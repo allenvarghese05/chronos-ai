@@ -37,7 +37,8 @@ gh repo edit "$OWNER/$REPO" \
 # 4. Security features: secret scanning + push protection, Dependabot alerts
 # (Secret scanning needs a public repo or GitHub Advanced Security; gitleaks in CI covers private repos.)
 gh api --method PATCH "repos/$OWNER/$REPO" \
-  --input - <<'JSON' >/dev/null 2>&1 || echo "Secret scanning not available on this repo (private without GHAS); gitleaks CI job covers it."
+  --input - <<'JSON' >/dev/null 2>&1 \
+  || echo "Secret scanning not available on this plan (private repo without GHAS); gitleaks in CI covers it. Enable in T6.7."
 { "security_and_analysis": {
     "secret_scanning": { "status": "enabled" },
     "secret_scanning_push_protection": { "status": "enabled" } } }
@@ -50,17 +51,22 @@ for l in api mobile renderer ci docs ops agents M0 M1 M2 M3 M4 M5 M6; do
 done
 
 # 6. Environment for the manual EAS workflow (secret added by hand: EXPO_TOKEN)
+# Environment reviewers require GitHub Pro or a public repo; the environment is created without
+# reviewers on a private free plan and the reviewer rule is added in T6.7 when the plan allows.
 gh api --method PUT "repos/$OWNER/$REPO/environments/mobile-build" \
-  --input - <<JSON >/dev/null || true
+  --input - <<JSON >/dev/null 2>&1 \
+  || echo "Environment reviewers not available on this plan (private repo without GitHub Pro); environment created without reviewer protection. Enable in T6.7."
 { "reviewers": [ { "type": "User", "id": $(gh api user --jq .id) } ] }
 JSON
 
 # 7. Protect main: PR required, required checks api/mobile/renderer/secrets, signed commits,
 #    conversation resolution, no force-push/deletion, no bypass actors.
-if gh api --method POST "repos/$OWNER/$REPO/rulesets" --input "$(dirname "$0")/github-ruleset.json" >/dev/null; then
+# Rulesets require GitHub Pro or a public repo. The JSON is ready in scripts/github-ruleset.json
+# and will be applied in T6.7 when the plan allows.
+if gh api --method POST "repos/$OWNER/$REPO/rulesets" --input "$(dirname "$0")/github-ruleset.json" >/dev/null 2>&1; then
   echo "Ruleset created: main is protected."
 else
-  echo "Could not create the ruleset (already exists, or private repo without GitHub Pro)."
+  echo "Ruleset not created: private repos on the free plan do not support rulesets (upgrade to Pro or make the repo public to enable). The ruleset JSON is defined and ready in scripts/github-ruleset.json. Enable in T6.7."
 fi
 
 echo "Done: https://github.com/$OWNER/$REPO"

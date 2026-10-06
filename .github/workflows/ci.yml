@@ -58,6 +58,8 @@ jobs:
           if [ -f services/api/pyproject.toml ]; then (cd services/api && uv sync --locked); else echo "services/api not yet scaffolded"; fi
       - name: just check-api (ruff, format, pyright, pytest, bandit, config validate)
         run: just check-api
+      - name: Ruleset contexts match CI job names
+        run: just ruleset-check
       - name: Generated types are current
         run: |
           just gen-types

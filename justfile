@@ -153,6 +153,15 @@ config-validate:
     if ! uv run --locked chronos config validate --help >/dev/null 2>&1; then echo "chronos config validate not yet implemented (T1.4), skipping"; exit 0; fi
     uv run --locked chronos config validate
 
+# Assert required_status_checks in scripts/github-ruleset.json equal job contexts in .github/workflows/ci.yml.
+# GitHub uses the job name: field as the status-check context (falls back to the key when absent).
+# Runs a stdlib-only self-test first, then the real check.
+ruleset-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 "{{justfile_directory()}}/scripts/ruleset-check.py" --self-test
+    python3 "{{justfile_directory()}}/scripts/ruleset-check.py" "{{justfile_directory()}}"
+
 # Lint, format-check, type-check, test, build and config-validate everything. Run before pushing. CI parity.
 check: lint format-check types test build config-validate
     @echo "just check: all steps passed (apps not yet scaffolded were skipped)"
