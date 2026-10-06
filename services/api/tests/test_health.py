@@ -46,11 +46,13 @@ class TestReadyz:
 
     def test_readyz_503_when_db_fails(self, tmp_path: Path) -> None:
         """When the DB URL is unreachable, /readyz must return 503."""
-        bad_settings = Settings(  # type: ignore[call-arg]
-            env="test",
-            # Point to a directory that cannot be a SQLite file.
-            database_url=f"sqlite:///{tmp_path / 'nonexistent' / 'bad.db'}",
-            secret_key="test-secret-key-32-bytes-exactly!",
+        bad_settings = Settings.model_validate(
+            {
+                "env": "test",
+                # Point to a directory that cannot be a SQLite file.
+                "database_url": f"sqlite:///{tmp_path / 'nonexistent' / 'bad.db'}",
+                "secret_key": "test-secret-key-32-bytes-exactly!",
+            }
         )
         app = create_app(settings=bad_settings)
         with TestClient(app, raise_server_exceptions=False) as c:

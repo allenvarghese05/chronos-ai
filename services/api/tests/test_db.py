@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -12,11 +13,11 @@ from chronos.db import create_db_engine
 
 
 @pytest.fixture()
-def tmp_engine(tmp_path: Path) -> Engine:
+def tmp_engine(tmp_path: Path) -> Iterator[Engine]:
     """SQLAlchemy engine backed by a temp-file SQLite DB (never :memory:)."""
     db_path = tmp_path / "test.db"
     engine = create_db_engine(f"sqlite:///{db_path}")
-    yield engine  # type: ignore[misc]  # pytest generator fixture
+    yield engine
     engine.dispose()
 
 

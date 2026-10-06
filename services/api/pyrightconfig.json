@@ -1,5 +1,6 @@
 {
-  "include": ["src"],
+  "include": ["src", "tests"],
+  "stubPath": "typestubs",
   "pythonVersion": "3.12",
   "typeCheckingMode": "strict",
   "reportMissingTypeStubs": false
