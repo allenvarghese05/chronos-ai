@@ -1,0 +1,45 @@
+# Builds the iOS dev-client on EAS. Manual only; needs the EXPO_TOKEN secret in the protected
+# `mobile-build` environment (owner approval required).
+name: EAS build
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: EAS build profile
+        default: development
+        type: choice
+        options: [development, preview]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  eas:
+    name: eas-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: mobile-build
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Install and start the EAS build
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          corepack enable
+          cd apps/mobile && pnpm install --frozen-lockfile
+          pnpm exec eas build --platform ios --profile "$PROFILE" --non-interactive --no-wait | tee "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,189 @@
+# CI (T0.2, docs/10-cicd-and-ops.md). The job names `api`, `mobile`, `renderer` and `secrets` are the
+# required status checks of the protect-main ruleset (scripts/github-ruleset.json): never rename
+# them, never give them a matrix or a path filter. Each job runs the same commands as the matching
+# `just check-*` recipe; an app that is not scaffolded yet is skipped inside the recipe so the check
+# still passes. No secrets are used. Actions are pinned to commit SHAs (Dependabot updates them).
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+  UV_PROJECT_ENVIRONMENT: .venv
+  UV_PYTHON_PREFERENCE: only-managed
+
+jobs:
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node from .nvmrc (pyright wrapper needs node)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+          enable-cache: true
+          cache-dependency-glob: services/api/uv.lock
+      - name: Install just
+        run: |
+          uv tool install rust-just==1.58.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Restore the pyright cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pyright-python
+          key: pyright-${{ runner.os }}-${{ hashFiles('services/api/uv.lock') }}
+      - name: Install API dependencies (locked)
+        run: |
+          if [ -f services/api/pyproject.toml ]; then (cd services/api && uv sync --locked); else echo "services/api not yet scaffolded"; fi
+      - name: just check-api (ruff, format, pyright, pytest, bandit, config validate)
+        run: just check-api
+      - name: Generated types are current
+        run: |
+          just gen-types
+          git diff --exit-code -- packages/renderer/src/schema.json packages/renderer/src/schema.ts apps/mobile/src/api/schema.d.ts || { echo "run just gen-types and commit"; exit 1; }
+      - name: Install semgrep (version from the justfile)
+        run: uv tool install "semgrep==$(just --evaluate semgrep_version)"
+      - name: Security (semgrep, whole repository; no skip in CI)
+        env:
+          SEMGREP_ENABLE_VERSION_CHECK: "0"
+        run: |
+          expected="$(just --evaluate semgrep_version)"; installed="$(semgrep --version)"
+          test "${installed}" = "${expected}"
+          semgrep --config=p/security-audit --config=p/python --config=p/typescript --config=p/secrets --metrics=off --error --quiet .
+
+  mobile:
+    name: mobile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Enable corepack and check the pnpm pin
+        run: |
+          corepack enable
+          if [ -f apps/mobile/package.json ]; then
+            expected="$(node -p "require('./apps/mobile/package.json').packageManager")"
+            actual="pnpm@$(cd apps/mobile && pnpm --version)"
+            echo "pnpm: ${actual}, package.json: ${expected}"; test "${actual}" = "${expected}"
+          fi
+      - name: Restore the pnpm store cache
+        if: hashFiles('apps/mobile/pnpm-lock.yaml') != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: apps/mobile/pnpm-lock.yaml
+      - name: Set up uv (for just)
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+      - name: Install just
+        run: |
+          uv tool install rust-just==1.58.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Install dependencies (frozen lockfile)
+        run: |
+          if [ -f apps/mobile/package.json ]; then (cd apps/mobile && pnpm install --frozen-lockfile); else echo "apps/mobile not yet scaffolded"; fi
+      - name: just check-mobile (biome, tsc, jest, expo-doctor, expo export)
+        env:
+          EXPO_NO_TELEMETRY: "1"
+          CI: "1"
+        run: just check-mobile
+
+  renderer:
+    name: renderer
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Enable corepack and check the pnpm pin
+        run: |
+          corepack enable
+          if [ -f packages/renderer/package.json ]; then
+            expected="$(node -p "require('./packages/renderer/package.json').packageManager")"
+            actual="pnpm@$(cd packages/renderer && pnpm --version)"
+            echo "pnpm: ${actual}, package.json: ${expected}"; test "${actual}" = "${expected}"
+          fi
+      - name: Restore the pnpm store cache
+        if: hashFiles('packages/renderer/pnpm-lock.yaml') != ''
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: packages/renderer/pnpm-lock.yaml
+      - name: Restore the Remotion headless browser
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: packages/renderer/node_modules/.remotion
+          key: remotion-browser-${{ runner.os }}-${{ hashFiles('packages/renderer/pnpm-lock.yaml') }}
+      - name: Set up uv (for just)
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+      - name: Install just
+        run: |
+          uv tool install rust-just==1.58.0
+          uv tool dir --bin >> "$GITHUB_PATH"
+      - name: Install dependencies (frozen lockfile)
+        run: |
+          if [ -f packages/renderer/package.json ]; then (cd packages/renderer && pnpm install --frozen-lockfile); else echo "packages/renderer not yet scaffolded"; fi
+      - name: just check-renderer (biome, tsc, vitest, still smoke render)
+        run: just check-renderer
+      - name: Upload the smoke still
+        if: hashFiles('packages/renderer/out/smoke.png') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: renderer-smoke-${{ github.sha }}
+          path: packages/renderer/out/smoke.png
+          retention-days: 7
+
+  secrets:
+    name: secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository (full history for gitleaks)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: gitleaks
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_SUMMARY: "true"
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: "false"

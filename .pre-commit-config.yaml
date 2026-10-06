@@ -1,0 +1,42 @@
+# Local hooks only: every tool runs at the version pinned in the repo (uv.lock / pnpm-lock.yaml) or
+# installed per README. ruff and Biome auto-fix: a commit a hook changed fails once, then passes
+# after `git add`. pyright and tests run in `just check` and CI. Golden fixtures are never touched.
+exclude: ^(services/api/tests/fixtures/|packages/renderer/src/fixtures/|data/)
+repos:
+  - repo: local
+    hooks:
+      - id: ruff
+        name: ruff (services/api)
+        entry: bash scripts/pre-commit-ruff.sh
+        language: system
+        files: ^services/api/.*\.pyi?$
+      - id: bandit
+        name: bandit (services/api/src)
+        entry: bash scripts/pre-commit-bandit.sh
+        language: system
+        files: ^services/api/src/.*\.py$
+      - id: biome-mobile
+        name: biome (apps/mobile)
+        entry: bash scripts/pre-commit-biome.sh apps/mobile
+        language: system
+        files: ^apps/mobile/.*\.(ts|tsx|js|jsx|json)$
+      - id: biome-renderer
+        name: biome (packages/renderer)
+        entry: bash scripts/pre-commit-biome.sh packages/renderer
+        language: system
+        files: ^packages/renderer/.*\.(ts|tsx|js|jsx|json)$
+      - id: actionlint
+        name: actionlint (.github/workflows)
+        entry: bash scripts/pre-commit-actionlint.sh
+        language: system
+        files: ^\.github/workflows/.*\.ya?ml$
+      - id: gitleaks
+        name: gitleaks (staged)
+        entry: bash scripts/pre-commit-gitleaks.sh
+        language: system
+        pass_filenames: false
+        always_run: true
+      - id: no-data-dir
+        name: block data/ and secrets
+        entry: bash -c 'for f in "$@"; do case "$f" in data/*|*.pem|*.p8|*.p12|*.mobileprovision|.env|.env.*) [ "$f" = ".env.example" ] || { echo "refusing to commit $f"; exit 1; };; esac; done' --
+        language: system

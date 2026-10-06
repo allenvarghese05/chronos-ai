@@ -1,0 +1,58 @@
+# Runtime data: database, media, models, certs, logs, backups (never commit)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+*.jks
+google-services.json
+GoogleService-Info.plist
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.pyright/
+
+# Node
+node_modules/
+.pnpm-store/
+dist/
+out/
+.expo/
+.expo-export/
+.expo-shared/
+*.tsbuildinfo
+
+# Expo prebuild output (regenerated from app.config.ts; the Swift module lives in modules/)
+apps/mobile/ios/
+apps/mobile/android/
+
+# Remotion
+packages/renderer/public/renders/
+packages/renderer/.remotion/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Local review notes
+IMPROVEMENTS.md
+
+# pi
+.pi/sessions/

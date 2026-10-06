@@ -1,0 +1,48 @@
+# Compiles the Expo iOS project (incl. the Swift module) on a macOS runner and runs the XCTests.
+# macOS minutes are expensive: manual and weekly only, never required.
+name: iOS build
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ios:
+    name: ios-build
+    runs-on: macos-14
+    timeout-minutes: 45
+    env:
+      COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Node from .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+      - name: Enable corepack and install
+        run: |
+          corepack enable
+          if [ ! -f apps/mobile/package.json ]; then echo "apps/mobile not yet scaffolded"; exit 0; fi
+          cd apps/mobile && pnpm install --frozen-lockfile
+      - name: Prebuild and build for the simulator
+        run: |
+          if [ ! -f apps/mobile/package.json ]; then exit 0; fi
+          cd apps/mobile
+          pnpm exec expo prebuild --platform ios --no-install
+          cd ios && pod install
+          xcodebuild -workspace ChronosAI.xcworkspace -scheme ChronosAI -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -50
+      - name: Swift module tests
+        run: |
+          if [ -x scripts/ios-test.sh ]; then scripts/ios-test.sh; else echo "scripts/ios-test.sh not yet implemented"; fi

@@ -1,0 +1,8 @@
+node_modules/
+.venv/
+dist/
+out/
+data/
+apps/mobile/ios/
+packages/renderer/public/renders/
+docs/

@@ -1,0 +1,41 @@
+# On a version tag: GitHub Release with generated notes and SBOM-ish dependency exports.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # create the GitHub release and upload files
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.18"
+      - name: Export dependency lists
+        run: |
+          mkdir -p release
+          if [ -f services/api/uv.lock ]; then (cd services/api && uv export --locked --no-emit-project > ../../release/python-requirements.txt); fi
+          for d in apps/mobile packages/renderer; do if [ -f "$d/pnpm-lock.yaml" ]; then cp "$d/pnpm-lock.yaml" "release/$(basename "$d")-pnpm-lock.yaml"; fi; done
+          cp VERSION release/VERSION
+      - name: Create the release (gh is on the runner)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release create "$TAG" --generate-notes release/*

@@ -1,0 +1,51 @@
+# PR titles must be conventional commits with a known scope, because squash merges use the title.
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  pr-title:
+    name: pr-title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read # read the PR title
+    steps:
+      - name: Validate the PR title
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            test
+            docs
+            chore
+            refactor
+            ci
+            build
+            perf
+          scopes: |
+            api
+            mobile
+            renderer
+            ci
+            docs
+            ops
+            agents
+            release
+          requireScope: false
+          # Task PRs are titled "T1.5: scoring engine"; allow that form too.
+          headerPattern: '^(?:(T\d+\.\d+): .+|(\w+)(?:\(([\w-]+)\))?!?: .+)$'
+          headerPatternCorrespondence: 'subject, type, scope'
+          validateSingleCommit: false

@@ -1,0 +1,44 @@
+# GitHub Actions: keep SHA pins current weekly. Python/npm: security updates only, grouped; other
+# lockfile changes are made on purpose inside tasks.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+      include: scope
+  - package-ecosystem: pip
+    directory: /services/api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build(api)
+    groups:
+      python-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build(mobile)
+    groups:
+      mobile-security:
+        applies-to: security-updates
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /packages/renderer
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build(renderer)
+    groups:
+      renderer-security:
+        applies-to: security-updates
+        patterns: ["*"]
