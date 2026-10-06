@@ -1,6 +1,7 @@
 # Stub: starlette 1.7.0 uses ``import httpx2 as httpx`` under TYPE_CHECKING.
 # httpx2 is a renamed fork of httpx with an identical public API.
 # Re-export everything from httpx so pyright resolves starlette TestClient correctly.
+# DELETE this stub when httpx2 becomes a real dependency or starlette drops the httpx2 import.
 from httpx import URL as URL
 from httpx import USE_CLIENT_DEFAULT as USE_CLIENT_DEFAULT
 from httpx import ASGITransport as ASGITransport
