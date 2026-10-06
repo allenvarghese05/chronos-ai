@@ -89,7 +89,8 @@ def run_migrations_online() -> None:
     from chronos.db import build_migration_engine
 
     url = config.get_main_option("sqlalchemy.url")
-    assert url is not None, "sqlalchemy.url must be set before run_migrations_online()"
+    if url is None:
+        raise RuntimeError("sqlalchemy.url not set")
     connectable = build_migration_engine(url)
     with connectable.connect() as connection:
         context.configure(
