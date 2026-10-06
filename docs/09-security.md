@@ -99,7 +99,7 @@
 | pre-commit | ruff (incl. `S` rules), bandit on `services/api/src`, biome, actionlint, gitleaks |
 | `just security` | semgrep (`p/security-audit`, `p/python`, `p/typescript`, `p/secrets`), bandit, pip-audit, pnpm audit, gitleaks (full history) |
 | CI required | `api` (bandit + semgrep), `secrets` (gitleaks), `mobile`, `renderer` |
-| CI non-required | CodeQL (python, javascript-typescript, actions; swift in the manual macOS job), `audit` weekly, `zizmor`, `dependency-review` |
+| CI non-required | `audit` weekly (pip-audit, pnpm audit), `zizmor` (workflow lint). CodeQL and dependency review are unavailable without Advanced Security on this private repo |
 | Reviewer agent | Manual checklist in `.pi/agents/reviewer.md` (SSRF guard usage, subprocess wrapper, no secret logging, validator presence) |
 | Runtime | `chronos doctor` (perms, certs, pins, firewall), `/readyz` |
 

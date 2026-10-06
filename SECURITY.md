@@ -20,5 +20,5 @@ email the owner. Do not open a public issue for a vulnerability.
 ## Scanning
 
 `just security` runs semgrep, bandit, pip-audit, pnpm audit and gitleaks locally. CI runs
-semgrep, bandit and gitleaks as required checks and CodeQL, zizmor, dependency review and a
-weekly audit as advisory checks. Actions are pinned to commit SHAs and updated by Dependabot.
+semgrep, bandit and gitleaks in the core jobs and zizmor and a weekly audit as advisory checks
+(CodeQL and dependency review need GitHub Advanced Security, which this private repo lacks). Actions are pinned to commit SHAs and updated by Dependabot.

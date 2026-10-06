@@ -61,11 +61,9 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `codeql.yml` | PR, push main, weekly | CodeQL `security-extended` for `python`, `javascript-typescript`, `actions` |
-| `zizmor.yml` | PR touching `.github/**`, weekly | Workflow security lint, SARIF uploaded to code scanning |
-| `dependency-review.yml` | PR | `actions/dependency-review-action`: fail on `high` vulns and on licences outside an allowlist; comments summary |
+| `zizmor.yml` | PR touching `.github/**`, weekly | Workflow security lint, plain output, pedantic persona, fails on any finding |
 | `audit.yml` | weekly + manual | `just security-py` (pip-audit), `just security-web` (pnpm audit ×2); advisory DBs change without code changes so it is never required |
-| `pr-title.yml` | PR opened/edited | Conventional-commit PR title (`amannn/action-semantic-pull-request`, pinned) with allowed scopes `api, mobile, renderer, ci, docs, agents, ops` |
+| `pr-title.yml` | PR opened/edited | Conventional-commit PR title `type(scope): T1.5 subject` (`amannn/action-semantic-pull-request`, pinned); scopes `api, mobile, renderer, ci, docs, ops, agents, release` |
 | `ios-build.yml` | manual (`workflow_dispatch`) + weekly Monday | `macos-14`: `pnpm install`, `expo prebuild --platform ios`, `xcodebuild -scheme ChronosAI -sdk iphonesimulator build`, XCTest for `chronos-sensors`, CodeQL `swift`. Costly minutes → never required |
 | `eas-build.yml` | manual, environment `mobile-build` (owner approval) | `eas build --platform ios --profile development --non-interactive` with `EXPO_TOKEN`; link posted in the run summary |
 | `release.yml` | tag `v*` | Creates a GitHub Release with auto-generated notes and attaches `smoke.png` + SBOMs (`uv export`, `pnpm licenses list --json`) |
@@ -76,9 +74,12 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
   (`open-pull-requests-limit: 5`, grouped), because lockfiles otherwise change on purpose.
 
 ### Repository settings (`scripts/bootstrap-github.sh` + `scripts/github-ruleset.json`)
-- Private repo `chronos-ai`; squash-only merges; auto-delete branches; auto-merge disabled
-  (owner merges by hand); secret scanning + push protection enabled; Dependabot alerts enabled;
-  code scanning default off (CodeQL via workflow).
+- Private repo `chronos-ai` (owner decision); squash-only merges; auto-delete branches; auto-merge
+  disabled (owner merges by hand); Dependabot alerts enabled. **Not available on a private
+  free-plan repo** (recorded 2026-10-06): rulesets/required checks, secret scanning + push
+  protection, CodeQL/code scanning, dependency review, environment reviewers. gitleaks (CI +
+  pre-commit), semgrep, zizmor and the agents' never-push-to-main rule are the controls; the
+  ruleset JSON is kept for when the repo goes public or the plan changes.
 - Ruleset `protect-main`: PR required, 0 approvals (solo), **required checks `api`, `mobile`,
   `renderer`, `secrets`** with strict up-to-date policy, required conversation resolution, block
   force-push and deletion, no bypass actors, **require signed commits** (owner's SSH signing key and

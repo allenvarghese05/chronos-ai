@@ -175,6 +175,9 @@ jobs:
     name: secrets
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read # check out the full history
+      pull-requests: read # gitleaks-action lists the PR's commits to scope the scan
     steps:
       - name: Check out the repository (full history for gitleaks)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

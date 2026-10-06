@@ -1,5 +1,6 @@
 # Static analysis of the workflows themselves (template injection, unpinned actions, excessive
-# permissions). Results go to code scanning. Not a required check.
+# permissions). Plain output (code scanning/SARIF needs GitHub Advanced Security, which this private
+# repo does not have). Not a required check.
 name: zizmor
 
 on:
@@ -24,17 +25,16 @@ jobs:
     name: zizmor
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    permissions:
-      security-events: write # upload SARIF results to code scanning
-      contents: read # check out the code
-      actions: read # read workflow run metadata
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Run zizmor
-        uses: zizmorcore/zizmor-action@cc914d7f3750a2d13d75c7f184a1060aa0e9d482 # v0.6.4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
-          min-severity: low
-          persona: pedantic
+          version: "0.12.18"
+      - name: Run zizmor (pedantic, fails on any finding)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # lets zizmor resolve action SHAs online
+        run: uvx zizmor==1.9.0 --persona pedantic --no-progress --format plain .github/workflows
