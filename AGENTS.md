@@ -26,7 +26,7 @@ Read `docs/00-overview.md` first. The documents in `docs/` are the design; the A
 ## Workflow rules
 
 - Never commit to `main`. Work on a branch named after the task (`t1-3-telemetry-endpoint`).
-- One task per PR. If a task grows, split it and say so.
+- One task per PR, titled `type(scope): T1.5 short title`. If a task grows, split it and say so.
 - Conventional commits: `feat:`, `fix:`, `test:`, `docs:`, `chore:`, `refactor:`, `ci:`, `build:`.
   Scope is the app (`feat(api): ...`, `feat(mobile): ...`, `feat(renderer): ...`).
 - Run `just check` (lint, format, types, tests for every app) before pushing. CI runs the same

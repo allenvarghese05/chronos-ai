@@ -36,6 +36,16 @@ repos:
         language: system
         pass_filenames: false
         always_run: true
+      - id: trailing-whitespace
+        name: trailing whitespace
+        entry: bash -c 'for f in "$@"; do sed -i "" "s/[[:space:]]*$//" "$f"; done' --
+        language: system
+        types: [text]
+      - id: end-of-file-fixer
+        name: end of file fixer
+        entry: bash -c 'for f in "$@"; do if [ -n "$(tail -c1 "$f")" ]; then printf "\n" >> "$f"; fi; done' --
+        language: system
+        types: [text]
       - id: no-data-dir
         name: block data/ and secrets
         entry: bash -c 'for f in "$@"; do case "$f" in data/*|*.pem|*.p8|*.p12|*.mobileprovision|.env|.env.*) [ "$f" = ".env.example" ] || { echo "refusing to commit $f"; exit 1; };; esac; done' --

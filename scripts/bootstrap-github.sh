@@ -35,8 +35,9 @@ gh repo edit "$OWNER/$REPO" \
   --enable-auto-merge=false
 
 # 4. Security features: secret scanning + push protection, Dependabot alerts
+# (Secret scanning needs a public repo or GitHub Advanced Security; gitleaks in CI covers private repos.)
 gh api --method PATCH "repos/$OWNER/$REPO" \
-  --input - <<'JSON' >/dev/null
+  --input - <<'JSON' >/dev/null 2>&1 || echo "Secret scanning not available on this repo (private without GHAS); gitleaks CI job covers it."
 { "security_and_analysis": {
     "secret_scanning": { "status": "enabled" },
     "secret_scanning_push_protection": { "status": "enabled" } } }

@@ -27,7 +27,11 @@ Procedure — stop and report at the first failure:
 3. Push
    - `git push -u origin HEAD`. Never `--force`. Never push `main`.
 4. Pull request
-   - Title: `<task-id>: <task title>` (title from `docs/11-implementation-plan.md`).
+   - Title: `<type>(<scope>): <task-id> <short title>`, e.g. `feat(api): T1.5 scoring engine`.
+     Type from the dominant commit (`feat`, `fix`, `chore`, `docs`, `ci`, `test`, `refactor`,
+     `build`); scope `api` | `mobile` | `renderer` | `ci` | `docs` | `ops` | `agents`. Title text
+     from `docs/11-implementation-plan.md`, shortened to ≤ 70 chars. The `pr-title` workflow
+     enforces this.
    - Body from `.github/pull_request_template.md`, filled in:
      - **What**: the plan's Summary.
      - **Why**: task id, milestone, D-numbers from the brief.
