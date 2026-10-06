@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pathlib
+
 import pytest
 from pydantic import ValidationError
 
@@ -83,24 +85,24 @@ class TestProdRequiresTls:
                 secret_key="prod-secret-key-32-bytes-exactly!",
             )
 
-    def test_prod_tls_missing_files_raises(self, tmp_path: pytest.TempPathFactory) -> None:
+    def test_prod_tls_missing_files_raises(self, tmp_path: pathlib.Path) -> None:
         """Pointing to non-existent cert/key paths in prod must raise."""
         with pytest.raises(ValidationError, match="does not exist"):
             Settings(  # type: ignore[call-arg]
                 env=Env.prod,
                 secret_key="prod-secret-key-32-bytes-exactly!",
-                tls_cert=tmp_path / "missing.pem",  # type: ignore[operator]
-                tls_key=tmp_path / "missing-key.pem",  # type: ignore[operator]
+                tls_cert=tmp_path / "missing.pem",
+                tls_key=tmp_path / "missing-key.pem",
             )
 
-    def test_prod_world_readable_cert_raises(self, tmp_path: pytest.TempPathFactory) -> None:
+    def test_prod_world_readable_cert_raises(self, tmp_path: pathlib.Path) -> None:
         """World-readable cert files must be rejected in prod."""
-        cert = tmp_path / "cert.pem"  # type: ignore[operator]
-        key = tmp_path / "key.pem"  # type: ignore[operator]
-        cert.write_text("cert")  # type: ignore[union-attr]
-        key.write_text("key")  # type: ignore[union-attr]
-        cert.chmod(0o644)  # world-readable  # type: ignore[union-attr]
-        key.chmod(0o600)  # type: ignore[union-attr]
+        cert = tmp_path / "cert.pem"
+        key = tmp_path / "key.pem"
+        cert.write_text("cert")
+        key.write_text("key")
+        cert.chmod(0o644)  # world-readable
+        key.chmod(0o600)
         with pytest.raises(ValidationError, match="world-readable"):
             Settings(  # type: ignore[call-arg]
                 env=Env.prod,

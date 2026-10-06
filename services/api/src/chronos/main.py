@@ -80,9 +80,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     # 3. Exception handlers (RFC 9457 problem+json).
-    app.add_exception_handler(HTTPException, http_exception_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[arg-type]
-    app.add_exception_handler(Exception, unhandled_exception_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    app.add_exception_handler(Exception, unhandled_exception_handler)
 
     # 4. Routers.
     app.include_router(health_router)

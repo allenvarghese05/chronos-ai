@@ -101,7 +101,7 @@ def get_settings() -> Settings:
     """
     global _settings
     if _settings is None:
-        _settings = Settings()  # type: ignore[call-arg]
+        _settings = Settings()  # type: ignore[call-arg]  # pydantic-settings reads secret_key from env
     return _settings
 
 

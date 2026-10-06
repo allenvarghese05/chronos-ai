@@ -14,11 +14,12 @@ Alembic can auto-generate migrations.
 
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Generator
-from typing import Any
 
 from sqlalchemy import Engine, event, text
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import ConnectionPoolEntry, NullPool
 from sqlmodel import SQLModel, create_engine
 
 # SQLModel exposes SQLAlchemy's metadata via SQLModel.metadata.
@@ -27,7 +28,7 @@ metadata = SQLModel.metadata
 _engine: Engine | None = None
 
 
-def _apply_pragmas(dbapi_conn: Any, _connection_record: Any) -> None:
+def _apply_pragmas(dbapi_conn: sqlite3.Connection, _connection_record: ConnectionPoolEntry) -> None:
     """SQLAlchemy ``connect`` event handler — set PRAGMAs on every new connection.
 
     This fires for every new DBAPI connection, including those created by
@@ -52,6 +53,30 @@ def create_db_engine(database_url: str) -> Engine:
     engine = create_engine(
         database_url,
         connect_args={"check_same_thread": False},
+    )
+    event.listen(engine, "connect", _apply_pragmas)
+    return engine
+
+
+def build_migration_engine(database_url: str) -> Engine:
+    """Create an engine suitable for Alembic migrations.
+
+    Uses :class:`~sqlalchemy.pool.NullPool` so each migration step gets a
+    fresh DBAPI connection (required for ``render_as_batch=True`` on SQLite).
+    PRAGMAs are applied via the same ``_apply_pragmas`` event listener as the
+    application engine, so ``foreign_keys`` and ``journal_mode=WAL`` are
+    enforced during migrations too.
+
+    Args:
+        database_url: A ``sqlite:///`` URL.
+
+    Returns:
+        A configured :class:`sqlalchemy.Engine` with :class:`NullPool`.
+    """
+    engine = create_engine(
+        database_url,
+        connect_args={"check_same_thread": False},
+        poolclass=NullPool,
     )
     event.listen(engine, "connect", _apply_pragmas)
     return engine

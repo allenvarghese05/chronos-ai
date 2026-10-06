@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+from structlog.typing import EventDict
 
 from chronos.observability import configure, redact_secrets, reset_for_testing
 
@@ -16,7 +19,7 @@ def _reset_structlog() -> None:
 class TestRedactSecrets:
     """Unit tests for the redact_secrets processor (pure function)."""
 
-    def _call(self, event_dict: dict) -> dict:  # type: ignore[type-arg]
+    def _call(self, event_dict: EventDict) -> EventDict:
         return redact_secrets(None, "info", event_dict)
 
     def test_redact_token(self) -> None:
@@ -69,7 +72,7 @@ class TestConfigure:
     def test_configure_prod_no_log_dir(self) -> None:
         configure("prod")  # log_dir=None → no file handler, no error
 
-    def test_configure_prod_with_log_dir(self, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    def test_configure_prod_with_log_dir(self, tmp_path: Path) -> None:
         log_dir = tmp_path / "logs"
         configure("prod", log_dir=log_dir)
         assert log_dir.exists()
