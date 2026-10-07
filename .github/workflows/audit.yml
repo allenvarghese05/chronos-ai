@@ -49,3 +49,16 @@ jobs:
       - name: JS dependencies (just security-web)
         if: ${{ !cancelled() }}
         run: just security-web
+      # Informational: list ALL advisories including those suppressed via auditConfig.ignoreGhsas
+      # in pnpm-workspace.yaml. pnpm has no flag to bypass ignoreGhsas, so ignored IDs are
+      # listed explicitly here (see docs/decisions/D31-pnpm-audit-ignores.md). Non-failing.
+      - name: JS audit informational (ignored advisories visible)
+        if: ${{ !cancelled() }}
+        run: |
+          IGNORED='GHSA-86w9-cpqp-85rv (node-forge HIGH) GHSA-vfj7-8cjw-p6xm (braces HIGH) GHSA-hp3w-g68c-fv3c (sprintf-js MODERATE)'
+          for app_dir in apps/mobile packages/renderer; do
+            [ -f "${app_dir}/package.json" ] || continue
+            echo "=== pnpm audit informational: ${app_dir} ==="
+            (cd "${app_dir}" && pnpm audit --json | python3 -c 'import json,sys; d=json.load(sys.stdin); [print("  ["+v.get("severity","?")+"] "+v.get("title","?")+" "+v.get("url","")) for v in d.get("advisories",{}).values()]; print("  "+str(len(d.get("advisories",{})))+" non-ignored advisory/ies shown above")' || true)
+            echo "  suppressed via ignoreGhsas (no patched version, see D31): ${IGNORED}"
+          done
