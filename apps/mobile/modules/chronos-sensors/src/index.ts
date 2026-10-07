@@ -15,6 +15,11 @@ const stub: ChronosSensorsModuleType = {
 	hello: () => 'ChronosSensors unavailable',
 };
 
+// NOTE: the match string below is copied verbatim from
+// expo-modules-core 57 src/requireNativeModule.ts.
+// It MUST be re-verified against the installed expo-modules-core on every
+// Expo SDK bump; if the message changes the stub fallback will silently stop
+// working and errors will propagate instead.
 /**
  * Returns true when the error indicates the native module is simply not
  * registered (Jest, Expo Go, CI without prebuild). Any other error
