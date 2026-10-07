@@ -3,7 +3,7 @@
 	"greeting": "Good morning",
 	"tone": "friendly",
 	"audio": {
-		"src": "public/audio/silence-3s.wav",
+		"src": "audio/silence-3s.wav",
 		"durationSec": 3.0
 	},
 	"scenes": [

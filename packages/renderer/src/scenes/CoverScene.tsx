@@ -28,8 +28,8 @@ import {
 	THEMES,
 	type Theme,
 	TRANSITION_FRAMES,
-} from '../design/tokens.js';
-import type { CoverSceneSchema } from '../schema.js';
+} from '../design/tokens';
+import type { CoverSceneSchema } from '../schema';
 
 type CoverSceneProps = z.infer<typeof CoverSceneSchema>;
 

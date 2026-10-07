@@ -17,8 +17,8 @@ import {
 	SAFE_SIDE,
 	THEMES,
 	type Theme,
-} from '../design/tokens.js';
-import type { CaptionWord } from '../schema.js';
+} from '../design/tokens';
+import type { CaptionWord } from '../schema';
 
 interface Props {
 	/** Caption words for the current scene. May be empty. */

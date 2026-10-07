@@ -15,8 +15,8 @@ import {
 	SAFE_TOP,
 	THEMES,
 	type Theme,
-} from '../design/tokens.js';
-import type { OutroSceneSchema } from '../schema.js';
+} from '../design/tokens';
+import type { OutroSceneSchema } from '../schema';
 
 type OutroSceneProps = z.infer<typeof OutroSceneSchema>;
 

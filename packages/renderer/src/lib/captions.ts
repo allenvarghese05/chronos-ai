@@ -12,7 +12,7 @@
  *   - Orphan at end  → merged into the previous line (line can exceed maxPerLine)
  */
 
-import type { CaptionWord } from '../schema.js';
+import type { CaptionWord } from '../schema';
 
 export interface CaptionLine {
 	words: CaptionWord[];

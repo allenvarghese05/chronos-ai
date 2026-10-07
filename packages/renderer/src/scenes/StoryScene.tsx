@@ -17,8 +17,8 @@ import {
 	SAFE_TOP,
 	THEMES,
 	type Theme,
-} from '../design/tokens.js';
-import type { StorySceneSchema } from '../schema.js';
+} from '../design/tokens';
+import type { StorySceneSchema } from '../schema';
 
 type StorySceneProps = z.infer<typeof StorySceneSchema>;
 

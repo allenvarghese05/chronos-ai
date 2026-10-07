@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { sceneFrames } from '../lib/timing.js';
+import { sceneFrames } from '../lib/timing';
 
 /**
  * sceneFrames(startSec, endSec, fps) tests.

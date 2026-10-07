@@ -13,7 +13,7 @@
  * References: docs/07-media-pipeline.md §6
  */
 
-import type { ReelProps } from '../schema.js';
+import type { ReelProps } from '../schema';
 
 // ─── Grid ─────────────────────────────────────────────────────────────────────
 

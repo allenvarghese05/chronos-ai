@@ -36,7 +36,7 @@ export function waitForFonts(): Promise<void> {
 		// Inter Tight — used for headings (700) and body (500)
 		loadFont({
 			family: 'Inter Tight',
-			url: staticFile('fonts/InterTight-variable.ttf'),
+			url: staticFile('fonts/InterTight-variable.ttf'), // staticFile: relative to public/
 			weight: '100 900',
 			style: 'normal',
 			format: 'truetype',
@@ -44,7 +44,7 @@ export function waitForFonts(): Promise<void> {
 		// JetBrains Mono — used for the kicker chip (500)
 		loadFont({
 			family: 'JetBrains Mono',
-			url: staticFile('fonts/JetBrainsMono-variable.ttf'),
+			url: staticFile('fonts/JetBrainsMono-variable.ttf'), // staticFile: relative to public/
 			weight: '100 800',
 			style: 'normal',
 			format: 'truetype',

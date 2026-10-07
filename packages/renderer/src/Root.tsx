@@ -7,9 +7,9 @@
  */
 
 import { Composition } from 'remotion';
-import { MorningReel, morningReelMetadata } from './compositions/MorningReel.js';
-import { COMPOSITION } from './design/tokens.js';
-import { ReelPropsSchema } from './schema.js';
+import { MorningReel, morningReelMetadata } from './compositions/MorningReel';
+import { COMPOSITION } from './design/tokens';
+import { ReelPropsSchema } from './schema';
 
 export function RemotionRoot() {
 	return (
@@ -29,7 +29,7 @@ export function RemotionRoot() {
 				localDate: '2026-10-06',
 				greeting: 'Good morning',
 				tone: 'friendly' as const,
-				audio: { src: 'public/audio/silence-3s.wav', durationSec: 3 },
+				audio: { src: 'audio/silence-3s.wav', durationSec: 3 },
 				scenes: [{ index: 0, type: 'cover' as const, startSec: 0, endSec: 3 }],
 				captions: [],
 				theme: 'dawn' as const,

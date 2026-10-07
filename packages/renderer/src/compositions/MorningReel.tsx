@@ -15,13 +15,13 @@
 
 import type { CalculateMetadataFunction } from 'remotion';
 import { Audio, Sequence, staticFile, useVideoConfig } from 'remotion';
-import { waitForFonts } from '../design/fonts.js';
-import { COMPOSITION } from '../design/tokens.js';
-import { sceneFrames } from '../lib/timing.js';
-import { CoverScene } from '../scenes/CoverScene.js';
-import { OutroScene } from '../scenes/OutroScene.js';
-import { StoryScene } from '../scenes/StoryScene.js';
-import type { ReelProps, SceneProps } from '../schema.js';
+import { waitForFonts } from '../design/fonts';
+import { COMPOSITION } from '../design/tokens';
+import { sceneFrames } from '../lib/timing';
+import { CoverScene } from '../scenes/CoverScene';
+import { OutroScene } from '../scenes/OutroScene';
+import { StoryScene } from '../scenes/StoryScene';
+import type { ReelProps, SceneProps } from '../schema';
 
 // ─── calculateMetadata ────────────────────────────────────────────────────────
 

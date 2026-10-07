@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { layoutCaptions } from '../lib/captions.js';
-import type { CaptionWord } from '../schema.js';
+import { layoutCaptions } from '../lib/captions';
+import type { CaptionWord } from '../schema';
 
 /**
  * layoutCaptions tests — explicit expected values, no snapshots.
