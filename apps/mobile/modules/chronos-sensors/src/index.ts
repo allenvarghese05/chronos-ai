@@ -15,12 +15,36 @@ const stub: ChronosSensorsModuleType = {
 	hello: () => 'ChronosSensors unavailable',
 };
 
+/**
+ * Returns true when the error indicates the native module is simply not
+ * registered (Jest, Expo Go, CI without prebuild). Any other error
+ * (e.g. the module was found but threw during initialisation) should
+ * propagate so it isn't silently swallowed.
+ *
+ * expo-modules-core 57 throws exactly:
+ *   `Cannot find native module '<name>'`
+ * See: node_modules/expo-modules-core/src/requireNativeModule.ts
+ */
+function isModuleNotFoundError(err: unknown): boolean {
+	return err instanceof Error && err.message.includes("Cannot find native module 'ChronosSensors'");
+}
+
 function loadModule(): ChronosSensorsModuleType {
 	try {
 		return requireNativeModule<ChronosSensorsModuleType>('ChronosSensors');
-	} catch {
-		// Native module is not linked (Jest, Expo Go, CI without prebuild).
-		return stub;
+	} catch (err) {
+		if (isModuleNotFoundError(err)) {
+			// Native module is not linked (Jest, Expo Go, CI without prebuild).
+			if (__DEV__) {
+				console.warn(
+					'[ChronosSensors] Native module not linked — using stub fallback. ' +
+						'Run `expo run:ios` with a dev-client build to enable the real module.',
+				);
+			}
+			return stub;
+		}
+		// Module was found but initialisation threw — do not swallow.
+		throw err;
 	}
 }
 
