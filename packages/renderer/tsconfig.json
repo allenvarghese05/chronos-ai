@@ -14,12 +14,7 @@
 		"esModuleInterop": true,
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
-		"outDir": "dist",
-		"rootDir": "src",
-		"baseUrl": ".",
-		"paths": {
-			"@/*": ["src/*"]
-		}
+		"outDir": "dist"
 	},
 	"include": ["src/**/*.ts", "src/**/*.tsx", "remotion.config.ts"],
 	"exclude": ["node_modules", "dist", "out"]

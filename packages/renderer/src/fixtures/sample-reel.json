@@ -1,0 +1,20 @@
+{
+	"localDate": "2026-10-06",
+	"greeting": "Good morning",
+	"tone": "friendly",
+	"audio": {
+		"src": "public/audio/silence-3s.wav",
+		"durationSec": 3.0
+	},
+	"scenes": [
+		{
+			"index": 0,
+			"type": "cover",
+			"startSec": 0,
+			"endSec": 3.0
+		}
+	],
+	"captions": [],
+	"theme": "dawn",
+	"attribution": []
+}
