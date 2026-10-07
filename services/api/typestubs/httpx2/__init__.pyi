@@ -1,0 +1,56 @@
+# Stub: starlette 1.7.0 uses ``import httpx2 as httpx`` under TYPE_CHECKING.
+# httpx2 is a renamed fork of httpx with an identical public API.
+# Re-export everything from httpx so pyright resolves starlette TestClient correctly.
+# DELETE this stub when httpx2 becomes a real dependency or starlette drops the httpx2 import.
+from httpx import URL as URL
+from httpx import USE_CLIENT_DEFAULT as USE_CLIENT_DEFAULT
+from httpx import ASGITransport as ASGITransport
+from httpx import AsyncBaseTransport as AsyncBaseTransport
+from httpx import AsyncByteStream as AsyncByteStream
+from httpx import AsyncClient as AsyncClient
+from httpx import AsyncHTTPTransport as AsyncHTTPTransport
+from httpx import Auth as Auth
+from httpx import BaseTransport as BaseTransport
+from httpx import BasicAuth as BasicAuth
+from httpx import ByteStream as ByteStream
+from httpx import Client as Client
+from httpx import CloseError as CloseError
+from httpx import ConnectError as ConnectError
+from httpx import ConnectTimeout as ConnectTimeout
+from httpx import CookieConflict as CookieConflict
+from httpx import Cookies as Cookies
+from httpx import DecodingError as DecodingError
+from httpx import DigestAuth as DigestAuth
+from httpx import Headers as Headers
+from httpx import HTTPError as HTTPError
+from httpx import HTTPStatusError as HTTPStatusError
+from httpx import HTTPTransport as HTTPTransport
+from httpx import InvalidURL as InvalidURL
+from httpx import Limits as Limits
+from httpx import LocalProtocolError as LocalProtocolError
+from httpx import MockTransport as MockTransport
+from httpx import NetRCAuth as NetRCAuth
+from httpx import NetworkError as NetworkError
+from httpx import PoolTimeout as PoolTimeout
+from httpx import ProtocolError as ProtocolError
+from httpx import Proxy as Proxy
+from httpx import ProxyError as ProxyError
+from httpx import QueryParams as QueryParams
+from httpx import ReadError as ReadError
+from httpx import ReadTimeout as ReadTimeout
+from httpx import RemoteProtocolError as RemoteProtocolError
+from httpx import Request as Request
+from httpx import RequestError as RequestError
+from httpx import RequestNotRead as RequestNotRead
+from httpx import Response as Response
+from httpx import ResponseNotRead as ResponseNotRead
+from httpx import StreamClosed as StreamClosed
+from httpx import StreamConsumed as StreamConsumed
+from httpx import Timeout as Timeout
+from httpx import TimeoutException as TimeoutException
+from httpx import TransportError as TransportError
+from httpx import UnsupportedProtocol as UnsupportedProtocol
+from httpx import WriteError as WriteError
+from httpx import WriteTimeout as WriteTimeout
+from httpx import _client as _client
+from httpx import _types as _types

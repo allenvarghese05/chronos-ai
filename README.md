@@ -99,7 +99,16 @@ when asked so `.pi/prompts` become slash commands.
 | semgrep | 1.178.0 | justfile `semgrep_version` |
 | gitleaks | 8.21.2 | justfile `gitleaks_version` (brew may be newer; CI uses the action) |
 | Node | 22.22.2 | `.nvmrc` |
-| Python | 3.12 | `services/api/pyproject.toml` (T0.3) |
+| Python | 3.12.14 | `services/api/pyproject.toml` `requires-python` |
+| FastAPI | 0.142.2 | `services/api/pyproject.toml` |
+| uvicorn | 0.54.0 | `services/api/pyproject.toml` |
+| SQLModel | 0.0.47 | `services/api/pyproject.toml` |
+| SQLAlchemy | 2.0.54 | `services/api/pyproject.toml` (SQLModel 0.0.47 requires <2.1) |
+| structlog | 26.1.0 | `services/api/pyproject.toml` |
+| ruff | 0.16.10 | `services/api/pyproject.toml` dev deps |
+| pyright | 1.1.414 | `services/api/pyproject.toml` dev deps |
+| pytest | 9.1.1 | `services/api/pyproject.toml` dev deps |
+| bandit | 1.9.4 | `services/api/pyproject.toml` dev deps |
 | Ollama model | qwen2.5:7b-instruct @ digest | justfile `ollama_model`, `ollama_digest` (T0.6) |
 
 Library versions are pinned by `services/api/uv.lock`, `apps/mobile/pnpm-lock.yaml` and

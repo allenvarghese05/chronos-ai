@@ -1,0 +1,121 @@
+"""Chronos-AI runtime configuration.
+
+All configuration comes from environment variables with the ``CHRONOS_`` prefix
+(loaded from ``.env`` if present). Sensitive fields use ``SecretStr`` so that
+their values are never printed in logs or stack-traces.
+
+Instantiate once via :func:`get_settings` and store in ``app.state.settings``.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from pathlib import Path
+
+from pydantic import SecretStr, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Env(StrEnum):
+    """Deployment environment."""
+
+    dev = "dev"
+    test = "test"
+    prod = "prod"
+
+
+class Settings(BaseSettings):
+    """Application settings loaded from ``CHRONOS_*`` environment variables.
+
+    All fields have safe defaults for local development; ``CHRONOS_SECRET_KEY``
+    is the only truly required field (no default).
+
+    ``extra="forbid"`` ensures that unexpected env vars raise a validation error
+    rather than being silently ignored.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="CHRONOS_",
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="forbid",
+    )
+
+    # ── environment ─────────────────────────────────────────────────────────
+    env: Env = Env.dev
+
+    # ── database ────────────────────────────────────────────────────────────
+    database_url: str = "sqlite:///data/chronos.db"
+
+    # ── security ────────────────────────────────────────────────────────────
+    #: 32+ random bytes; required in all environments.
+    secret_key: SecretStr
+
+    # ── server ──────────────────────────────────────────────────────────────
+    api_bind_host: str = "127.0.0.1"
+    api_bind_port: int = 8443
+
+    #: Path to TLS certificate file (PEM). Required in prod.
+    tls_cert: Path | None = None
+    #: Path to TLS private key file (PEM). Required in prod.
+    tls_key: Path | None = None
+
+    # ── logging ─────────────────────────────────────────────────────────────
+    log_dir: Path = Path("data/logs")
+
+    # ── tool endpoints ───────────────────────────────────────────────────────
+    ollama_endpoint: str = "http://localhost:11434"
+    llm_provider: str = "ollama"
+
+    # ── Expo push ────────────────────────────────────────────────────────────
+    expo_access_token: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def require_tls_in_prod(self) -> Settings:
+        """Refuse to start in production without valid TLS certificate files."""
+        if self.env is not Env.prod:
+            return self
+
+        if self.tls_cert is None or self.tls_key is None:
+            raise ValueError("CHRONOS_TLS_CERT and CHRONOS_TLS_KEY are required in prod")
+
+        for label, path in (("CHRONOS_TLS_CERT", self.tls_cert), ("CHRONOS_TLS_KEY", self.tls_key)):
+            if not path.exists():
+                raise ValueError(f"{label} path does not exist: {path}")
+            # Reject world-readable cert/key files (mode bits o+r).
+            mode = path.stat().st_mode & 0o777
+            if mode & 0o004:
+                raise ValueError(f"{label} is world-readable (mode {oct(mode)}); chmod 600 it")
+
+        return self
+
+
+_settings: Settings | None = None
+
+
+def get_settings() -> Settings:
+    """Return the module-level :class:`Settings` singleton, creating it on first call.
+
+    The singleton is reset between test cases by patching this module's
+    ``_settings`` variable (or by calling :func:`reset_settings`).
+    """
+    global _settings
+    if _settings is None:
+        _settings = Settings()  # type: ignore[call-arg]  # pydantic-settings reads secret_key from env
+    return _settings
+
+
+def reset_settings() -> None:
+    """Clear the cached singleton (used in tests)."""
+    global _settings
+    _settings = None
+
+
+def override_settings(s: Settings) -> None:
+    """Replace the singleton with *s* (used in test fixtures)."""
+    global _settings
+    _settings = s
+
+
+# Silence "unused import" from env.py which imports Env.
+__all__ = ["Env", "Settings", "get_settings", "override_settings", "reset_settings"]
