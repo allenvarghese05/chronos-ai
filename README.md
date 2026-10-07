@@ -38,6 +38,28 @@ reel is sent anyway.
 | Open questions | [docs/13-open-questions.md](docs/13-open-questions.md) |
 | Agent workflow | [AGENTS.md](AGENTS.md), `.pi/agents/`, `.pi/prompts/` |
 
+## Pinned versions
+
+| Component | Version | Pin location |
+|---|---|---|
+| Node | 22.22.2 | `.nvmrc` |
+| pnpm | 12.10.1 | `apps/mobile/package.json` `packageManager` |
+| Expo SDK | 57.0.27 | `apps/mobile/package.json` |
+| expo-router | 57.0.25 | `apps/mobile/package.json` |
+| expo-dev-client | 57.0.19 | `apps/mobile/package.json` |
+| react-native | 0.86.3 | `apps/mobile/package.json` |
+| TypeScript (mobile) | 6.0.3 | `apps/mobile/package.json` |
+| Biome (mobile) | 2.5.15 | `apps/mobile/package.json` |
+| jest-expo | 57.0.5 | `apps/mobile/package.json` |
+| Python | 3.12 | `services/api/pyproject.toml` |
+| uv | 0.12.18 | `justfile` |
+| semgrep | 1.178.0 | `justfile` |
+| gitleaks | 8.21.2 | `justfile` |
+
+**Note (T0.4, pnpm 12.x + Expo):** React Native's Metro bundler does not follow symlinks, so
+`apps/mobile/pnpm-workspace.yaml` sets `nodeLinker: hoisted`. This is the pnpm 12.x location for
+project settings (previously `.npmrc`). See `docs/plans/T0.4-plan.md` §2 Design for details.
+
 ## Setup (macOS, Apple Silicon)
 
 1. Tools: [uv](https://docs.astral.sh/uv/), Node 22 (`.nvmrc`), pnpm via `corepack enable`,

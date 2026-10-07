@@ -1,0 +1,10 @@
+{
+	"name": "chronos-sensors",
+	"version": "0.1.0",
+	"description": "Expo local module: CoreMotion sensors and device state for Chronos",
+	"main": "src/index",
+	"license": "MIT",
+	"peerDependencies": {
+		"expo": "*"
+	}
+}
