@@ -7,3 +7,16 @@
 # as a direct dependency (which expo-doctor rejects).
 # See: https://pnpm.io/settings#nodelinker
 nodeLinker: hoisted
+
+# Audit advisories to ignore. These are HIGH/MODERATE vulnerabilities in Expo
+# SDK's build tools (@expo/cli, Metro bundler) for which no patched versions
+# exist. They are NOT in the app's runtime code. Review when Expo SDK is upgraded.
+#
+#   GHSA-86w9-cpqp-85rv: node-forge RSA bypass — in @expo/cli, no patch
+#   GHSA-vfj7-8cjw-p6xm: braces ReDoS — in Metro bundler, no patch
+#   GHSA-hp3w-g68c-fv3c: sprintf-js DoS — in argparse (test tooling), no patch
+auditConfig:
+  ignoreGhsas:
+    - GHSA-86w9-cpqp-85rv
+    - GHSA-vfj7-8cjw-p6xm
+    - GHSA-hp3w-g68c-fv3c

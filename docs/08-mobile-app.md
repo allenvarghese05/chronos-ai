@@ -2,6 +2,25 @@
 
 ## 1. Project setup (T0.4)
 
+- Expo SDK **pinned at task time (T0.4, 2026-10-06)**. All versions are recorded in
+  `apps/mobile/package.json` and `README.md`:
+
+  | Package | Pinned version | Note |
+  |---|---|---|
+  | `expo` | 57.0.27 | SDK pin |
+  | `expo-router` | 57.0.25 | dist-tag `sdk-57` |
+  | `expo-dev-client` | 57.0.19 | dist-tag `sdk-57` |
+  | `expo-notifications` | 57.0.22 | dist-tag `sdk-57` |
+  | `expo-secure-store` | 57.0.4 | dist-tag `sdk-57` |
+  | `expo-video` | 57.0.5 | dist-tag `sdk-57` |
+  | `react` | 19.2.3 | SDK manifest |
+  | `react-native` | 0.86.3 | SDK manifest |
+  | `typescript` | 6.0.3 | SDK `~6.0.3` |
+  | `jest-expo` | 57.0.5 | dist-tag `sdk-57` |
+
+- **pnpm 12.x + Metro:** `apps/mobile/pnpm-workspace.yaml` sets `nodeLinker: hoisted`
+  (pnpm 12.x moved project settings out of `.npmrc`). This is required for Metro.
+
 - `create-expo-app` with the TypeScript template, **Expo SDK pinned** (latest stable at task time;
   record the version in the task plan and `README.md`), `expo-router`, `expo-dev-client`.
 - `app.config.ts` (not JSON) so iOS config is typed:
