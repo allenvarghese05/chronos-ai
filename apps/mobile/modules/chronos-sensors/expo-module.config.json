@@ -1,0 +1,6 @@
+{
+	"name": "chronos-sensors",
+	"ios": {
+		"modules": ["ChronosSensorsModule"]
+	}
+}
