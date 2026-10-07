@@ -8,8 +8,17 @@
 // rethrown so it isn't silently hidden.
 
 // Isolate each test by resetting modules so the mock takes effect per-test.
+// Silence the __DEV__ console.warn emitted by the stub fallback path so Jest
+// output stays clean. The not-found test asserts the warn was actually fired.
+let warnSpy: jest.SpyInstance;
+
 beforeEach(() => {
 	jest.resetModules();
+	warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+});
+
+afterEach(() => {
+	warnSpy.mockRestore();
 });
 
 describe('ChronosSensors fallback (native module not linked)', () => {
@@ -24,6 +33,9 @@ describe('ChronosSensors fallback (native module not linked)', () => {
 		};
 		expect(() => ChronosSensors.hello()).not.toThrow();
 		expect(typeof ChronosSensors.hello()).toBe('string');
+		// The stub fallback must have emitted the dev warning exactly once.
+		expect(warnSpy).toHaveBeenCalledTimes(1);
+		expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ChronosSensors'));
 	});
 
 	it('fallback hello() returns the stub message when module is not linked', () => {
