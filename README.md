@@ -44,13 +44,13 @@ reel is sent anyway.
 |---|---|---|
 | Node | 22.22.2 | `.nvmrc` |
 | pnpm | 12.10.1 | `apps/mobile/package.json` `packageManager` |
-| Expo SDK | 57.0.27 | `apps/mobile/package.json` |
-| expo-router | 57.0.25 | `apps/mobile/package.json` |
-| expo-dev-client | 57.0.19 | `apps/mobile/package.json` |
+| Expo SDK | 57.0.28 | `apps/mobile/package.json` |
+| expo-router | 57.0.26 | `apps/mobile/package.json` |
+| expo-dev-client | 57.0.20 | `apps/mobile/package.json` |
 | react-native | 0.86.3 | `apps/mobile/package.json` |
 | TypeScript (mobile) | 6.0.3 | `apps/mobile/package.json` |
 | Biome (mobile) | 2.5.15 | `apps/mobile/package.json` |
-| jest-expo | 57.0.5 | `apps/mobile/package.json` |
+| jest-expo | 57.0.6 | `apps/mobile/package.json` |
 | Python | 3.12 | `services/api/pyproject.toml` |
 | uv | 0.12.18 | `justfile` |
 | semgrep | 1.178.0 | `justfile` |
