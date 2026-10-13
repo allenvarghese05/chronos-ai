@@ -62,3 +62,17 @@ jobs:
             (cd "${app_dir}" && pnpm audit --json | python3 -c 'import json,sys; d=json.load(sys.stdin); [print("  ["+v.get("severity","?")+"] "+v.get("title","?")+" "+v.get("url","")) for v in d.get("advisories",{}).values()]; print("  "+str(len(d.get("advisories",{})))+" non-ignored advisory/ies shown above")' || true)
             echo "  suppressed via ignoreGhsas (no patched version, see D31): ${IGNORED}"
           done
+      # Informational: report Expo SDK package drift vs live manifest weekly.
+      # Non-failing (|| true). Pins are bumped deliberately in task plans (ADR D32).
+      - name: Expo SDK drift (advisory)
+        if: ${{ !cancelled() }}
+        env:
+          EXPO_NO_TELEMETRY: "1"
+          CI: "1"
+        run: |
+          [ -f apps/mobile/package.json ] || { echo "apps/mobile not scaffolded"; exit 0; }
+          cd apps/mobile
+          pnpm install --frozen-lockfile
+          echo "=== Expo SDK drift (from live manifest) ==="
+          pnpm exec expo install --check 2>&1 || true
+          echo "To bump deliberately: cd apps/mobile && pnpm exec expo install --fix (then commit per ADR D32)"
