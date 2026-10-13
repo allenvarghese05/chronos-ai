@@ -353,6 +353,16 @@ mobile-build:
     pnpm exec expo prebuild --platform ios --clean
     pnpm exec expo run:ios --device
 
+# Boot (or reuse) the iOS Simulator named by CHRONOS_SIM (default "iPhone 16 Pro") and
+# run the dev-client. macOS only. First run compiles Pods — allow several minutes.
+mobile-sim:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}/apps/mobile" 2>/dev/null || { echo "apps/mobile not yet scaffolded, skipping mobile-sim"; exit 0; }
+    [ "$(uname -s)" = "Darwin" ] || { echo "mobile-sim requires macOS, skipping"; exit 0; }
+    sim="${CHRONOS_SIM:-iPhone 16 Pro}"
+    pnpm exec expo run:ios --device "$sim"
+
 # XCTest for the Swift module (macOS only).
 mobile-ios-test:
     #!/usr/bin/env bash
