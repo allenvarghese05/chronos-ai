@@ -40,10 +40,15 @@
 - `expo prebuild --platform ios --clean` is reproducible from `app.config.ts`; the `ios/`
   directory is **gitignored** (regenerated), except nothing — the Swift module lives in
   `modules/chronos-sensors/` which Expo autolinks.
-- Build: `just mobile-build` → `npx expo run:ios --device` (Xcode 16, free personal team is enough
-  for a 7-day cert; a paid developer account gives a 1-year profile and is recommended — see
-  `13-open-questions.md`). EAS Build (`eas build --profile development --platform ios`) is a
-  manual GitHub workflow with `EXPO_TOKEN`.
+- **Simulator (T0.4b):** `just mobile-sim` (or `CHRONOS_SIM="iPhone 15" just mobile-sim`) — runs
+  `expo run:ios --device "<name>"` against the named simulator (default "iPhone 16 Pro").
+  Requires Xcode 17+ (Swift 6.3.1): the pinned Expo SDK 57 xcframeworks were built with Swift
+  6.3.1 and are not compatible with Xcode 16.4 (Swift 6.1.2). Upgrade Xcode before running.
+  Physical device install is deferred to T2.4 (owner's iPhone port is broken).
+- **Device (deferred to T2.4):** `just mobile-build` → `expo run:ios --device` (Xcode 17+, free
+  personal team is enough for a 7-day cert; a paid developer account gives a 1-year profile and
+  is recommended — see `13-open-questions.md`). EAS Build (`eas build --profile development
+  --platform ios`) is a manual GitHub workflow with `EXPO_TOKEN`.
 - Push: `expo-notifications` with `getExpoPushTokenAsync({ projectId })` → `PATCH /v1/device/me`.
   APNs key is uploaded to Expo once (`eas credentials`) — required even for local builds because
   Expo Push Service sends through APNs.
