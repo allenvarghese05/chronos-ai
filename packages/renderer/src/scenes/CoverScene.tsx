@@ -19,7 +19,6 @@
 import { AbsoluteFill, interpolateColors, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { z } from 'zod';
 import {
-	COMPOSITION,
 	FONT_FAMILY,
 	FONT_SIZE,
 	SAFE_BOTTOM,
@@ -163,6 +162,3 @@ export function CoverScene({ theme, greeting, localDate }: Props) {
 		</AbsoluteFill>
 	);
 }
-
-// Silence lint warning for unused imports (COMPOSITION, SPRING_TEXT are used in T4.4)
-void COMPOSITION;
