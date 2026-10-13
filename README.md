@@ -53,7 +53,7 @@ reel is sent anyway.
 | jest-expo | 57.0.6 | `apps/mobile/package.json` |
 | remotion + @remotion/* | 4.0.534 | `packages/renderer/package.json` |
 | react (renderer) | 19.3.0 | `packages/renderer/package.json` |
-| zod | 4.6.5 | `packages/renderer/package.json` |
+| zod | 4.5.4 | `packages/renderer/package.json` |
 | TypeScript (renderer) | 7.0.2 | `packages/renderer/package.json` |
 | Biome (renderer) | 2.5.15 | `packages/renderer/package.json` |
 | vitest | 5.0.3 | `packages/renderer/package.json` |
