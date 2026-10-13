@@ -284,7 +284,8 @@ security-secrets:
     set -euo pipefail
     cd "{{justfile_directory()}}"
     command -v gitleaks >/dev/null 2>&1 || { echo "gitleaks not found (brew install gitleaks), skipping security-secrets"; exit 0; }
-    gitleaks git --no-banner --redact . && gitleaks dir --no-banner --redact .
+    config_arg=""; [ -f .gitleaks.toml ] && config_arg="--config .gitleaks.toml"
+    gitleaks git --no-banner --redact $config_arg . && gitleaks dir --no-banner --redact $config_arg .
     echo "security-secrets: no findings"
 
 # ───────────────────────────── run ─────────────────────────────
