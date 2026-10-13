@@ -72,9 +72,9 @@ export const FONT_SIZE = {
 
 export const FONT_FAMILY = {
 	/** Main text — Inter Tight 500/700 (self-hosted). */
-	sans: 'Inter Tight',
+	sans: '"Inter Tight", sans-serif',
 	/** Kicker chip, timestamps — JetBrains Mono 500 (self-hosted). */
-	mono: 'JetBrains Mono',
+	mono: '"JetBrains Mono", monospace',
 } as const;
 
 // ─── Colour palettes ──────────────────────────────────────────────────────────

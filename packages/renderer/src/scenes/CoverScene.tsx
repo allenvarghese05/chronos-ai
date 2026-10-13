@@ -71,19 +71,29 @@ export function CoverScene({ theme, greeting, localDate }: Props) {
 	// Clamp to [0, 1] to avoid artefacts during the transition overlap frames.
 	const progress = Math.min(1, frame / Math.max(1, durationInFrames - TRANSITION_FRAMES));
 
-	// Interpolate between the four theme gradient stops in pairs.
-	// We cycle: stop[0] → stop[1] → stop[2] → stop[3] → stop[0]
-	const bg = interpolateColors(
+	// Two-stop animated gradient: each stop independently cycles through the
+	// theme's four background colours so the gradient shifts visibly over time.
+	// stop0 follows stops [0]→[2]→[0]; stop1 follows stops [1]→[3]→[1].
+	const bgStop0 = interpolateColors(
 		progress,
-		[0, 0.33, 0.66, 1],
-		[palette.background[0], palette.background[1], palette.background[2], palette.background[3]],
+		[0, 0.5, 1],
+		[palette.background[0], palette.background[2], palette.background[0]],
+	);
+	const bgStop1 = interpolateColors(
+		progress,
+		[0, 0.5, 1],
+		[palette.background[1], palette.background[3], palette.background[1]],
 	);
 
 	// Fade-in opacity for the content (0 → 1 over the first 10 frames).
 	const fadeIn = Math.min(1, frame / Math.max(1, Math.min(10, fps / 3)));
 
 	return (
-		<AbsoluteFill style={{ backgroundColor: bg }}>
+		<AbsoluteFill
+			style={{
+				background: `linear-gradient(160deg, ${bgStop0} 0%, ${bgStop1} 100%)`,
+			}}
+		>
 			{/* Wordmark — top-left, respecting SAFE_TOP */}
 			<div
 				style={{

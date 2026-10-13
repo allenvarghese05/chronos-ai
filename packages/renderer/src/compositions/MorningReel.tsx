@@ -13,6 +13,7 @@
  * are computed by `sceneFrames(scene.startSec, scene.endSec, fps)`.
  */
 
+import { useMemo } from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { Audio, Sequence, staticFile, useVideoConfig } from 'remotion';
 import { waitForFonts } from '../design/fonts';
@@ -55,6 +56,13 @@ export const morningReelMetadata: CalculateMetadataFunction<ReelProps> = async (
 
 export function MorningReel(props: ReelProps) {
 	const { fps } = useVideoConfig();
+
+	// Trigger font loading from component scope so loadFont's own delayRender
+	// is registered in the React render pass (not only in calculateMetadata).
+	// waitForFonts() is idempotent — returns the same Promise on subsequent calls.
+	useMemo(() => {
+		void waitForFonts();
+	}, []);
 
 	return (
 		<>
