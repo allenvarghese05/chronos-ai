@@ -46,5 +46,6 @@ jobs:
             release
           requireScope: true
           # Task PRs are titled "feat(api): T1.5 scoring engine" (type and scope first, task id in the subject).
-          subjectPattern: '^(T\d+\.\d+ .+|[^T].+|T[^0-9].+)$'
+          # Task ids may carry a letter suffix (T0.2b, T0.4b).
+          subjectPattern: '^(T\d+\.\d+[a-z]? .+|[^T].+|T[^0-9].+)$'
           validateSingleCommit: false

@@ -53,7 +53,7 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
 | Job | Runner | Steps |
 |---|---|---|
 | `api` | ubuntu | setup-uv (pinned), `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest -m "not ollama and not kokoro and not whisper and not remotion"` with coverage ≥ 85 % on `chronos/wake` and `chronos/content/script`, `bandit -r src -ll`, `chronos config validate`, `just gen-types && git diff --exit-code`, semgrep (`p/security-audit p/python`, pinned, `--error`) |
-| `mobile` | ubuntu | setup-node from `.nvmrc`, corepack pnpm pin check, `pnpm install --frozen-lockfile`, `biome ci`, `tsc --noEmit`, `jest --ci`, `expo-doctor`, `expo export --platform ios` (bundle compiles) , semgrep `p/typescript` |
+| `mobile` | ubuntu | setup-node from `.nvmrc`, corepack pnpm pin check, `pnpm install --frozen-lockfile`, `biome ci`, `tsc --noEmit`, `jest --ci`, `expo-doctor` (live-manifest version sub-check disabled via `EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1` in the `check-mobile` recipe — see ADR D32; all other 20 checks run), `expo export --platform ios` (bundle compiles), semgrep `p/typescript` |
 | `renderer` | ubuntu | same JS setup, `biome ci`, `tsc --noEmit`, `vitest run`, Remotion **still smoke render** of `sample-reel.json` (headless shell cached by `actions/cache`), upload `smoke.png` artefact (7 days) |
 | `secrets` | ubuntu | gitleaks (pinned action) over the full history of the PR branch; fails on any finding |
 

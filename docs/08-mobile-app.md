@@ -7,16 +7,16 @@
 
   | Package | Pinned version | Note |
   |---|---|---|
-  | `expo` | 57.0.27 | SDK pin |
-  | `expo-router` | 57.0.25 | dist-tag `sdk-57` |
-  | `expo-dev-client` | 57.0.19 | dist-tag `sdk-57` |
+  | `expo` | 57.0.28 | SDK pin (bumped T0.2b) |
+  | `expo-router` | 57.0.26 | dist-tag `sdk-57` (bumped T0.2b) |
+  | `expo-dev-client` | 57.0.20 | dist-tag `sdk-57` (bumped T0.2b) |
   | `expo-notifications` | 57.0.22 | dist-tag `sdk-57` |
   | `expo-secure-store` | 57.0.4 | dist-tag `sdk-57` |
   | `expo-video` | 57.0.5 | dist-tag `sdk-57` |
   | `react` | 19.2.3 | SDK manifest |
   | `react-native` | 0.86.3 | SDK manifest |
   | `typescript` | 6.0.3 | SDK `~6.0.3` |
-  | `jest-expo` | 57.0.5 | dist-tag `sdk-57` |
+  | `jest-expo` | 57.0.6 | dist-tag `sdk-57` (bumped T0.2b) |
 
 - **pnpm 12.x + Metro:** `apps/mobile/pnpm-workspace.yaml` sets `nodeLinker: hoisted`
   (pnpm 12.x moved project settings out of `.npmrc`). This is required for Metro.
