@@ -1,0 +1,19 @@
+# pnpm
+node_modules/
+.pnpm-store/
+
+# Remotion headless shell (cached in CI; downloaded locally by `just models`)
+.remotion/
+
+# Render output (smoke.png committed only as a CI artefact, not in git)
+out/
+dist/
+public/renders/
+
+# TypeScript
+*.tsbuildinfo
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/

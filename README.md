@@ -51,6 +51,13 @@ reel is sent anyway.
 | TypeScript (mobile) | 6.0.3 | `apps/mobile/package.json` |
 | Biome (mobile) | 2.5.15 | `apps/mobile/package.json` |
 | jest-expo | 57.0.6 | `apps/mobile/package.json` |
+| remotion + @remotion/* | 4.0.534 | `packages/renderer/package.json` |
+| react (renderer) | 19.3.0 | `packages/renderer/package.json` |
+| zod | 4.5.4 | `packages/renderer/package.json` |
+| TypeScript (renderer) | 7.0.2 | `packages/renderer/package.json` |
+| Biome (renderer) | 2.5.15 | `packages/renderer/package.json` |
+| vitest | 5.0.3 | `packages/renderer/package.json` |
+| Chrome Headless Shell | 157.0.8080.0 | Remotion auto-managed; cached at `packages/renderer/node_modules/.remotion` |
 | Python | 3.12 | `services/api/pyproject.toml` |
 | uv | 0.12.18 | `justfile` |
 | semgrep | 1.178.0 | `justfile` |
@@ -112,4 +119,4 @@ when asked so `.pi/prompts` become slash commands.
 | Ollama model | qwen2.5:7b-instruct @ digest | justfile `ollama_model`, `ollama_digest` (T0.6) |
 
 Library versions are pinned by `services/api/uv.lock`, `apps/mobile/pnpm-lock.yaml` and
-`packages/renderer/pnpm-lock.yaml` once those apps exist (T0.3–T0.5).
+`packages/renderer/pnpm-lock.yaml`.

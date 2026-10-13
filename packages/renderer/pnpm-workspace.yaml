@@ -1,0 +1,7 @@
+# pnpm 12.x project-level settings for packages/renderer.
+# nodeLinker=hoisted for consistency with apps/mobile; also ensures that
+# Remotion's internal React resolution works without symlinking surprises.
+nodeLinker: hoisted
+
+allowBuilds:
+  esbuild: true
