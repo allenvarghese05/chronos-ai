@@ -1,6 +1,6 @@
 {
-	"name": "chronos-sensors",
-	"ios": {
+	"platforms": ["apple"],
+	"apple": {
 		"modules": ["ChronosSensorsModule"]
 	}
 }

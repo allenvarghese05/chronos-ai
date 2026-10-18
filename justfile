@@ -284,7 +284,8 @@ security-secrets:
     set -euo pipefail
     cd "{{justfile_directory()}}"
     command -v gitleaks >/dev/null 2>&1 || { echo "gitleaks not found (brew install gitleaks), skipping security-secrets"; exit 0; }
-    gitleaks git --no-banner --redact . && gitleaks dir --no-banner --redact .
+    config_arg=""; [ -f .gitleaks.toml ] && config_arg="--config .gitleaks.toml"
+    gitleaks git --no-banner --redact $config_arg . && gitleaks dir --no-banner --redact $config_arg .
     echo "security-secrets: no findings"
 
 # ───────────────────────────── run ─────────────────────────────
@@ -352,6 +353,17 @@ mobile-build:
     [ "$(uname -s)" = "Darwin" ] || { echo "mobile-build requires macOS, skipping"; exit 0; }
     pnpm exec expo prebuild --platform ios --clean
     pnpm exec expo run:ios --device
+
+# Boot (or reuse) the iOS Simulator named by CHRONOS_SIM (default "iPhone 16 Pro") and
+# run the dev-client. macOS only. First run compiles Pods — allow several minutes.
+# expo run:ios auto-prebuilds (runs `expo prebuild --platform ios`) when the ios/ directory is missing.
+mobile-sim:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}/apps/mobile" 2>/dev/null || { echo "apps/mobile not yet scaffolded, skipping mobile-sim"; exit 0; }
+    [ "$(uname -s)" = "Darwin" ] || { echo "mobile-sim requires macOS, skipping"; exit 0; }
+    sim="${CHRONOS_SIM:-iPhone 16 Pro}"
+    pnpm exec expo run:ios --device "$sim"
 
 # XCTest for the Swift module (macOS only).
 mobile-ios-test:

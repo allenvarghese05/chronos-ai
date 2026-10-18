@@ -42,7 +42,7 @@ jobs:
           cd apps/mobile
           pnpm exec expo prebuild --platform ios --no-install
           cd ios && pod install
-          xcodebuild -workspace ChronosAI.xcworkspace -scheme ChronosAI -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -50
+          xcodebuild -workspace Chronos.xcworkspace -scheme Chronos -sdk iphonesimulator -configuration Debug -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build | tail -50
       - name: Swift module tests
         run: |
           if [ -x scripts/ios-test.sh ]; then scripts/ios-test.sh; else echo "scripts/ios-test.sh not yet implemented"; fi
