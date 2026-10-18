@@ -151,7 +151,7 @@ def check_db(engine: Engine | None = None) -> str:
     try:
         resolved = engine if engine is not None else get_engine()
         with Session(resolved) as session:
-            session.execute(text("SELECT 1"))
+            session.exec(text("SELECT 1"))  # type: ignore[call-overload]
         return "ok"
     except Exception as exc:
         return f"error: {exc}"

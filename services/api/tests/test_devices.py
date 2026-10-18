@@ -16,8 +16,6 @@ Coverage:
 
 from __future__ import annotations
 
-import time  # noqa: F401 (unused but kept for clarity)
-
 import time_machine
 from fastapi.testclient import TestClient
 from sqlmodel import Session, select
@@ -32,9 +30,8 @@ from chronos.models.devices import Device
 from chronos.ratelimit import TokenBucket, reset_all
 from chronos.time import utc_now_iso
 
+
 # ── helpers ───────────────────────────────────────────────────────────────────
-
-
 def make_settings(**overrides: object) -> Settings:
     base: dict[str, object] = {
         "env": "test",
@@ -80,8 +77,6 @@ def _auth(token: str) -> dict[str, str]:
 
 
 # ── auth dependency ───────────────────────────────────────────────────────────
-
-
 class TestAuthDependency:
     def test_valid_token_200(self, client: TestClient, test_settings: Settings) -> None:
         plain, _ = _insert_device(test_settings)
@@ -125,8 +120,6 @@ class TestAuthDependency:
 
 
 # ── GET /v1/device/me ─────────────────────────────────────────────────────────
-
-
 class TestGetDevice:
     def test_get_fields(self, client: TestClient, test_settings: Settings) -> None:
         plain, device = _insert_device(test_settings)
@@ -145,8 +138,6 @@ class TestGetDevice:
 
 
 # ── PATCH /v1/device/me ───────────────────────────────────────────────────────
-
-
 class TestPatchDevice:
     def test_patch_push_token(self, client: TestClient, test_settings: Settings) -> None:
         plain, _ = _insert_device(test_settings)
@@ -201,8 +192,6 @@ class TestPatchDevice:
 
 
 # ── DELETE /v1/device/me ──────────────────────────────────────────────────────
-
-
 class TestDeleteDevice:
     def test_delete_returns_204(self, client: TestClient, test_settings: Settings) -> None:
         plain, _ = _insert_device(test_settings)
@@ -228,8 +217,6 @@ class TestDeleteDevice:
 
 
 # ── last_seen_at throttle ─────────────────────────────────────────────────────
-
-
 class TestLastSeenThrottle:
     def test_last_seen_at_not_bumped_within_60s(
         self, client: TestClient, test_settings: Settings
@@ -276,8 +263,6 @@ class TestLastSeenThrottle:
 
 
 # ── rate limiting ─────────────────────────────────────────────────────────────
-
-
 class TestDeviceRateLimit:
     def test_token_bucket_121st_blocked(self) -> None:
         """120 req/min bucket: 121st request is blocked (injectable clock, no sleeping)."""

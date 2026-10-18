@@ -14,7 +14,6 @@ Key functions
 from __future__ import annotations
 
 import hashlib
-import hmac
 import secrets
 from datetime import UTC, datetime, timedelta
 
@@ -90,11 +89,6 @@ def normalise_pairing_code(code: str) -> str:
         Canonical string (e.g. ``"7K2M9QXD"``).
     """
     return code.upper().replace("-", "").replace(" ", "")
-
-
-def _constant_time_equal(a: str, b: str) -> bool:
-    """Constant-time string comparison using :func:`hmac.compare_digest`."""
-    return hmac.compare_digest(a.encode(), b.encode())
 
 
 def _should_bump_last_seen(last_seen_at: str, now: datetime) -> bool:

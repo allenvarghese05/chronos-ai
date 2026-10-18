@@ -329,6 +329,7 @@ class TestPairingRateLimit:
         reset_all()
         app = create_app(settings=test_settings)
         with TestClient(app) as c:
-            for _ in range(6):
+            r = c.post("/v1/pair", json=_pair_body(generate_pairing_code()))
+            for _ in range(5):
                 r = c.post("/v1/pair", json=_pair_body(generate_pairing_code()))
             assert r.headers.get("retry-after") is not None

@@ -146,10 +146,11 @@ def pair_code() -> None:
     from datetime import timedelta
 
     import segno
+    from sqlmodel import Session
 
     from chronos.auth import generate_pairing_code, hash_token, normalise_pairing_code
     from chronos.config import get_settings
-    from chronos.db import create_db_engine, get_session
+    from chronos.db import create_db_engine
     from chronos.models.devices import PairingCode
     from chronos.time import parse_utc_iso, utc_now_iso
 
@@ -172,7 +173,7 @@ def pair_code() -> None:
         attempts=0,
     )
 
-    with get_session(engine) as session:
+    with Session(engine) as session:
         session.add(pc)
         session.commit()
 
@@ -206,10 +207,10 @@ def device_revoke(
     Sets ``status = revoked`` and ``revoked_at = now`` on every matched device
     row.  Any subsequent request with the old token will receive 403 ``revoked``.
     """
-    from sqlmodel import select
+    from sqlmodel import Session, select
 
     from chronos.config import get_settings
-    from chronos.db import create_db_engine, get_session
+    from chronos.db import create_db_engine
     from chronos.enums import DeviceStatus
     from chronos.models.devices import Device
     from chronos.time import utc_now_iso
@@ -217,9 +218,9 @@ def device_revoke(
     settings = get_settings()
     engine = create_db_engine(settings.database_url)
 
-    with get_session(engine) as session:
+    with Session(engine) as session:
         if all_devices:
-            devices = list(session.exec(select(Device)).all())
+            devices: list[Device] = list(session.exec(select(Device)).all())
         else:
             devices = list(
                 session.exec(select(Device).where(Device.status == DeviceStatus.active)).all()
