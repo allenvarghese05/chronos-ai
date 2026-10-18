@@ -3,7 +3,7 @@
 - Engine: SQLite 3.45+ via SQLAlchemy 2 / SQLModel; `PRAGMA journal_mode=WAL; foreign_keys=ON;
   busy_timeout=5000`. File: `data/chronos.db` (gitignored).
 - Migrations: Alembic, one revision per task that changes schema, up **and** down tested.
-- Timestamps: UTC ISO-8601 strings in `*_at` columns (`TEXT`), local dates as `YYYY-MM-DD` `TEXT`.
+- Timestamps: UTC ISO-8601 with microseconds and Z suffix in `*_at` columns (`TEXT`), local dates as `YYYY-MM-DD` `TEXT`.
 - JSON columns are `TEXT` validated by a Pydantic model at the boundary.
 - IDs: `INTEGER PRIMARY KEY` for internal tables; `TEXT` ULIDs for anything exposed in URLs
   (`reels.public_id`, `devices.public_id`).

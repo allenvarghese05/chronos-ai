@@ -10,7 +10,7 @@ import pytest
 from chronos.ids import new_ulid
 from chronos.time import parse_utc_iso, utc_now_iso
 
-_ISO_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+_ISO_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 _ULID_PATTERN = re.compile(r"^[0-9A-Z]{26}$")
 
 
@@ -29,22 +29,29 @@ class TestUtcNowIso:
         iso = utc_now_iso()
         after = datetime.datetime.now(tz=datetime.UTC)
         parsed = parse_utc_iso(iso)
-        # Allow 1-second fuzz due to strftime truncating sub-seconds.
-        fuzz = datetime.timedelta(seconds=1)
-        assert before - fuzz <= parsed <= after + fuzz
+        assert before <= parsed <= after
+
+    def test_monotonic_non_decreasing(self) -> None:
+        """Two consecutive calls must return non-decreasing timestamps."""
+        iso1 = utc_now_iso()
+        iso2 = utc_now_iso()
+        t1 = parse_utc_iso(iso1)
+        t2 = parse_utc_iso(iso2)
+        assert t1 <= t2, f"Timestamps not monotonic: {iso1!r} > {iso2!r}"
 
     def test_lexicographic_ordering(self) -> None:
-        """ISO-8601 UTC strings must sort lexicographically in time order."""
+        """ISO-8601 UTC strings with microseconds must sort lexicographically in time order."""
         import time
 
         iso1 = utc_now_iso()
         time.sleep(0.01)
         iso2 = utc_now_iso()
-        assert iso1 <= iso2
+        assert iso1 < iso2, f"Lexicographic order violated: {iso1!r} >= {iso2!r}"
 
 
 class TestParseUtcIso:
-    def test_valid_string(self) -> None:
+    def test_valid_string_seconds_precision(self) -> None:
+        """Second-precision strings (legacy) must still be accepted."""
         s = "2026-10-06T07:12:04Z"
         dt = parse_utc_iso(s)
         assert dt.year == 2026
@@ -53,6 +60,14 @@ class TestParseUtcIso:
         assert dt.hour == 7
         assert dt.minute == 12
         assert dt.second == 4
+        assert dt.tzinfo == datetime.UTC
+
+    def test_valid_string_microseconds_precision(self) -> None:
+        """Microsecond-precision strings produced by utc_now_iso must parse correctly."""
+        s = "2026-10-06T07:12:04.123456Z"
+        dt = parse_utc_iso(s)
+        assert dt.year == 2026
+        assert dt.microsecond == 123456
         assert dt.tzinfo == datetime.UTC
 
     def test_bad_input_raises(self) -> None:
