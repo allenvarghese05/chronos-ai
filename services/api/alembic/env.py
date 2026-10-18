@@ -24,6 +24,8 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "src"))
 # Import SQLModel metadata so Alembic sees all declared models.
 from sqlmodel import SQLModel
 
+import chronos.models  # noqa: F401 — side-effect: populates SQLModel.metadata with all tables
+
 target_metadata = SQLModel.metadata
 
 # Alembic Config object (gives access to alembic.ini values).
