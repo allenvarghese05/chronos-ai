@@ -13,6 +13,7 @@ Error codes returned by this router:
 
 from __future__ import annotations
 
+import hmac
 import zoneinfo
 from typing import Annotated
 
@@ -152,7 +153,7 @@ def create_pair(
     #    attempts > 5 means it was already burned.
     #    We check >= 5 here because we burned on the 5th wrong; correct code on 6th → 400.
     submitted_hash = hash_token(normalise_pairing_code(body.code))
-    is_correct = submitted_hash == pairing_code.code_hash
+    is_correct = hmac.compare_digest(submitted_hash, pairing_code.code_hash)
 
     if not is_correct:
         # Burn the code on the 5th wrong attempt.
