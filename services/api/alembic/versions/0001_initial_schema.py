@@ -222,6 +222,14 @@ def upgrade() -> None:
             "cause IN ('evaluation', 'scheduler_window_start', 'scheduler_window_end', 'deliver_ok', 'manual')",
             name="ck_day_transitions_cause",
         ),
+        sa.CheckConstraint(
+            "from_state IN ('idle', 'monitoring', 'confirmed', 'fallback', 'delivered')",
+            name="ck_day_transitions_from_state",
+        ),
+        sa.CheckConstraint(
+            "to_state IN ('idle', 'monitoring', 'confirmed', 'fallback', 'delivered')",
+            name="ck_day_transitions_to_state",
+        ),
         sa.ForeignKeyConstraint(
             ["caused_by_evaluation_id"],
             ["wake_evaluations.id"],

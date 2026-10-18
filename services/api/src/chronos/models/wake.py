@@ -219,6 +219,14 @@ class DayTransition(SQLModel, table=True):
             f"cause IN {ck_values(TransitionCause)}",
             name="ck_day_transitions_cause",
         ),
+        CheckConstraint(
+            f"from_state IN {ck_values(DayState)}",
+            name="ck_day_transitions_from_state",
+        ),
+        CheckConstraint(
+            f"to_state IN {ck_values(DayState)}",
+            name="ck_day_transitions_to_state",
+        ),
     )
 
     id: int | None = Field(default=None, primary_key=True)

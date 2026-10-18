@@ -83,6 +83,12 @@ _INSERT_DAY = text(
     " VALUES (:ld, :did, 'UTC', 'weekday', :ts, :ts, 'idle', 0, 0, 0, :ts, :ts)"
 )
 
+_INSERT_DAY_TRANSITION = text(
+    "INSERT INTO day_transitions"
+    " (local_date, device_id, from_state, to_state, cause, at)"
+    " VALUES (:ld, :did, :from_state, :to_state, 'evaluation', :ts)"
+)
+
 
 class TestForeignKeys:
     def test_device_fk_on_telemetry_events(self, tmp_path: Path) -> None:
@@ -267,6 +273,58 @@ class TestCheckConstraints:
                         " VALUES (1, 'INVALID', '{}', 'abc', :ts, 'cli', 0)"
                     ),
                     {"ts": ts},
+                )
+                session.commit()
+        engine.dispose()
+
+    def test_day_transition_from_state_check_constraint(self, tmp_path: Path) -> None:
+        """Inserting a day_transition with an invalid from_state must fail."""
+        engine = _migrated_engine(tmp_path, "ck_dt_from_state.db")
+        ts = utc_now_iso()
+        with Session(engine) as session:
+            session.execute(
+                _INSERT_DEVICE,
+                {"pub": "PUB1", "name": "Phone", "th": "hash1", "tz": "UTC", "ts": ts},
+            )
+            session.execute(_INSERT_DAY, {"ld": "2026-10-06", "did": 1, "ts": ts})
+            session.commit()
+
+            with pytest.raises(IntegrityError):
+                session.execute(
+                    _INSERT_DAY_TRANSITION,
+                    {
+                        "ld": "2026-10-06",
+                        "did": 1,
+                        "from_state": "INVALID_STATE",
+                        "to_state": "monitoring",
+                        "ts": ts,
+                    },
+                )
+                session.commit()
+        engine.dispose()
+
+    def test_day_transition_to_state_check_constraint(self, tmp_path: Path) -> None:
+        """Inserting a day_transition with an invalid to_state must fail."""
+        engine = _migrated_engine(tmp_path, "ck_dt_to_state.db")
+        ts = utc_now_iso()
+        with Session(engine) as session:
+            session.execute(
+                _INSERT_DEVICE,
+                {"pub": "PUB1", "name": "Phone", "th": "hash1", "tz": "UTC", "ts": ts},
+            )
+            session.execute(_INSERT_DAY, {"ld": "2026-10-06", "did": 1, "ts": ts})
+            session.commit()
+
+            with pytest.raises(IntegrityError):
+                session.execute(
+                    _INSERT_DAY_TRANSITION,
+                    {
+                        "ld": "2026-10-06",
+                        "did": 1,
+                        "from_state": "idle",
+                        "to_state": "INVALID_STATE",
+                        "ts": ts,
+                    },
                 )
                 session.commit()
         engine.dispose()
