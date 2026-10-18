@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import text
+from sqlalchemy import Engine, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,7 @@ def _alembic_cfg(db_url: str) -> Config:
     return cfg
 
 
-def _migrated_engine(tmp_path: Path, name: str = "constraints_test.db"):  # type: ignore[no-untyped-def]
+def _migrated_engine(tmp_path: Path, name: str = "constraints_test.db") -> Engine:
     """Return a build_migration_engine pointing at a freshly migrated temp DB."""
     db_url = f"sqlite:///{tmp_path / name}"
     command.upgrade(_alembic_cfg(db_url), "head")
