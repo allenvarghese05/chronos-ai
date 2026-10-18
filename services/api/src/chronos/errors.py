@@ -83,6 +83,7 @@ def make_problem(
     """
     body: dict[str, Any] = {
         "type": f"urn:chronos:error:{code}",
+        "code": code,  # extension member: machine-readable shorthand (RFC 9457 §3.2)
         "title": title,
         "status": status,
         "detail": detail,

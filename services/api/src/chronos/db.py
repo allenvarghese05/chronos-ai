@@ -19,9 +19,8 @@ from collections.abc import Generator
 
 from fastapi import Request
 from sqlalchemy import Engine, event, text
-from sqlalchemy.orm import Session
 from sqlalchemy.pool import ConnectionPoolEntry, NullPool
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 # SQLModel exposes SQLAlchemy's metadata via SQLModel.metadata.
 metadata = SQLModel.metadata

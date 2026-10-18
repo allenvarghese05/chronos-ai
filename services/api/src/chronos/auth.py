@@ -19,8 +19,7 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, Request
-from sqlalchemy.orm import Session
-from sqlmodel import select
+from sqlmodel import Session, select
 
 from chronos.db import get_session_dep
 from chronos.errors import ProblemException

@@ -119,11 +119,16 @@ def _get_or_create(
 
 
 def reset_all() -> None:
-    """Clear all registered buckets and the registry (call in test teardown)."""
+    """Reset all registered bucket states (call in test setup/teardown).
+
+    Resets the internal token counts of every registered bucket so that tests
+    start with a clean slate.  The registry itself is *not* cleared — removing
+    buckets would break module-level ``Depends`` closures that hold direct
+    references to the bucket objects.
+    """
     with _registry_lock:
         for bucket in _registry.values():
             bucket.reset()
-        _registry.clear()
 
 
 def rate_limit(
