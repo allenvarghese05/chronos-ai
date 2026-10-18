@@ -356,6 +356,7 @@ mobile-build:
 
 # Boot (or reuse) the iOS Simulator named by CHRONOS_SIM (default "iPhone 16 Pro") and
 # run the dev-client. macOS only. First run compiles Pods — allow several minutes.
+# expo run:ios auto-prebuilds (runs `expo prebuild --platform ios`) when the ios/ directory is missing.
 mobile-sim:
     #!/usr/bin/env bash
     set -euo pipefail
