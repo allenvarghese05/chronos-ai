@@ -17,6 +17,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Generator
 
+from fastapi import Request
 from sqlalchemy import Engine, event, text
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import ConnectionPoolEntry, NullPool
@@ -120,6 +121,25 @@ def get_session(engine: Engine | None = None) -> Generator[Session, None, None]:
         except Exception:
             session.rollback()
             raise
+
+
+def get_session_dep(request: Request) -> Generator[Session, None, None]:
+    """FastAPI ``Depends``-compatible session factory.
+
+    Reads the SQLAlchemy engine from ``request.app.state.db_engine`` (stored
+    there by the lifespan hook in :mod:`chronos.main`) and delegates to
+    :func:`get_session`.
+
+    Usage::
+
+        from fastapi import Depends
+        from chronos.db import get_session_dep
+
+        @router.get("/example")
+        def example(session: Session = Depends(get_session_dep)) -> ...
+    """
+    engine: Engine = request.app.state.db_engine
+    yield from get_session(engine)
 
 
 def check_db(engine: Engine | None = None) -> str:

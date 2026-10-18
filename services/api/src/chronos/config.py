@@ -12,7 +12,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import SecretStr, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -69,6 +69,37 @@ class Settings(BaseSettings):
 
     # ── Expo push ────────────────────────────────────────────────────────────
     expo_access_token: SecretStr | None = None
+
+    # ── public URL (pairing response) ────────────────────────────────────────
+    #: The base URL returned in the pairing response (docs/05 §1).
+    #: Defaults to scheme://api_bind_host:api_bind_port/v1.
+    #: Must never be set to a 0.0.0.0 address.
+    public_base_url: str = ""
+
+    # ── rate limits ──────────────────────────────────────────────────────────
+    #: Max pairing attempts per minute per IP (docs/05 §0).
+    rate_limit_pairing_per_minute: int = Field(default=5, ge=1)
+    #: Max requests per minute per IP for all other endpoints.
+    rate_limit_default_per_minute: int = Field(default=120, ge=1)
+
+    @model_validator(mode="after")
+    def _derive_public_base_url(self) -> Settings:
+        """Compute ``public_base_url`` from bind host/port when not supplied."""
+        if not self.public_base_url:
+            host = self.api_bind_host
+            if host in ("0.0.0.0", "::"):  # nosec B104  # noqa: S104
+                raise ValueError(
+                    "CHRONOS_PUBLIC_BASE_URL must be set when CHRONOS_API_BIND_HOST "
+                    "is 0.0.0.0 or :: (cannot derive a routable URL)"
+                )
+            scheme = "https" if (self.tls_cert is not None or self.env is Env.prod) else "http"
+            self.public_base_url = f"{scheme}://{host}:{self.api_bind_port}/v1"
+        else:
+            # Explicitly supplied — validate it is not a 0.0.0.0 URL.
+            for bad in ("://0.0.0.0", "://[::]"):
+                if bad in self.public_base_url:
+                    raise ValueError("CHRONOS_PUBLIC_BASE_URL must not use 0.0.0.0 or [::]")
+        return self
 
     @model_validator(mode="after")
     def require_tls_in_prod(self) -> Settings:
