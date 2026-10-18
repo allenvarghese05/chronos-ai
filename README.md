@@ -75,9 +75,10 @@ project settings (previously `.npmrc`). See `docs/plans/T0.4-plan.md` §2 Design
 3. `just models` — Kokoro and whisper model files (checksummed), `ollama pull`, Remotion browser.
 4. `just certs` — local HTTPS certificate; install the printed root CA profile on the iPhone.
 5. `just laptop-setup` — LaunchAgents (API, deploy), `pmset` wake schedule, log directories.
-6. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator
-   (requires Xcode 17+ / Swift 6.3.1; the pinned Expo SDK 57 xcframeworks are incompatible
-   with Xcode 16.4). Physical device install is deferred to T2.4. To override the simulator:
+6. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator;
+   the app displays "Hello from ChronosSensors!" (Swift native module). Requires Xcode with
+   Swift ≥ 6.3.1 (Xcode 17 or newer; verified with Xcode 27.1 / Swift 6.4). Physical device
+   install is deferred to T2.4. To override the simulator:
    `CHRONOS_SIM="iPhone 15" just mobile-sim`. After simulator launch, pair with
    `uv run chronos pair-code` (in `services/api`).
 
