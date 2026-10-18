@@ -69,9 +69,11 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
 | `release.yml` | tag `v*` | Creates a GitHub Release with auto-generated notes and attaches `smoke.png` + SBOMs (`uv export`, `pnpm licenses list --json`) |
 
 ### Dependabot (`.github/dependabot.yml`)
-- `github-actions` weekly (keeps SHA pins current).
+- `github-actions` weekly (keeps SHA pins current); PRs use `ci(deps):` title, which is in the
+  allowed scopes list (D33).
 - `pip` (`services/api`) and `npm` (`apps/mobile`, `packages/renderer`): **security updates only**
-  (`open-pull-requests-limit: 5`, grouped), because lockfiles otherwise change on purpose.
+  via `open-pull-requests-limit: 0` (GitHub ignores the limit for security PRs, so CVE patches
+  still open; version-bump PRs do not — D33). Grouped so each ecosystem produces at most one PR.
 
 ### Repository settings (`scripts/bootstrap-github.sh` + `scripts/github-ruleset.json`)
 - Private repo `chronos-ai` (owner decision); squash-only merges; auto-delete branches; auto-merge

@@ -1,5 +1,8 @@
-# GitHub Actions: keep SHA pins current weekly. Python/npm: security updates only, grouped; other
-# lockfile changes are made on purpose inside tasks.
+# Policy: github-actions SHA pins are bumped weekly (keeps CI actions current).
+# pip and npm: security updates ONLY. Version updates are disabled via
+# open-pull-requests-limit: 0 — GitHub Dependabot ignores this limit for security
+# updates, so CVE-triggered PRs still open; routine version bumps do not.
+# Lockfile changes for pip/npm happen deliberately inside feature tasks (D19, D33).
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -13,7 +16,7 @@ updates:
     directory: /services/api
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: build(api)
     groups:
@@ -24,7 +27,7 @@ updates:
     directory: /apps/mobile
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: build(mobile)
     groups:
@@ -35,7 +38,7 @@ updates:
     directory: /packages/renderer
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
     commit-message:
       prefix: build(renderer)
     groups:
