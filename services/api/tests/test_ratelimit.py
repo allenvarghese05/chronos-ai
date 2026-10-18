@@ -24,7 +24,7 @@ class TestTokenBucketPruning:
 
         # Prime a bucket for "old_ip" at t=0.
         bucket.check("old_ip")
-        assert "old_ip" in bucket._buckets
+        assert "old_ip" in bucket.keys()
 
         # Advance time past the idle timeout (10 x 60 = 600 s).
         ticks[0] = 601.0
@@ -32,8 +32,8 @@ class TestTokenBucketPruning:
         # A check for ANY key triggers pruning.
         bucket.check("new_ip")
 
-        assert "old_ip" not in bucket._buckets, "stale key should have been pruned"
-        assert "new_ip" in bucket._buckets
+        assert "old_ip" not in bucket.keys(), "stale key should have been pruned"
+        assert "new_ip" in bucket.keys()
 
     def test_active_key_budget_unaffected_by_pruning(self) -> None:
         """Pruning stale keys must not consume tokens from an active key."""
@@ -60,7 +60,7 @@ class TestTokenBucketPruning:
         bucket.check("pruned_trigger")
 
         # "old_ip" gone, "active_ip" gone (also idle > 600s).
-        assert "old_ip" not in bucket._buckets
+        assert "old_ip" not in bucket.keys()
 
         # Now check "active_ip" again — it refills from scratch, so it's allowed.
         allowed, _ = bucket.check("active_ip")
@@ -84,15 +84,15 @@ class TestTokenBucketPruning:
         ticks[0] = 601.0
         bucket.check("live_ip")  # This also triggers pruning.
 
-        assert "stale_ip" not in bucket._buckets, "stale_ip should be pruned"
-        assert "live_ip" in bucket._buckets, "live_ip should survive"
+        assert "stale_ip" not in bucket.keys(), "stale_ip should be pruned"
+        assert "live_ip" in bucket.keys(), "live_ip should survive"
 
     def test_max_keys_evicts_stalest_when_exceeded(self) -> None:
         """When len(buckets) > max_keys, the stalest entry is evicted."""
         ticks: list[float] = [0.0]
         clock = lambda: ticks[0]  # noqa: E731
 
-        # max_keys=3, idle_factor high so time-based pruning doesn't fire.
+        # max_keys=3, idle_factor high so time-based pruning does not fire.
         bucket = TokenBucket(per_minute=10, clock=clock, max_keys=3, idle_factor=9999)
 
         # Fill to capacity: ip1 (t=0), ip2 (t=1), ip3 (t=2).
@@ -102,18 +102,18 @@ class TestTokenBucketPruning:
         ticks[0] = 2.0
         bucket.check("ip3")
 
-        assert len(bucket._buckets) == 3
+        assert len(bucket.keys()) == 3
 
         # Adding a 4th key at t=3 should evict "ip1" (stalest: last_refill=0).
         ticks[0] = 3.0
         bucket.check("ip4")
 
-        assert len(bucket._buckets) == 3
-        assert "ip1" not in bucket._buckets, "stalest key should be evicted"
-        assert "ip4" in bucket._buckets, "newest key should be kept"
+        assert len(bucket.keys()) == 3
+        assert "ip1" not in bucket.keys(), "stalest key should be evicted"
+        assert "ip4" in bucket.keys(), "newest key should be kept"
 
     def test_max_keys_keeps_active_key_budget(self) -> None:
-        """After a max_keys eviction, the surviving active key still has its correct token count."""
+        """After a max_keys eviction, the surviving active key is still allowed."""
         ticks: list[float] = [0.0]
         clock = lambda: ticks[0]  # noqa: E731
 
@@ -131,8 +131,8 @@ class TestTokenBucketPruning:
         ticks[0] = 2.0
         bucket.check("ip3")
 
-        assert "ip1" not in bucket._buckets
-        assert "ip2" in bucket._buckets
+        assert "ip1" not in bucket.keys()
+        assert "ip2" in bucket.keys()
         # ip2 should still be allowed (has remaining tokens).
         allowed, _ = bucket.check("ip2")
         assert allowed

@@ -133,6 +133,16 @@ class TokenBucket:
             self._prune(now)
             return result
 
+    def keys(self) -> frozenset[str]:
+        """Return a snapshot of all currently tracked bucket keys.
+
+        Intended for tests and diagnostics only.  The returned set is a
+        frozen snapshot taken under the internal lock; it is immediately
+        stale once returned.
+        """
+        with self._lock:
+            return frozenset(self._buckets)
+
     def reset(self) -> None:
         """Clear all buckets (tests only)."""
         with self._lock:
