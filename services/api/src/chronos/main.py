@@ -23,7 +23,9 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from chronos import __version__
+from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
+from chronos.api.pair import router as pair_router
 from chronos.config import Settings, get_settings, override_settings
 from chronos.db import create_db_engine
 from chronos.errors import (
@@ -86,5 +88,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     # 4. Routers.
     app.include_router(health_router)
+    app.include_router(pair_router, prefix="/v1")
+    app.include_router(device_router, prefix="/v1")
 
     return app
