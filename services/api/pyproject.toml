@@ -63,6 +63,7 @@ src = ["src"]
 select = ["E", "F", "I", "UP", "S", "B", "C4", "PTH", "RUF"]
 ignore = [
   "S101",   # assert allowed in tests
+  "B008",   # FastAPI Depends() in default args is the canonical pattern
   "S603",   # subprocess calls reviewed per AGENTS.md
   "S607",   # partial path in subprocess — same
 ]
