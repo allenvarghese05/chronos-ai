@@ -141,17 +141,41 @@ def create_pair(
             detail="No active pairing code found. Run `chronos pair-code` on the laptop.",
         )
 
-    # 3. Increment attempts *before* comparing (count every submission).
+    now = utc_now_iso()
+
+    # 3. Check expiry FIRST — an expired code is 410 regardless of whether the
+    #    submitted value matches, and does NOT increment the attempt counter.
+    try:
+        expires_dt = parse_utc_iso(pairing_code.expires_at)
+    except ValueError as exc:
+        raise ProblemException(
+            status_code=400,
+            code="pairing_invalid",
+            title="Bad Request",
+            detail="Pairing code has an invalid expiry timestamp.",
+        ) from exc
+
+    now_dt = parse_utc_iso(now)
+    if now_dt > expires_dt:
+        # Do NOT commit here — we have not mutated the row.
+        raise ProblemException(
+            status_code=410,
+            code="pairing_expired",
+            title="Gone",
+            detail=(
+                f"Pairing code expired at {pairing_code.expires_at}. "
+                f"Server time is {now}. Run `chronos pair-code` to generate a new code."
+            ),
+        )
+
+    # 4. Increment attempts *before* comparing (count every non-expired submission).
     pairing_code.attempts += 1
     session.add(pairing_code)
     session.flush()  # write attempts without committing yet
 
-    now = utc_now_iso()
-
-    # 4. Check if already burned (>= 5 attempts reached by a *previous* request).
+    # 5. Check code hash.  Burn after 5 wrong attempts.
     #    After the increment above, attempts == 5 means this is the 5th wrong attempt;
     #    attempts > 5 means it was already burned.
-    #    We check >= 5 here because we burned on the 5th wrong; correct code on 6th → 400.
     submitted_hash = hash_token(normalise_pairing_code(body.code))
     is_correct = hmac.compare_digest(submitted_hash, pairing_code.code_hash)
 
@@ -166,42 +190,6 @@ def create_pair(
             code="pairing_invalid",
             title="Bad Request",
             detail="Invalid pairing code.",
-        )
-
-    # Code is correct — now check expiry and burned status.
-    if pairing_code.attempts > 1:
-        # This was a retry with the correct code; check if previously burned.
-        # (attempts was incremented above, so attempts > 5 means it was burned before.)
-        pass  # handled below
-
-    # Re-check consumed_at: could have been set by an earlier run (burn).
-    # Note: we flushed but didn't commit yet; if consumed_at was set in this request
-    # (wrong code path), we would have returned above.  But a previously burned code
-    # would have consumed_at set before this request, so pairing_code would not have
-    # been found by the "consumed_at IS NULL" query.  So if we're here, it's non-consumed.
-
-    # Check expiry.
-    try:
-        expires_dt = parse_utc_iso(pairing_code.expires_at)
-    except ValueError as exc:
-        raise ProblemException(
-            status_code=400,
-            code="pairing_invalid",
-            title="Bad Request",
-            detail="Pairing code has an invalid expiry timestamp.",
-        ) from exc
-
-    now_dt = parse_utc_iso(now)
-    if now_dt > expires_dt:
-        session.commit()  # save the incremented attempts
-        raise ProblemException(
-            status_code=410,
-            code="pairing_expired",
-            title="Gone",
-            detail=(
-                f"Pairing code expired at {pairing_code.expires_at}. "
-                f"Server time is {now}. Run `chronos pair-code` to generate a new code."
-            ),
         )
 
     # 5. All checks pass — consume the code and create the device.

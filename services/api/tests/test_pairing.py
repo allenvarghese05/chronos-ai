@@ -249,6 +249,33 @@ class TestPairErrors:
         assert r.status_code == 410
         assert r.json()["code"] == "pairing_expired"
 
+    def test_expired_wrong_code_410_no_attempt_increment(
+        self, client: TestClient, test_settings: Settings
+    ) -> None:
+        """Expired code + wrong submission → 410, attempts NOT incremented.
+
+        Expiry is checked before the attempt counter is bumped, so a wrong
+        code submitted against an expired row must still return 410 (not 400)
+        and must leave attempts unchanged.
+        """
+        _, pc = _insert_code(test_settings, minutes_until_expiry=-1)
+        initial_attempts = pc.attempts
+
+        wrong = generate_pairing_code()
+        r = client.post("/v1/pair", json=_pair_body(wrong))
+
+        assert r.status_code == 410
+        assert r.json()["code"] == "pairing_expired"
+
+        # Verify attempts were NOT incremented.
+        engine = create_db_engine(test_settings.database_url)
+        with Session(engine) as s:
+            refreshed = s.exec(select(PairingCode)).first()
+        assert refreshed is not None
+        assert refreshed.attempts == initial_attempts, (
+            f"attempts should be {initial_attempts}, got {refreshed.attempts}"
+        )
+
     def test_consumed_code_400(self, client: TestClient, test_settings: Settings) -> None:
         """A previously consumed code must return 400 (not 410)."""
         raw_code, _ = _insert_code(test_settings, consumed=True)
