@@ -32,10 +32,20 @@ class _Bucket:
 class TokenBucket:
     """Thread-safe sliding-window token bucket.
 
+    Memory is bounded: buckets idle longer than ``idle_factor x 60`` seconds
+    are pruned on every :meth:`check` call; if the dict still exceeds
+    ``max_keys`` after time-based pruning, the stalest entries are evicted.
+
     Args:
         per_minute: Maximum allowed requests per 60-second window.
         clock:      Callable returning monotonic seconds.  Defaults to
                     ``time.monotonic``.  Inject a fake in tests.
+        max_keys:   Hard upper bound on the number of tracked keys.
+                    Excess stalest keys are evicted.  Default: 1024.
+        idle_factor: Multiplier on the 60-second window that defines the
+                    idle timeout.  A bucket unseen for
+                    ``idle_factor x 60`` seconds is removed.  Default: 10
+                    (= 10 minutes).
 
     Example::
 
@@ -51,12 +61,37 @@ class TokenBucket:
         self,
         per_minute: int,
         clock: Callable[[], float] | None = None,
+        max_keys: int = 1024,
+        idle_factor: int = 10,
     ) -> None:
         self._per_minute = per_minute
         self._rate: float = per_minute / 60.0  # tokens per second
         self._clock: Callable[[], float] = clock or _time.monotonic
+        self._max_keys = max_keys
+        self._idle_timeout: float = idle_factor * 60.0  # seconds before a bucket is stale
         self._buckets: dict[str, _Bucket] = {}
         self._lock = threading.Lock()
+
+    def _prune(self, now: float) -> None:
+        """Evict stale buckets to keep memory bounded.  **Must be called under ``self._lock``.**
+
+        Two-stage eviction:
+
+        1. Remove every bucket whose ``last_refill`` is older than
+           :attr:`_idle_timeout` seconds.
+        2. If the dict still exceeds :attr:`_max_keys`, sort the remaining
+           entries by ``last_refill`` ascending and delete the excess.
+        """
+        stale = [k for k, b in self._buckets.items() if now - b.last_refill > self._idle_timeout]
+        for k in stale:
+            del self._buckets[k]
+
+        if len(self._buckets) > self._max_keys:
+            # Evict oldest by last_refill until we are within the limit.
+            excess = len(self._buckets) - self._max_keys
+            oldest = sorted(self._buckets, key=lambda k: self._buckets[k].last_refill)[:excess]
+            for k in oldest:
+                del self._buckets[k]
 
     def check(self, key: str) -> tuple[bool, int]:
         """Consume one token for *key* and report whether the request is allowed.
@@ -71,12 +106,15 @@ class TokenBucket:
         """
         now = self._clock()
         with self._lock:
+            # Update (or create) the bucket for this key *before* pruning so
+            # that the current caller's key has the freshest ``last_refill``
+            # and is never the victim of a max_keys eviction.
             if key not in self._buckets:
-                # First request: create a full bucket minus one token.
                 self._buckets[key] = _Bucket(
                     tokens=float(self._per_minute) - 1.0,
                     last_refill=now,
                 )
+                self._prune(now)
                 return True, 0
 
             bucket = self._buckets[key]
@@ -86,11 +124,14 @@ class TokenBucket:
 
             if bucket.tokens >= 1.0:
                 bucket.tokens -= 1.0
-                return True, 0
+                result: tuple[bool, int] = (True, 0)
+            else:
+                # Exhausted: compute how many seconds until one token refills.
+                retry_after = max(1, int((1.0 - bucket.tokens) / self._rate) + 1)
+                result = (False, retry_after)
 
-            # Exhausted: compute how many seconds until one token refills.
-            retry_after = max(1, int((1.0 - bucket.tokens) / self._rate) + 1)
-            return False, retry_after
+            self._prune(now)
+            return result
 
     def reset(self) -> None:
         """Clear all buckets (tests only)."""
