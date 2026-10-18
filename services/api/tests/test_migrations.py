@@ -18,11 +18,13 @@ from pathlib import Path
 
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import inspect, text
+from sqlalchemy import UniqueConstraint, inspect, text
 from sqlmodel import SQLModel
 
-import chronos.models  # noqa: F401 -- populates SQLModel.metadata
+import chronos.models  # side-effect: populates SQLModel.metadata
 from chronos.db import build_migration_engine
+
+_ = chronos.models  # keep reference so pyright doesn't flag unused import
 
 
 def _alembic_cfg(db_url: str) -> Config:
@@ -179,9 +181,9 @@ class TestMigration0001:
                     for u in inspector.get_unique_constraints(table_name)
                 }
                 meta_uqs = {
-                    tuple(sorted(c.columns.keys()))
+                    tuple(sorted(c.columns.keys()))  # type: ignore[union-attr]
                     for c in meta_table.constraints
-                    if c.__class__.__name__ == "UniqueConstraint"
+                    if isinstance(c, UniqueConstraint)
                 }
                 assert meta_uqs == db_uqs, (
                     f"{table_name} unique constraints mismatch: meta={meta_uqs} db={db_uqs}"
