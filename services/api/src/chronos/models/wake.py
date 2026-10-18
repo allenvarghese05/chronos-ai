@@ -156,6 +156,13 @@ class Day(SQLModel, table=True):
     __tablename__ = "days"  # type: ignore[assignment]
     __table_args__ = (
         PrimaryKeyConstraint("local_date", "device_id", name="pk_days"),
+        # FK from device_id to devices(id); declared here (not inline) so that
+        # the composite PK definition above takes precedence.
+        ForeignKeyConstraint(
+            ["device_id"],
+            ["devices.id"],
+            name="fk_days_device_id",
+        ),
         CheckConstraint(
             f"kind IN {ck_values(DayKind)}",
             name="ck_days_kind",
