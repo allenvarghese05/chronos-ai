@@ -37,9 +37,11 @@ def parse_utc_iso(s: str) -> datetime.datetime:
     Raises:
         ValueError: If ``s`` is not a valid ``YYYY-MM-DDTHH:MM:SSZ`` string.
     """
-    if not isinstance(s, str) or not s.endswith("Z"):
-        raise ValueError(f"Expected UTC ISO-8601 string ending in 'Z', got: {s!r}")
     try:
+        if not s.endswith("Z"):
+            raise ValueError(f"Expected UTC ISO-8601 string ending in 'Z', got: {s!r}")
         return datetime.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.UTC)
-    except ValueError as exc:
-        raise ValueError(f"Cannot parse UTC ISO-8601 string: {s!r}") from exc
+    except AttributeError as exc:
+        raise ValueError(f"Expected a string, got: {s!r}") from exc
+    except ValueError:
+        raise

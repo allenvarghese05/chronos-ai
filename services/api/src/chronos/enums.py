@@ -119,12 +119,12 @@ class TransitionCause(enum.StrEnum):
     manual = "manual"
 
 
-def _ck_values(e: type[enum.Enum]) -> str:
+def ck_values(e: type[enum.Enum]) -> str:
     """Return a SQL IN-list string for use in a ``CheckConstraint``.
 
     Example::
 
-        _ck_values(WakeSource)
+        ck_values(WakeSource)
         # "('silent_push','bg_refresh','foreground','manual')"
     """
     values = ", ".join(f"'{m.value}'" for m in e)
