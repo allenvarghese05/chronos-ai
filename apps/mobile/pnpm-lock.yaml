@@ -166,9 +166,6 @@ importers:
 
   .:
     dependencies:
-      chronos-sensors:
-        specifier: ./modules/chronos-sensors
-        version: link:modules/chronos-sensors
       expo:
         specifier: 57.0.28
         version: 57.0.28(2cb686198121053743dcbfa38253e017)
