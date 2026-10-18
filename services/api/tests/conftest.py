@@ -13,11 +13,22 @@ from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from fastapi.testclient import TestClient
 
 from chronos.config import Settings, reset_settings
 from chronos.main import create_app
 from chronos.observability import reset_for_testing
+from chronos.ratelimit import reset_all as reset_rate_limiters
+
+
+def _run_migrations(db_url: str) -> None:
+    """Apply all Alembic migrations to *db_url* (runs ``upgrade head``)."""
+    ini_path = Path(__file__).parents[1] / "alembic.ini"
+    cfg = Config(str(ini_path))
+    cfg.set_main_option("sqlalchemy.url", db_url)
+    command.upgrade(cfg, "head")
 
 
 def make_settings(**overrides: object) -> Settings:
@@ -38,6 +49,7 @@ def _reset_globals() -> None:
     """Reset module-level singletons between tests."""
     reset_settings()
     reset_for_testing()
+    reset_rate_limiters()
 
 
 @pytest.fixture()
@@ -48,7 +60,8 @@ def tmp_db_url(tmp_path: Path) -> str:
 
 @pytest.fixture()
 def test_settings(tmp_db_url: str) -> Settings:
-    """Minimal valid :class:`Settings` with ``env=test`` and a temp-file DB."""
+    """Minimal valid :class:`Settings` with ``env=test`` and a migrated temp-file DB."""
+    _run_migrations(tmp_db_url)
     return make_settings(database_url=tmp_db_url)
 
 

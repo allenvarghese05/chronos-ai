@@ -31,6 +31,37 @@ log = structlog.get_logger(__name__)
 PROBLEM_CONTENT_TYPE = "application/problem+json"
 
 
+class ProblemException(HTTPException):
+    """HTTPException subclass that carries the problem+json code and title explicitly.
+
+    Raise this instead of a bare :class:`~starlette.exceptions.HTTPException` when
+    you need a specific problem code (e.g. ``pairing_invalid``, ``rate_limited``).
+    The ``headers`` kwarg is forwarded to the response (useful for ``Retry-After``).
+
+    Example::
+
+        raise ProblemException(
+            status_code=429,
+            code="rate_limited",
+            title="Too Many Requests",
+            detail="Retry after 12 seconds.",
+            headers={"Retry-After": "12"},
+        )
+    """
+
+    def __init__(
+        self,
+        status_code: int,
+        code: str,
+        title: str,
+        detail: str,
+        headers: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(status_code=status_code, detail=detail, headers=headers)
+        self.problem_code = code
+        self.problem_title = title
+
+
 def make_problem(
     status: int,
     code: str,
@@ -52,6 +83,7 @@ def make_problem(
     """
     body: dict[str, Any] = {
         "type": f"urn:chronos:error:{code}",
+        "code": code,  # extension member: machine-readable shorthand (RFC 9457 §3.2)
         "title": title,
         "status": status,
         "detail": detail,
@@ -65,25 +97,49 @@ def make_problem(
 
 
 async def http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Convert :class:`~starlette.exceptions.HTTPException` to problem+json."""
+    """Convert :class:`~starlette.exceptions.HTTPException` to problem+json.
+
+    If the exception is a :class:`ProblemException` its ``problem_code`` and
+    ``problem_title`` are used directly; otherwise the status code is mapped to
+    a default code.  Extra headers (e.g. ``Retry-After``) are forwarded.
+    """
     assert isinstance(exc, HTTPException)
+
+    # ProblemException carries the code explicitly.
+    if isinstance(exc, ProblemException):
+        response = make_problem(
+            status=exc.status_code,
+            code=exc.problem_code,
+            title=exc.problem_title,
+            detail=str(exc.detail),
+            instance=str(request.url.path),
+        )
+        if exc.headers:
+            response.headers.update(exc.headers)
+        return response
+
     code_map: dict[int, tuple[str, str]] = {
-        404: ("not_found", "Not Found"),
-        405: ("method_not_allowed", "Method Not Allowed"),
+        400: ("pairing_invalid", "Bad Request"),
         401: ("unauthorized", "Unauthorized"),
         403: ("revoked", "Forbidden"),
+        404: ("not_found", "Not Found"),
+        405: ("method_not_allowed", "Method Not Allowed"),
         409: ("conflict", "Conflict"),
-        410: ("media_expired", "Gone"),
+        410: ("pairing_expired", "Gone"),
+        422: ("validation", "Unprocessable Entity"),
         429: ("rate_limited", "Too Many Requests"),
     }
     code, title = code_map.get(exc.status_code, ("internal", "HTTP Error"))
-    return make_problem(
+    response = make_problem(
         status=exc.status_code,
         code=code,
         title=title,
         detail=str(exc.detail),
         instance=str(request.url.path),
     )
+    if exc.headers:
+        response.headers.update(exc.headers)
+    return response
 
 
 async def validation_exception_handler(request: Request, exc: Exception) -> JSONResponse:

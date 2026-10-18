@@ -17,10 +17,10 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Generator
 
+from fastapi import Request
 from sqlalchemy import Engine, event, text
-from sqlalchemy.orm import Session
 from sqlalchemy.pool import ConnectionPoolEntry, NullPool
-from sqlmodel import SQLModel, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 # SQLModel exposes SQLAlchemy's metadata via SQLModel.metadata.
 metadata = SQLModel.metadata
@@ -122,6 +122,25 @@ def get_session(engine: Engine | None = None) -> Generator[Session, None, None]:
             raise
 
 
+def get_session_dep(request: Request) -> Generator[Session, None, None]:
+    """FastAPI ``Depends``-compatible session factory.
+
+    Reads the SQLAlchemy engine from ``request.app.state.db_engine`` (stored
+    there by the lifespan hook in :mod:`chronos.main`) and delegates to
+    :func:`get_session`.
+
+    Usage::
+
+        from fastapi import Depends
+        from chronos.db import get_session_dep
+
+        @router.get("/example")
+        def example(session: Session = Depends(get_session_dep)) -> ...
+    """
+    engine: Engine = request.app.state.db_engine
+    yield from get_session(engine)
+
+
 def check_db(engine: Engine | None = None) -> str:
     """Run a lightweight connectivity probe.
 
@@ -132,7 +151,7 @@ def check_db(engine: Engine | None = None) -> str:
     try:
         resolved = engine if engine is not None else get_engine()
         with Session(resolved) as session:
-            session.execute(text("SELECT 1"))
+            session.exec(text("SELECT 1"))  # type: ignore[call-overload]
         return "ok"
     except Exception as exc:
         return f"error: {exc}"

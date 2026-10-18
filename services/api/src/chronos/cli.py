@@ -6,12 +6,15 @@ Commands
 ``chronos db migrate``       — Apply pending Alembic migrations.
 ``chronos config validate``  — Validate YAML config files (stub, T1.4).
 ``chronos doctor``           — System health check (stub, T0.6).
+``chronos pair-code``        — Generate a pairing code and print/QR it.
+``chronos device revoke``    — Revoke the active device (or all).
 """
 
 from __future__ import annotations
 
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
 
 import typer
@@ -117,6 +120,125 @@ def config_validate() -> None:
     This is a stub; full validation is implemented in T1.4.
     """
     typer.echo("no config files yet (T1.4)")
+
+
+# ── pair-code ─────────────────────────────────────────────────────────────────
+
+# ── device subgroup ──────────────────────────────────────────────────────────
+device_app = typer.Typer(name="device", help="Device management commands.", no_args_is_help=True)
+app.add_typer(device_app, name="device")
+
+
+@app.command("pair-code")
+def pair_code() -> None:
+    """Generate a one-time pairing code and display it (plus a QR code).
+
+    Creates a ``pairing_codes`` row (10-minute expiry), prints the
+    ``XXXX-XXXX`` code to the terminal and renders a compact QR code whose
+    payload is the JSON object::
+
+        {"code": "XXXX-XXXX", "api_base": "http://…/v1"}
+
+    The QR is rendered with ``segno`` (owner answer 1) using the terminal
+    pixel-art renderer.
+    """
+    import json
+    from datetime import timedelta
+
+    import segno
+    from sqlmodel import Session
+
+    from chronos.auth import generate_pairing_code, hash_token, normalise_pairing_code
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.models.devices import PairingCode
+    from chronos.time import parse_utc_iso, utc_now_iso
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+
+    raw_code = generate_pairing_code()
+    code_hash = hash_token(normalise_pairing_code(raw_code))
+    now_iso = utc_now_iso()
+    expires_iso = (
+        (parse_utc_iso(now_iso) + timedelta(minutes=10))
+        .astimezone(UTC)
+        .strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+    )
+
+    pc = PairingCode(
+        code_hash=code_hash,
+        expires_at=expires_iso,
+        consumed_at=None,
+        attempts=0,
+    )
+
+    with Session(engine) as session:
+        session.add(pc)
+        session.commit()
+
+    display_code = f"{raw_code[:4]}-{raw_code[4:]}"
+    api_base = settings.public_base_url
+    payload = json.dumps({"code": display_code, "api_base": api_base}, separators=(",", ":"))
+
+    typer.echo(f"\nPairing code : {display_code}")
+    typer.echo("Expires in   : 10 minutes")
+    typer.echo(f"API base     : {api_base}")
+    typer.echo("\nScan the QR code on your iPhone:\n")
+
+    try:
+        qr = segno.make(payload, error="M")
+        qr.terminal(compact=True)
+    except Exception as exc:  # pragma: no cover — segno output is env-dependent
+        typer.echo(f"(QR generation skipped: {exc})", err=True)
+
+    typer.echo(f"\nOr enter manually: {display_code}")
+
+
+# ── device revoke ─────────────────────────────────────────────────────────────
+
+
+@device_app.command("revoke")
+def device_revoke(
+    all_devices: bool = typer.Option(False, "--all", help="Revoke all devices (not just active)."),
+) -> None:
+    """Revoke the active device token (or all devices with ``--all``).
+
+    Sets ``status = revoked`` and ``revoked_at = now`` on every matched device
+    row.  Any subsequent request with the old token will receive 403 ``revoked``.
+    """
+    from sqlmodel import Session, select
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.enums import DeviceStatus
+    from chronos.models.devices import Device
+    from chronos.time import utc_now_iso
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+
+    with Session(engine) as session:
+        if all_devices:
+            devices: list[Device] = list(session.exec(select(Device)).all())
+        else:
+            devices = list(
+                session.exec(select(Device).where(Device.status == DeviceStatus.active)).all()
+            )
+
+        if not devices:
+            typer.echo("No devices to revoke.")
+            return
+
+        now = utc_now_iso()
+        for device in devices:
+            device.status = DeviceStatus.revoked
+            device.revoked_at = now
+            session.add(device)
+        session.commit()
+
+    count = len(devices)
+    typer.echo(f"Revoked {count} device(s).")
 
 
 # ── doctor ────────────────────────────────────────────────────────────────────
