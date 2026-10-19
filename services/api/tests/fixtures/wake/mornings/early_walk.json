@@ -32,11 +32,11 @@
       }
     },
     {
-      "_comment": "06:05 LA = 13:05 UTC. In window. prev=event0(unplugged,unlocked=false,consecutive_high=0). steps=35->row[35,30]=30; walking=80/high->row[60,20]=20; unlocked=true(prev=false,no bonus)->15; charger(prev=unplugged,curr=unplugged)=false->0; steps_window=120->row[100,5]=5; wake=silent->0. Total=70. consecutive_high=1. decision=high.",
+      "_comment": "06:05 LA = 13:05 UTC. In window. prev=event0(unplugged,unlocked=false,consecutive_high=0). steps=100->row[35,30]=30; walking=80/high->row[60,20]=20; unlocked=true(prev=false,no bonus)->15; charger(prev=unplugged,curr=unplugged)=false->0; steps_window=120->row[100,5]=5; wake=silent->0. Total=70. consecutive_high=1. decision=high.",
       "device_ts": "2026-10-06T13:05:00+00:00",
       "tz": "America/Los_Angeles",
       "wake_source": "silent_push",
-      "steps_10m": 35,
+      "steps_10m": 100,
       "steps_since_window": 120,
       "walking_sec_10m": 80,
       "walking_conf": "high",
