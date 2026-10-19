@@ -22,6 +22,7 @@ from sqlmodel import Session, select
 from chronos.enums import DayKind, DayState, EvaluationGate, TransitionCause
 from chronos.models.devices import Device
 from chronos.models.wake import Day, DayTransition
+from chronos.time import format_utc_iso
 from chronos.wake.rules import WakeRules
 from chronos.wake.window import window_for
 
@@ -80,8 +81,8 @@ def get_or_create_day(
     kind: DayKind = window.kind
 
     # Format window bounds as ISO-8601 UTC strings.
-    start_str = _fmt_utc(window.start_utc)
-    end_str = _fmt_utc(window.end_utc)
+    start_str = format_utc_iso(window.start_utc)
+    end_str = format_utc_iso(window.end_utc)
 
     day = Day(
         local_date=local_date_str,
@@ -100,8 +101,8 @@ def get_or_create_day(
         ticks_received=0,
         brief_id=None,
         reel_id=None,
-        created_at=_fmt_utc(now),
-        updated_at=_fmt_utc(now),
+        created_at=format_utc_iso(now),
+        updated_at=format_utc_iso(now),
     )
     session.add(day)
     session.flush()
@@ -146,7 +147,7 @@ def apply(
     """
     from chronos.enums import EvaluationDecision
 
-    now_str = _fmt_utc(now)
+    now_str = format_utc_iso(now)
     transitions: list[DayTransition] = []
 
     # Rule 1: idle + open gate → monitoring.
@@ -213,16 +214,6 @@ def on_confirmed(session: Session, day: Day) -> None:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-
-def _fmt_utc(dt: datetime.datetime) -> str:
-    """Format a UTC-aware datetime as ISO-8601 with 'Z' suffix."""
-    if dt.tzinfo is not None:
-        # Convert to UTC then format.
-        utc = dt.astimezone(datetime.UTC)
-        return utc.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
-    # Naive — assume UTC.
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
 
 def _insert_transition(

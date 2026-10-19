@@ -23,8 +23,9 @@ from sqlmodel import Session, select
 from chronos.enums import DayState
 from chronos.errors import ProblemException
 from chronos.models.devices import Device
-from chronos.models.wake import Day, TelemetryEvent, WakeEvaluation
-from chronos.wake.rules import RuleVersion, WakeRules
+from chronos.models.wake import Day, RuleVersion, TelemetryEvent, WakeEvaluation
+from chronos.time import format_utc_iso
+from chronos.wake.rules import WakeRules
 from chronos.wake.scoring import (
     EvalContext,
     Evaluation,
@@ -122,7 +123,7 @@ def ingest_telemetry(
     device_ts_utc = signals.device_ts.astimezone(datetime.UTC).replace(tzinfo=datetime.UTC)
     skew_sec = abs((device_ts_utc - now).total_seconds())
     if skew_sec > CLOCK_SKEW_MAX_SEC:
-        server_time = _fmt_utc(now)
+        server_time = format_utc_iso(now)
         raise ProblemException(
             status_code=422,
             code="clock_skew",
@@ -247,7 +248,7 @@ def ingest_telemetry(
     device_ts_str = signals.device_ts.isoformat()
     te = TelemetryEvent(
         device_id=device.id,
-        received_at=_fmt_utc(now),
+        received_at=format_utc_iso(now),
         device_ts=device_ts_str,
         tz=signals.tz,
         local_date=local_date_str,
@@ -284,14 +285,14 @@ def ingest_telemetry(
         breakdown_json=breakdown_json,
         decision=evaluation.decision.value,
         consecutive_high=evaluation.consecutive_high,
-        evaluated_at=_fmt_utc(now),
+        evaluated_at=format_utc_iso(now),
     )
     session.add(wake_eval)
     session.flush()  # get wake_eval.id
 
     # ── 10. Increment ticks_received ──────────────────────────────────────
     day.ticks_received += 1
-    day.updated_at = _fmt_utc(now)
+    day.updated_at = format_utc_iso(now)
 
     # ── 11. State machine ─────────────────────────────────────────────────
     assert wake_eval.id is not None
@@ -319,11 +320,3 @@ def ingest_telemetry(
         rule_version_number=rule_version.version,
         is_duplicate=False,
     )
-
-
-def _fmt_utc(dt: datetime.datetime) -> str:
-    """Format a UTC-aware datetime as ISO-8601 with 'Z' suffix."""
-    if dt.tzinfo is not None:
-        utc = dt.astimezone(datetime.UTC)
-        return utc.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
-    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"

@@ -8,7 +8,7 @@ import re
 import pytest
 
 from chronos.ids import new_ulid
-from chronos.time import parse_utc_iso, utc_now_iso
+from chronos.time import format_utc_iso, parse_utc_iso, utc_now_iso
 
 _ISO_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$")
 _ULID_PATTERN = re.compile(r"^[0-9A-Z]{26}$")
@@ -81,6 +81,38 @@ class TestParseUtcIso:
     def test_non_string_raises(self) -> None:
         with pytest.raises(ValueError):
             parse_utc_iso(None)  # type: ignore[arg-type]
+
+
+class TestFormatUtcIso:
+    def test_aware_utc_datetime(self) -> None:
+        dt = datetime.datetime(2026, 10, 6, 7, 12, 4, 0, tzinfo=datetime.UTC)
+        assert format_utc_iso(dt) == "2026-10-06T07:12:04.000000Z"
+
+    def test_aware_non_utc_converted(self) -> None:
+        from zoneinfo import ZoneInfo
+
+        la = ZoneInfo("America/Los_Angeles")
+        # 2026-10-06 07:00 LA = 14:00 UTC.
+        dt = datetime.datetime(2026, 10, 6, 7, 0, 0, tzinfo=la)
+        result = format_utc_iso(dt)
+        assert result == "2026-10-06T14:00:00.000000Z"
+
+    def test_naive_treated_as_utc(self) -> None:
+        dt = datetime.datetime(2026, 10, 6, 7, 12, 4, 0)
+        result = format_utc_iso(dt)
+        assert result == "2026-10-06T07:12:04.000000Z"
+
+    def test_microsecond_precision(self) -> None:
+        dt = datetime.datetime(2026, 10, 6, 7, 12, 4, 123456, tzinfo=datetime.UTC)
+        result = format_utc_iso(dt)
+        assert result.endswith("Z")
+        assert "123456" in result
+
+    def test_output_is_valid_iso(self) -> None:
+        dt = datetime.datetime(2026, 10, 6, 7, 12, 4, tzinfo=datetime.UTC)
+        result = format_utc_iso(dt)
+        parsed = parse_utc_iso(result)
+        assert parsed.tzinfo == datetime.UTC
 
 
 class TestNewUlid:
