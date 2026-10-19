@@ -124,8 +124,25 @@ def get_config_wake(
 
 # ── PUT ───────────────────────────────────────────────────────────────────────
 
+# Maximum accepted request body size for PUT /v1/config/wake.
+_MAX_BODY_BYTES: int = 65_536  # 64 KiB
 
-@router.put("/wake", status_code=201)
+# openapi_extra declares the WakeRules request-body schema so that the generated
+# OpenAPI spec is accurate, while the handler still receives body as Any and
+# performs manual validation to emit rules_invalid problem+json on failure.
+_PUT_OPENAPI_EXTRA: dict[str, object] = {
+    "requestBody": {
+        "required": True,
+        "content": {
+            "application/json": {
+                "schema": {"$ref": "#/components/schemas/WakeRules"},
+            },
+        },
+    },
+}
+
+
+@router.put("/wake", status_code=201, openapi_extra=_PUT_OPENAPI_EXTRA)
 def put_config_wake(
     request: Request,
     body: Annotated[Any, Body()],
@@ -137,6 +154,7 @@ def put_config_wake(
 
     The body is accepted as ``Any`` so that validation errors are caught here
     and re-emitted as ``422 rules_invalid`` problem+json with per-field paths.
+    Requests exceeding ``_MAX_BODY_BYTES`` are rejected with **413**.
 
     Returns:
         ``200`` — SHA matches active version (no-op).
@@ -146,6 +164,25 @@ def put_config_wake(
         :class:`~chronos.errors.ProblemException` 422 ``rules_invalid`` with
             ``errors: [{loc, msg, type}]`` on validation failure.
     """
+    # Content-Length guard: reject oversized payloads before expensive validation.
+    content_length_raw = request.headers.get("content-length")
+    if content_length_raw is not None:
+        try:
+            if int(content_length_raw) > _MAX_BODY_BYTES:
+                return JSONResponse(
+                    status_code=413,
+                    content={
+                        "type": "urn:chronos:error:payload_too_large",
+                        "title": "Payload Too Large",
+                        "status": 413,
+                        "detail": f"Request body must not exceed {_MAX_BODY_BYTES} bytes.",
+                        "instance": str(request.url.path),
+                    },
+                    headers={"Content-Type": PROBLEM_CONTENT_TYPE},
+                )
+        except ValueError:
+            pass  # non-integer Content-Length header; let body parsing handle it
+
     # Manual validation so we can re-emit field-level errors in problem+json.
     try:
         rules = WakeRules.model_validate(body)

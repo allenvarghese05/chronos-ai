@@ -269,6 +269,77 @@ class TestPutConfigWake:
 
 
 # ---------------------------------------------------------------------------
+# PUT /v1/config/wake — OpenAPI schema and size limit (BLOCKING 4)
+# ---------------------------------------------------------------------------
+
+
+class TestPutConfigWakeOpenApiAndSize:
+    def test_put_openapi_schema_documents_wake_rules(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        """PUT /v1/config/wake requestBody must reference WakeRules in the OpenAPI spec."""
+        client, _ = authed_client
+        resp = client.get("/openapi.json")
+        assert resp.status_code == 200
+        spec = resp.json()
+
+        put_op = spec.get("paths", {}).get("/v1/config/wake", {}).get("put", {})
+        assert put_op, "PUT /v1/config/wake must appear in OpenAPI paths"
+
+        request_body = put_op.get("requestBody", {})
+        assert request_body, "PUT /v1/config/wake must have a non-empty requestBody"
+        assert request_body.get("required") is True
+
+        json_schema = request_body.get("content", {}).get("application/json", {}).get("schema", {})
+        assert json_schema, "requestBody.content.application/json.schema must be non-empty"
+        # Schema must reference WakeRules (either $ref or inline allOf/$defs).
+        schema_str = str(json_schema)
+        assert "WakeRules" in schema_str, (
+            f"WakeRules not referenced in PUT requestBody schema: {json_schema}"
+        )
+
+    def test_put_body_too_large_returns_413(self, authed_client: tuple[TestClient, str]) -> None:
+        """Bodies exceeding 65 536 bytes must be rejected with 413 Payload Too Large."""
+        import json as _json
+
+        client, token = authed_client
+        # Build a genuinely large JSON payload (> 64 KiB).
+        large_body = _json.dumps({"version": 1, "padding": "x" * 70_000})
+        resp = client.put(
+            "/v1/config/wake",
+            content=large_body,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        assert resp.status_code == 413
+        data = resp.json()
+        assert data["status"] == 413
+        assert "payload_too_large" in data["type"]
+
+    def test_put_422_shape_unchanged_for_invalid_body(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        """422 rules_invalid shape must have type, title, status, errors fields."""
+        client, token = authed_client
+        body = copy.deepcopy(VALID_BODY)
+        body["rules"][0]["cap"] = 1  # cap < max points → invalid
+        resp = client.put("/v1/config/wake", json=body, headers=_auth(token))
+        assert resp.status_code == 422
+        data = resp.json()
+        assert data["type"] == "urn:chronos:error:rules_invalid"
+        assert data["title"] == "Wake Rules Validation Failed"
+        assert data["status"] == 422
+        assert isinstance(data["errors"], list)
+        assert len(data["errors"]) > 0
+        first_err = data["errors"][0]
+        assert "loc" in first_err
+        assert "msg" in first_err
+        assert "type" in first_err
+
+
+# ---------------------------------------------------------------------------
 # CLI: chronos config validate
 # ---------------------------------------------------------------------------
 
