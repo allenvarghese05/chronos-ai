@@ -330,33 +330,69 @@ def test_ingest_late_past_date(db_session: Session) -> None:
 
 
 def test_ingest_rollback_on_failure(db_session: Session) -> None:
-    """If the DB raises after TelemetryEvent insert, no rows are committed."""
+    """If apply raises after TelemetryEvent+WakeEvaluation flush, the full transaction
+    is rolled back: no te/we/day_transitions rows for that seq, ticks_received unchanged."""
+    from chronos.models.wake import DayTransition
+
     device = _make_device(db_session)
     rv = _make_rv(db_session)
     rules = _rules()
     now = _IN_WINDOW
-    sig = _signals(seq=0)
 
-    original_flush = Session.flush
+    # ── First tick committed successfully (establishes Day with ticks_received=1). ──
+    sig0 = _signals(seq=0)
+    ingest_telemetry(db_session, device, sig0, _raw(sig0), now, rules, rv)
 
-    call_count = 0
+    day_before = db_session.exec(  # type: ignore[call-overload]
+        select(Day).where(Day.device_id == device.id)
+    ).first()
+    assert day_before is not None
+    ticks_before = day_before.ticks_received
 
-    def _patched_flush(self: Session, objects: object = None) -> None:  # type: ignore[override]
-        nonlocal call_count
-        call_count += 1
-        if call_count == 2:  # second flush = after WakeEvaluation add
-            raise RuntimeError("simulated DB failure")
-        original_flush(self, objects)  # type: ignore[call-arg]
+    dt_count_before = len(
+        list(  # type: ignore[call-overload]
+            db_session.exec(select(DayTransition).where(DayTransition.device_id == device.id))
+        )
+    )
 
-    with patch.object(Session, "flush", _patched_flush):
-        with pytest.raises(RuntimeError, match="simulated DB failure"):
-            ingest_telemetry(db_session, device, sig, _raw(sig), now, rules, rv)
+    # ── Second tick: apply raises AFTER TE+WE are flushed but BEFORE commit. ──
+    sig1 = _signals(seq=1)
+    with patch("chronos.wake.service.apply", side_effect=RuntimeError("simulated failure")):
+        with pytest.raises(RuntimeError, match="simulated failure"):
+            ingest_telemetry(db_session, device, sig1, _raw(sig1), now, rules, rv)
 
     db_session.rollback()
-    te_rows = list(  # type: ignore[call-overload]
-        db_session.exec(select(TelemetryEvent).where(TelemetryEvent.device_id == device.id))
+
+    # No TelemetryEvent for seq=1.
+    te_seq1 = list(  # type: ignore[call-overload]
+        db_session.exec(
+            select(TelemetryEvent).where(
+                TelemetryEvent.device_id == device.id,
+                TelemetryEvent.seq == 1,
+            )
+        )
     )
-    assert te_rows == []
+    assert te_seq1 == [], "telemetry_events row for failed seq must be rolled back"
+
+    # No extra WakeEvaluation rows (only the one from seq=0 remains).
+    we_rows = list(  # type: ignore[call-overload]
+        db_session.exec(select(WakeEvaluation))
+    )
+    assert len(we_rows) == 1, "wake_evaluations from failed tick must be rolled back"
+
+    # No extra DayTransition rows beyond those from the first tick.
+    dt_rows = list(  # type: ignore[call-overload]
+        db_session.exec(select(DayTransition).where(DayTransition.device_id == device.id))
+    )
+    assert len(dt_rows) == dt_count_before, "day_transitions must not grow on rollback"
+
+    # Day.ticks_received is unchanged from what the first tick committed.
+    db_session.expire_all()
+    day_after = db_session.exec(  # type: ignore[call-overload]
+        select(Day).where(Day.device_id == device.id)
+    ).first()
+    assert day_after is not None
+    assert day_after.ticks_received == ticks_before, "ticks_received must not change on rollback"
 
 
 def test_ingest_monitoring_to_confirmed_two_ticks(db_session: Session) -> None:
