@@ -474,6 +474,65 @@ class TestNextWindowStart:
         result = next_window_start(after, IST, DEFAULT_CFG)
         assert result == _utc(2026, 10, 6, 0, 30, 0)
 
+    # --- NEW TEST 1: after == exact window start → returns NEXT window (strictly after) ---
+
+    def test_at_exact_window_start_ist(self) -> None:
+        """after == window.start_utc is NOT strictly after → must return NEXT day's start.
+
+        IST (UTC+5:30, no DST).
+        2026-10-06 (Tuesday) window starts at 00:30 UTC (06:00 IST).
+        Passing that exact instant as *after* must skip it and return 2026-10-07 00:30 UTC.
+        """
+        after = _utc(2026, 10, 6, 0, 30, 0)  # exact start of Tue 2026-10-06 window
+        result = next_window_start(after, IST, DEFAULT_CFG)
+        # 2026-10-07 is a Wednesday (weekday) → start = 06:00 IST = 00:30 UTC
+        assert result == _utc(2026, 10, 7, 0, 30, 0)
+
+    def test_at_exact_window_start_ny(self) -> None:
+        """after == window.start_utc is NOT strictly after → must return NEXT day's start.
+
+        America/New_York in EDT (UTC-4).
+        2026-10-06 (Tuesday) window starts at 10:00 UTC (06:00 EDT).
+        Passing that exact instant as *after* must skip it and return 2026-10-07 10:00 UTC.
+        """
+        after = _utc(2026, 10, 6, 10, 0, 0)  # exact start of Tue 2026-10-06 window
+        result = next_window_start(after, NY, DEFAULT_CFG)
+        # 2026-10-07 is a Wednesday (weekday) → start = 06:00 EDT = 10:00 UTC
+        assert result == _utc(2026, 10, 7, 10, 0, 0)
+
+    # --- NEW TEST 2: next_window_start across a holiday ---
+
+    def test_saturday_holiday_treated_as_weekend(self) -> None:
+        """Saturday in holidays → DayKind.weekend (weekend beats holiday) → uses weekend times.
+
+        Scenario (America/New_York, EDT = UTC-4):
+        - Saturday 2026-10-10 is listed in holidays.
+        - Monday  2026-10-12 is listed in holidays.
+        - *after* = Friday 2026-10-09 15:01 UTC (just after the weekday window end at 15:00 UTC).
+        - Expected: Saturday 2026-10-10 is classified as weekend despite being in holidays,
+          so it uses weekend_start = 08:00 EDT = 12:00 UTC → result = 2026-10-10 12:00 UTC.
+        """
+        cfg = _cfg(holidays=frozenset({datetime.date(2026, 10, 10), datetime.date(2026, 10, 12)}))
+        after = _utc(2026, 10, 9, 15, 1, 0)  # Friday 2026-10-09, just past window end
+        result = next_window_start(after, NY, cfg)
+        # Saturday is weekend regardless of holiday membership → weekend_start 08:00 EDT = 12:00 UTC
+        assert result == _utc(2026, 10, 10, 12, 0, 0)
+
+    def test_monday_holiday_uses_weekend_times(self) -> None:
+        """Monday in holidays → DayKind.holiday → uses weekend_start/weekend_end.
+
+        Scenario (America/New_York, EDT = UTC-4):
+        - Saturday 2026-10-10 is listed in holidays (still weekend, irrelevant here).
+        - Monday  2026-10-12 is listed in holidays → DayKind.holiday → weekend window.
+        - *after* = Sunday 2026-10-11 22:00 UTC (well after the weekend window closes at 18:00 UTC).
+        - Expected: Monday 2026-10-12 uses weekend times → start = 08:00 EDT = 12:00 UTC.
+        """
+        cfg = _cfg(holidays=frozenset({datetime.date(2026, 10, 10), datetime.date(2026, 10, 12)}))
+        after = _utc(2026, 10, 11, 22, 0, 0)  # Sunday 2026-10-11, well after window close
+        result = next_window_start(after, NY, cfg)
+        # Monday 2026-10-12 is a holiday → uses weekend_start 08:00 EDT = 12:00 UTC
+        assert result == _utc(2026, 10, 12, 12, 0, 0)
+
 
 # ---------------------------------------------------------------------------
 # Step 4 — tick_instants
@@ -559,6 +618,34 @@ class TestTickInstants:
         )
         ticks = tick_instants(w, 30)
         assert ticks == [start]
+
+    # --- NEW TEST 3: 7-min interval over 5-hour weekday window → exactly 43 ticks ---
+
+    def test_7min_interval_5h_window_43_ticks(self) -> None:
+        """7-minute ticks over a 300-minute window produce exactly 43 ticks.
+
+        300 min / 7 min = 42.857...  -> ticks at offsets 0, 7, 14, ..., 42*7 = 294 min.
+        Count: 43 (indices 0 through 42).
+
+        Window: NY weekday 2026-10-06, start = 10:00 UTC, end = 15:00 UTC.
+        - first tick = 10:00 UTC (== start)
+        - last  tick = 10:00 UTC + 294 min = 14:54 UTC  (< 15:00 UTC end)
+        """
+        start = _utc(2026, 10, 6, 10, 0, 0)  # 06:00 EDT
+        end = _utc(2026, 10, 6, 15, 0, 0)  # 11:00 EDT  — 5-hour window
+        w = Window(
+            local_date=datetime.date(2026, 10, 6),
+            kind=DayKind.weekday,
+            start_utc=start,
+            end_utc=end,
+            start_local=datetime.time(6, 0),
+            end_local=datetime.time(11, 0),
+        )
+        ticks = tick_instants(w, 7)
+        assert len(ticks) == 43
+        assert ticks[0] == start
+        assert ticks[-1] == start + datetime.timedelta(minutes=42 * 7)  # 14:54 UTC
+        assert ticks[-1] < end
 
 
 # ---------------------------------------------------------------------------
