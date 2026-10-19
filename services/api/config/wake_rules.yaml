@@ -1,0 +1,51 @@
+version: 1
+window:
+  weekday: { start: "06:00", end: "11:00" }
+  weekend: { start: "08:00", end: "14:00" }
+  day_boundary: "03:00"          # local time at which a new "day" begins
+  holidays_as_weekend: []        # ISO dates, optional
+  tick_interval_min: 5
+thresholds:
+  confirm: 70                    # score >= confirm on 2 consecutive ticks -> confirmed
+  strong: 85                     # score >= strong on 1 tick -> confirmed
+  dedupe_min: 2                  # ignore a second snapshot < 2 min after the last
+rules:
+  - id: steps_10m
+    signal: steps_10m
+    points: [[35, 30], [20, 18], [10, 8]]
+    cap: 30
+  - id: walking_10m
+    signal: walking_sec_10m
+    points: [[60, 20], [30, 12]]
+    requires: { walking_conf: [medium, high] }
+    cap: 20
+  - id: unlocked
+    signal: is_unlocked
+    points: [[true, 15]]
+    bonus_consecutive: { ticks: 2, points: 10 }
+    cap: 25
+  - id: charger_disconnect
+    signal: charger_disconnected
+    points: [[true, 15]]
+    cap: 15
+  - id: steps_window
+    signal: steps_since_window
+    points: [[100, 5]]
+    cap: 5
+  - id: foreground
+    signal: wake_source
+    points: [["foreground", 40]]
+    cap: 40
+penalties:
+  - id: stationary_dominant
+    when: { stationary_sec_10m: ">= 540", steps_10m: "< 10" }
+    points: -20
+  - id: pedometer_denied
+    when: { pedometer_auth: ["denied", "restricted"] }
+    points: 0
+# Schema requires sum(reweight values) <= 100; charger_disconnect adjusted from 30
+# to 25 so 35+25+40=100 (docs/03 §4 listed 30 which would sum to 105).
+reweight_without_pedometer:
+  unlocked: 35
+  charger_disconnect: 25
+  foreground: 40
