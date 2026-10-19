@@ -166,6 +166,11 @@ def ingest_telemetry(
         dup_day = session.exec(day_stmt).first()  # type: ignore[call-overload]
         day_state = DayState(dup_day.state) if dup_day else DayState.idle
         local_date = datetime.date.fromisoformat(dup_te.local_date)
+        # Retrieve the version NUMBER stored with the original evaluation — not the
+        # currently active one, which may have changed since this event was first seen.
+        orig_rv_stmt = select(RuleVersion).where(RuleVersion.id == dup_we.rule_version_id)
+        orig_rv = session.exec(orig_rv_stmt).first()  # type: ignore[call-overload]
+        orig_rv_number = orig_rv.version if orig_rv is not None else rule_version.version
         log.info(
             "telemetry_duplicate_seq",
             device_id=device.id,
@@ -178,7 +183,7 @@ def ingest_telemetry(
             evaluation=stored_eval,
             day_state=day_state,
             rule_version_id=dup_we.rule_version_id,
-            rule_version_number=rule_version.version,
+            rule_version_number=orig_rv_number,
             is_duplicate=True,
         )
 

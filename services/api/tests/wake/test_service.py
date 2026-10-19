@@ -230,6 +230,43 @@ def test_ingest_duplicate_seq_identical_returns_first(db_session: Session) -> No
     assert len(te_rows) == 1
 
 
+def test_ingest_duplicate_uses_original_rule_version(db_session: Session) -> None:
+    """Duplicate seq returns the rule version stored with the original evaluation,
+    not the currently active version (which may have changed between calls)."""
+    from tests.factories import make_rule_version
+
+    device = _make_device(db_session)
+    rules = _rules()
+    now = _IN_WINDOW
+
+    # rv1 is the first active version (version=1).
+    rv1 = _make_rv(db_session)
+    assert rv1.version == 1
+
+    sig = _signals(seq=0)
+    r1 = ingest_telemetry(db_session, device, sig, _raw(sig), now, rules, rv1)
+    assert r1.rule_version_number == rv1.version
+
+    # Deactivate rv1 and make a new active version (version=2).
+    rv1_row = db_session.exec(  # type: ignore[call-overload]
+        select(RuleVersion).where(RuleVersion.id == rv1.id)
+    ).first()
+    assert rv1_row is not None
+    rv1_row.active = 0
+    db_session.flush()
+    rv2 = make_rule_version(db_session, active=1, version=2)
+    db_session.commit()
+
+    # Duplicate call with rv2 as the current rule version.
+    r2 = ingest_telemetry(db_session, device, sig, _raw(sig), now, rules, rv2)
+    assert r2.is_duplicate
+    assert r2.evaluation_id == r1.evaluation_id
+    # Must report rv1.version (the original), NOT rv2.version.
+    assert r2.rule_version_number == rv1.version, (
+        f"Expected original version {rv1.version}, got {r2.rule_version_number}"
+    )
+
+
 def test_ingest_duplicate_seq_different_returns_first_with_warning(
     db_session: Session,
 ) -> None:
