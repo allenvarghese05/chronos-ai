@@ -165,9 +165,9 @@ class BonusConsecutive(BaseModel):
 
 # Type alias for a points row (threshold, award).
 # YAML delivers [[35, 30], [20, 18], ...]; after Pydantic coercion each inner
-# item is a list of two elements.  We use list[list[Any]] during parsing and
+# item is a list of two elements.  We use list[list[...]] during parsing and
 # validate the elements ourselves.
-_PointsRowRaw = list[Any]
+_PointsRowRaw = list[int | float | bool | str]
 
 
 class Rule(BaseModel):
@@ -215,15 +215,18 @@ class Rule(BaseModel):
                 )
 
         elif spec.kind is SignalKind.numeric:
-            # All thresholds must be numeric.
+            # All thresholds must be numeric.  Build a narrowed list so the
+            # descending-order comparison is type-safe (int | float >= int | float).
+            numeric_thresholds: list[int | float] = []
             for i, t in enumerate(thresholds):
                 if not isinstance(t, (int, float)) or isinstance(t, bool):
                     raise ValueError(
                         f"numeric signal threshold must be a number; got {t!r} at points[{i}]"
                     )
+                numeric_thresholds.append(t)
             # Strictly descending.
-            for i in range(1, len(thresholds)):
-                if thresholds[i] >= thresholds[i - 1]:
+            for i in range(1, len(numeric_thresholds)):
+                if numeric_thresholds[i] >= numeric_thresholds[i - 1]:
                     raise ValueError(
                         f"thresholds must be in strictly descending order; got {thresholds!r}"
                     )
