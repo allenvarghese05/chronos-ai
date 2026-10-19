@@ -144,7 +144,9 @@ class TestStartupFailsOnUnreachableDb:
 
 
 class TestStartupYamlStaleWarning:
-    def test_startup_yaml_stale_warning_logged(self, tmp_path: Path) -> None:
+    def test_startup_yaml_stale_warning_logged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """Startup logs a yaml_stale warning when the YAML has changed since last activation."""
 
         db_url = f"sqlite:///{tmp_path / 'test.db'}"
@@ -182,21 +184,19 @@ class TestStartupYamlStaleWarning:
 
         import chronos.main as _main_module
 
-        original_log = _main_module.log
-        _main_module.log = _CapturingLog()  # type: ignore[assignment]
-        try:
-            reset_rules_cache()
-            app2 = create_app(settings=settings)
-            with TestClient(app2):
-                pass
-        finally:
-            _main_module.log = original_log
+        monkeypatch.setattr(_main_module, "log", _CapturingLog())
+        reset_rules_cache()
+        app2 = create_app(settings=settings)
+        with TestClient(app2):
+            pass
 
         assert "yaml_stale" in warnings_logged, (
             f"Expected 'yaml_stale' warning at startup; got: {warnings_logged}"
         )
 
-    def test_startup_no_stale_warning_when_yaml_unchanged(self, tmp_path: Path) -> None:
+    def test_startup_no_stale_warning_when_yaml_unchanged(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """No yaml_stale warning when YAML matches the DB version."""
         db_url = f"sqlite:///{tmp_path / 'test.db'}"
         _run_migrations(db_url)
@@ -218,16 +218,12 @@ class TestStartupYamlStaleWarning:
 
         import chronos.main as _main_module
 
-        original_log = _main_module.log
-        _main_module.log = _CapturingLog()  # type: ignore[assignment]
-        try:
-            reset_rules_cache()
-            settings = _make_settings(db_url, wake_rules_path=str(temp_yaml))
-            app = create_app(settings=settings)
-            with TestClient(app):
-                pass
-        finally:
-            _main_module.log = original_log
+        monkeypatch.setattr(_main_module, "log", _CapturingLog())
+        reset_rules_cache()
+        settings = _make_settings(db_url, wake_rules_path=str(temp_yaml))
+        app = create_app(settings=settings)
+        with TestClient(app):
+            pass
 
         assert "yaml_stale" not in warnings_logged, (
             f"Did not expect 'yaml_stale' warning; got: {warnings_logged}"
