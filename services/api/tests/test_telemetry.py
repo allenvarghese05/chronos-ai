@@ -255,6 +255,10 @@ class TestTelemetryIdempotency:
         assert r1.status_code == 200
         assert r2.status_code == 200
         assert r1.json()["evaluation_id"] == r2.json()["evaluation_id"]
+        # Full response bodies must be identical for the same frozen clock.
+        assert r1.json() == r2.json(), (
+            f"Duplicate seq responses differ:\nr1={r1.json()}\nr2={r2.json()}"
+        )
 
     def test_duplicate_seq_different_payload_first_evaluation(
         self, client: TestClient, test_settings: Settings

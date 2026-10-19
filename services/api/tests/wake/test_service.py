@@ -220,6 +220,9 @@ def test_ingest_duplicate_seq_identical_returns_first(db_session: Session) -> No
     r2 = ingest_telemetry(db_session, device, sig, _raw(sig), now, rules, rv)
     assert r2.is_duplicate
     assert r2.evaluation_id == r1.evaluation_id
+    # Scoring result and version must be identical.
+    assert r2.evaluation == r1.evaluation
+    assert r2.rule_version_number == r1.rule_version_number
 
     te_rows = list(  # type: ignore[call-overload]
         db_session.exec(select(TelemetryEvent).where(TelemetryEvent.device_id == device.id))
