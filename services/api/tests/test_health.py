@@ -45,13 +45,20 @@ class TestReadyz:
         assert body["db"] == "ok"
 
     def test_readyz_503_when_db_fails(self, tmp_path: Path) -> None:
-        """When the DB URL is unreachable, /readyz must return 503."""
+        """When the DB URL is unreachable, /readyz must return 503.
+
+        CHRONOS_SKIP_RULES_INIT=true lets the app start (no DB touch at startup);
+        the readyz probe is then what exercises the bad connection path.
+        """
         bad_settings = Settings.model_validate(
             {
                 "env": "test",
                 # Point to a directory that cannot be a SQLite file.
                 "database_url": f"sqlite:///{tmp_path / 'nonexistent' / 'bad.db'}",
                 "secret_key": "test-secret-key-32-bytes-exactly!",
+                # Skip rules-init so startup does not fail hard on the bad URL;
+                # the readyz endpoint is what we are testing here.
+                "skip_rules_init": True,
             }
         )
         app = create_app(settings=bad_settings)
