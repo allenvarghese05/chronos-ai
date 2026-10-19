@@ -28,6 +28,10 @@ steps since window start = 112 .............  +5  (rule steps_window: ≥100 →
                                              ----
 score 85 ≥ threshold 70 → "high"; previous tick was 72 → CONFIRMED
 ```
+Note: score 85 ≥ strong 85 (one-tick rule) AND consecutive_high 2 (two-tick rule) both fire;
+``confirm_reason = "both"``.
+```
+```
 
 ## 2. Why these signals (and not the ones in the original brief)
 
@@ -80,6 +84,7 @@ thresholds:
   confirm: 70                    # score ≥ confirm on 2 consecutive ticks (≤ 12 min apart) → confirmed
   strong: 85                     # score ≥ strong on 1 tick → confirmed
   dedupe_min: 2                  # ignore a second snapshot < 2 min after the last (same wake)
+  confirm_max_gap_min: 12        # two consecutive high ticks must be ≤ 12 min apart (allows one missed tick at 5-min interval)
 rules:
   - id: steps_10m
     signal: steps_10m

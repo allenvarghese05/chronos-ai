@@ -143,6 +143,10 @@ class Thresholds(BaseModel):
     confirm: int = Field(ge=1, le=100)
     strong: int = Field(ge=1, le=100)
     dedupe_min: int = Field(ge=1, le=60)
+    confirm_max_gap_min: int = Field(default=12, ge=2, le=60)
+    """Two consecutive ticks >= ``confirm`` must be <= this many minutes apart
+    for the consecutive rule to fire.  Allows one missed tick at the default 5-min
+    interval (gap = 10 min < 12).  Bounds: [2, 60]."""
 
     @model_validator(mode="after")
     def _check_strong_lte_confirm(self) -> Thresholds:

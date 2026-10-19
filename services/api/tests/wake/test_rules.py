@@ -816,3 +816,102 @@ class TestWakeRulesWindowToWindowConfig:
         wc = w.to_window_config()
         assert datetime.date(2026, 12, 25) in wc.holidays
         assert datetime.date(2026, 1, 1) in wc.holidays
+
+
+# ---------------------------------------------------------------------------
+# T1.5 additions: confirm_max_gap_min and needs_pedometer
+# ---------------------------------------------------------------------------
+
+
+class TestConfirmMaxGapMin:
+    """Tests for Thresholds.confirm_max_gap_min (T1.5 schema addition)."""
+
+    def test_default_is_12(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate({"confirm": 70, "strong": 85, "dedupe_min": 2})
+        assert t.confirm_max_gap_min == 12
+
+    def test_explicit_value_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 20}
+        )
+        assert t.confirm_max_gap_min == 20
+
+    def test_lower_bound_2_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 2}
+        )
+        assert t.confirm_max_gap_min == 2
+
+    def test_upper_bound_60_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 60}
+        )
+        assert t.confirm_max_gap_min == 60
+
+    def test_below_lower_bound_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from chronos.wake.rules import Thresholds
+
+        with pytest.raises(ValidationError):
+            Thresholds.model_validate(
+                {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 1}
+            )
+
+    def test_above_upper_bound_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from chronos.wake.rules import Thresholds
+
+        with pytest.raises(ValidationError):
+            Thresholds.model_validate(
+                {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 61}
+            )
+
+    def test_confirm_max_gap_min_in_yaml(self) -> None:
+        """The live YAML file must include confirm_max_gap_min: 12."""
+        rules_path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+        rules = load_yaml(rules_path)
+        assert rules.thresholds.confirm_max_gap_min == 12
+
+
+class TestNeedsPedometer:
+    """Tests for SignalSpec.needs_pedometer flag (T1.5 addition)."""
+
+    def test_steps_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["steps_10m"].needs_pedometer is True
+
+    def test_walking_sec_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["walking_sec_10m"].needs_pedometer is True
+
+    def test_stationary_sec_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["stationary_sec_10m"].needs_pedometer is True
+
+    def test_steps_since_window_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["steps_since_window"].needs_pedometer is True
+
+    def test_is_unlocked_no_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["is_unlocked"].needs_pedometer is False
+
+    def test_charger_disconnected_no_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["charger_disconnected"].needs_pedometer is False

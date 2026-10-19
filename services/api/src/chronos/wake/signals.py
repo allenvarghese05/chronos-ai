@@ -39,18 +39,24 @@ class SignalSpec:
     """Immutable descriptor for one wake-engine signal.
 
     Attributes:
-        name:         Canonical field name (matches telemetry payload key or derived name).
-        kind:         ``numeric``, ``bool``, or ``enum``.
-        source:       ``"phone"`` — sent in the telemetry payload;
-                      ``"derived"`` — computed server-side from consecutive snapshots.
-        enum_values:  Non-empty only when ``kind == SignalKind.enum_``; the
-                      exhaustive set of allowed string values.
+        name:             Canonical field name (matches telemetry payload key or derived name).
+        kind:             ``numeric``, ``bool``, or ``enum``.
+        source:           ``"phone"`` — sent in the telemetry payload;
+                          ``"derived"`` — computed server-side from consecutive snapshots.
+        enum_values:      Non-empty only when ``kind == SignalKind.enum_``; the
+                          exhaustive set of allowed string values.
+        needs_pedometer:  ``True`` when CoreMotion pedometer authorisation is required
+                          to produce meaningful values.  Signals marked ``True`` are
+                          skipped by the scoring engine when
+                          ``pedometer_auth ∈ {denied, restricted, not_determined}``
+                          and the ``reweight_without_pedometer`` redistribution applies.
     """
 
     name: str
     kind: SignalKind
     source: Literal["phone", "derived"]
     enum_values: frozenset[str] = field(default_factory=lambda: frozenset[str]())
+    needs_pedometer: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -81,16 +87,19 @@ SIGNALS: dict[str, SignalSpec] = {
         name="steps_10m",
         kind=SignalKind.numeric,
         source="phone",
+        needs_pedometer=True,
     ),
     "steps_since_window": SignalSpec(
         name="steps_since_window",
         kind=SignalKind.numeric,
         source="phone",
+        needs_pedometer=True,
     ),
     "walking_sec_10m": SignalSpec(
         name="walking_sec_10m",
         kind=SignalKind.numeric,
         source="phone",
+        needs_pedometer=True,
     ),
     "walking_conf": SignalSpec(
         name="walking_conf",
@@ -102,6 +111,7 @@ SIGNALS: dict[str, SignalSpec] = {
         name="stationary_sec_10m",
         kind=SignalKind.numeric,
         source="phone",
+        needs_pedometer=True,
     ),
     "is_unlocked": SignalSpec(
         name="is_unlocked",
