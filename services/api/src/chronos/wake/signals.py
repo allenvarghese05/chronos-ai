@@ -1,4 +1,4 @@
-"""Signal registry for the Chronos-AI wake engine (T1.4).
+"""Signal registry and validated telemetry snapshot for the Chronos-AI wake engine.
 
 Every field that may appear in a ``points`` rule or a ``penalty.when`` condition
 must be registered here.  The registry is the single source of truth for:
@@ -8,22 +8,30 @@ must be registered here.  The registry is the single source of truth for:
 - Whether the field comes from the phone telemetry payload or is computed
   server-side from two consecutive snapshots.
 - Allowed enum values (for ``enum`` kind).
+- Whether the field requires pedometer authorisation (T1.5 scoring reweighting).
 
 The scoring engine (T1.5) imports ``SIGNALS`` to look up the kind of each signal
-before evaluating a rule's threshold rows.
+before evaluating a rule's threshold rows.  The :class:`Signals` pydantic model
+is imported by the T1.6 telemetry endpoint as the request body type.
 
 Public API
 ----------
 - :class:`SignalKind` — ``numeric`` / ``bool`` / ``enum``.
 - :class:`SignalSpec` — immutable descriptor for one signal.
 - :data:`SIGNALS` — ``dict[str, SignalSpec]`` registry.
+- :class:`Signals` — validated telemetry snapshot from the iOS phone.
 """
 
 from __future__ import annotations
 
+import datetime
 import enum
 from dataclasses import dataclass, field
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from chronos.enums import AppState, BatteryState, PedometerAuth, WakeSource, WalkingConf
 
 
 class SignalKind(enum.StrEnum):
@@ -185,3 +193,59 @@ SIGNALS: dict[str, SignalSpec] = {
         source="derived",
     ),
 }
+
+
+# ---------------------------------------------------------------------------
+# Validated telemetry snapshot (T1.5)
+# ---------------------------------------------------------------------------
+
+
+class Signals(BaseModel):
+    """Validated telemetry snapshot from the iOS app.
+
+    All 17 phone fields are required; extra fields are forbidden.
+    ``device_ts`` must carry timezone information (naive datetimes are rejected
+    by the ``_reject_naive_device_ts`` validator so that the scoring engine
+    never silently misclassifies a tick).
+
+    Reused by the T1.6 telemetry endpoint as the request body type.
+
+    Bounds (enforced by Pydantic):
+    - ``steps_10m``, ``steps_since_window`` \u2208 [0, 5000]
+    - ``walking_sec_10m``, ``stationary_sec_10m`` \u2208 [0, 600]
+    - ``battery_level`` \u2208 [0.0, 1.0] or ``None``
+    - ``seq`` \u2265 0
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    device_ts: datetime.datetime
+    """When the snapshot was taken.  Must be timezone-aware (offset or UTC)."""
+
+    tz: str
+    """IANA timezone identifier, e.g. ``"America/Los_Angeles"``."""
+
+    wake_source: WakeSource
+    steps_10m: int = Field(ge=0, le=5000)
+    steps_since_window: int = Field(ge=0, le=5000)
+    walking_sec_10m: int = Field(ge=0, le=600)
+    walking_conf: WalkingConf
+    stationary_sec_10m: int = Field(ge=0, le=600)
+    is_unlocked: bool
+    battery_state: BatteryState
+    battery_level: float | None = Field(default=None, ge=0.0, le=1.0)
+    app_state: AppState
+    low_power_mode: bool
+    pedometer_auth: PedometerAuth
+    seq: int = Field(ge=0)
+    app_version: str
+    ios_version: str
+
+    @model_validator(mode="after")
+    def _reject_naive_device_ts(self) -> Signals:
+        if self.device_ts.tzinfo is None:
+            raise ValueError(
+                "device_ts must be timezone-aware (ISO-8601 with UTC offset); "
+                "naive datetimes are rejected to prevent silent timezone errors."
+            )
+        return self
