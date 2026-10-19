@@ -458,12 +458,35 @@ def evaluate(
                     pts = int(award)
                     break
 
-        # 7d. Effective cap (reweighted if pedometer unavailable).
-        effective_cap = (
-            rules.reweight_without_pedometer[rule.id]
-            if pedometer_unavailable and rule.id in rules.reweight_without_pedometer
-            else rule.cap
+        # 7d. Effective cap + reweighted base points (Owner Answer 17).
+        #
+        # A ``reweight_without_pedometer`` value sets **both** the cap and
+        # the effective points for a rule:
+        #
+        # - bool / enum rules (no bonus_consecutive): the single row's pts
+        #   become the reweight value.
+        # - rules with bonus_consecutive: base row pts = reweight_value -
+        #   bonus.points (e.g., unlocked 35 → base 25 + bonus 10).
+        # - numeric rules: proportional scaling so the top row = reweight
+        #   value (none listed today; document only).
+        #
+        # The validator ensures reweight_value > bonus.points for bonus rules.
+        reweight_value: int | None = (
+            rules.reweight_without_pedometer.get(rule.id) if pedometer_unavailable else None
         )
+        effective_cap = reweight_value if reweight_value is not None else rule.cap
+
+        reweight_note: str | None = None
+        if reweight_value is not None and pts > 0:
+            if rule.bonus_consecutive:
+                # base row = reweight_value - bonus.points
+                base_pts = reweight_value - rule.bonus_consecutive.points
+                pts = base_pts
+                reweight_note = f"reweighted: base {base_pts} (pedometer unavailable)"
+            else:
+                # bool / enum single-row: pts = reweight_value
+                pts = reweight_value
+                reweight_note = f"reweighted: pts={reweight_value} (pedometer unavailable)"
 
         # 7e. Bonus consecutive (only for unlocked rule with gap ≤ max).
         bonus_note: str | None = None
@@ -472,7 +495,11 @@ def evaluate(
                 gap_min = (signals.device_ts - prev.device_ts).total_seconds() / 60
                 if gap_min <= rules.thresholds.confirm_max_gap_min:
                     bonus = rule.bonus_consecutive.points
-                    pts = min(pts + bonus, effective_cap)
+                    if reweight_value is not None:
+                        # With bonus the total reaches the full reweight value.
+                        pts = reweight_value
+                    else:
+                        pts = min(pts + bonus, effective_cap)
                     bonus_note = f"consecutive bonus +{bonus}"
                 else:
                     pts = min(pts, effective_cap)
@@ -481,7 +508,8 @@ def evaluate(
         else:
             pts = min(pts, effective_cap)
 
-        note: str | None = bonus_note
+        note_parts = [p for p in (reweight_note, bonus_note) if p]
+        note: str | None = "; ".join(note_parts) if note_parts else None
         breakdown_list.append(
             RuleBreakdown(
                 rule_id=rule.id,
