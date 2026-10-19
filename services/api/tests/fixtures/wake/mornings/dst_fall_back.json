@@ -1,0 +1,119 @@
+{
+  "name": "dst_fall_back",
+  "tz": "America/New_York",
+  "day_kind": "weekend",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "2026-11-01 US DST ends (clocks fall back from EDT=UTC-4 to EST=UTC-5 at 02:00AM local = 06:00 UTC). 05:30 UTC = 01:30 EDT (pre-fall-back). local_time=01:30 < boundary=03:00 -> local_date=2026-10-31 (Saturday). Window for 2026-10-31 (Saturday, EDT): 08:00-14:00 EDT = 12:00-18:00 UTC. 05:30 UTC < 12:00 UTC -> gate=closed.",
+      "device_ts": "2026-11-01T05:30:00+00:00",
+      "tz": "America/New_York",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 590,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.90,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:30 UTC = 01:30 EST (post-fall-back, since fall-back happened at 06:00 UTC). local_time=01:30 EST < boundary=03:00 -> local_date=2026-10-31. Window for 2026-10-31 (Saturday, EDT): 12:00-18:00 UTC. 06:30 UTC < 12:00 UTC -> gate=closed. (Verifies that post-fall-back 01:30 is still attributed to Oct 31 via boundary rule.)",
+      "device_ts": "2026-11-01T06:30:00+00:00",
+      "tz": "America/New_York",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 590,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.92,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "13:00 UTC = 08:00 EST. local_time=08:00 >= boundary=03:00 -> local_date=2026-11-01 (Sunday=weekend). Window for 2026-11-01 (Sunday, EST): 08:00-14:00 EST = 13:00-19:00 UTC. 13:00 UTC >= 13:00 UTC -> gate=open (at window start). No prev for this local_date (events 0,1 belong to Oct 31). steps=35->30; walking=60/high->20; unlocked=true(no prev)->15; charger=false->0; steps_window=120->5; wake=silent->0. Total=70. consecutive_high=1. decision=high.",
+      "device_ts": "2026-11-01T13:00:00+00:00",
+      "tz": "America/New_York",
+      "wake_source": "silent_push",
+      "steps_10m": 35,
+      "steps_since_window": 120,
+      "walking_sec_10m": 60,
+      "walking_conf": "high",
+      "stationary_sec_10m": 30,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.88,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 2,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "13:05 UTC = 08:05 EST. Gap=5min. prev=event2(unplugged,unlocked=true,consecutive_high=1,local_date=2026-11-01). steps=40->30; walking=80/high->20; unlocked+bonus(prev=true,gap=5<=12)->25; charger=false->0; steps_window=200->5; wake=0. Total=80. consecutive_high=2. confirm, reason='consecutive'.",
+      "device_ts": "2026-11-01T13:05:00+00:00",
+      "tz": "America/New_York",
+      "wake_source": "silent_push",
+      "steps_10m": 40,
+      "steps_since_window": 200,
+      "walking_sec_10m": 80,
+      "walking_conf": "high",
+      "stationary_sec_10m": 15,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.87,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 3,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 80,
+        "decision": "confirm",
+        "consecutive_high": 2,
+        "confirm_reason": "consecutive"
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at_event_index": 3
+  }
+}

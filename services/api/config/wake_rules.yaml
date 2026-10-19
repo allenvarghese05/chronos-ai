@@ -9,6 +9,7 @@ thresholds:
   confirm: 70                    # score >= confirm on 2 consecutive ticks -> confirmed
   strong: 85                     # score >= strong on 1 tick -> confirmed
   dedupe_min: 2                  # ignore a second snapshot < 2 min after the last
+  confirm_max_gap_min: 12        # two consecutive high ticks must be <= 12 min apart (allows one missed tick)
 rules:
   - id: steps_10m
     signal: steps_10m

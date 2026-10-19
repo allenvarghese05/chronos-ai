@@ -45,6 +45,7 @@ packages = ["src/chronos"]
 # ── pytest ──────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = ""
 filterwarnings = [
   # starlette 1.7.0 deprecates httpx in favour of httpx2; httpx is still functional
   "ignore::starlette.exceptions.StarletteDeprecationWarning",

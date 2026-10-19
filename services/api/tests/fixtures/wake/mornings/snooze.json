@@ -1,0 +1,119 @@
+{
+  "name": "snooze",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "06:30 LA = 13:30 UTC. Foreground, mostly stationary. steps_10m=5<10->0; walking=0/low->requires[med,high] unmet->0; unlocked=true(no prev)->15; charger(no prev)=false->0; steps_window=5<100->0; foreground->40. Subtotal=55. Penalty stationary_dominant: stationary_sec=550>=540 AND steps=5<10 -> fires -> -20. Total=35. Score=35<70 -> low, consecutive_high=0.",
+      "device_ts": "2026-10-06T13:30:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "foreground",
+      "steps_10m": 5,
+      "steps_since_window": 5,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 550,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.91,
+      "app_state": "active",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 35,
+        "decision": "low",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:35 LA = 13:35 UTC. Gap=5min. prev=event0(unplugged,unlocked=true,consecutive_high=0). steps=3<10->0; walking=0/low->0; unlocked=false->0; charger(prev=unplugged,curr=unplugged)=false->0; steps_window=5<100->0; wake=silent->0. Subtotal=0. Penalty: stationary=570>=540 AND steps=3<10 -> -20 -> clamp to 0. Score=0 -> low, consecutive_high=0.",
+      "device_ts": "2026-10-06T13:35:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 3,
+      "steps_since_window": 5,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 570,
+      "is_unlocked": false,
+      "battery_state": "unplugged",
+      "battery_level": 0.90,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 0,
+        "decision": "low",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "07:40 LA = 14:40 UTC. Gap=65min from prev. prev=event1(unplugged,unlocked=false,consecutive_high=0). steps=35->row[35,30]=30; walking=60/high->row[60,20]=20; unlocked=true(prev=false,no bonus)->15; charger=false->0; steps_window=400->row[100,5]=5; wake=silent->0. Total=70. consecutive_high: prev.consecutive_high=0 -> consecutive_high=1. decision=high.",
+      "device_ts": "2026-10-06T14:40:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 35,
+      "steps_since_window": 400,
+      "walking_sec_10m": 60,
+      "walking_conf": "high",
+      "stationary_sec_10m": 30,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.88,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 2,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "07:45 LA = 14:45 UTC. Gap=5min. prev=event2(unplugged,unlocked=true,consecutive_high=1). steps=50->row[35,30]=30; walking=80/high->row[60,20]=20; unlocked+bonus(prev=true,gap=5<=12)->15+10=25(cap=25); charger=false->0; steps_window=500->row[100,5]=5; wake=0. Total=80. prev.consecutive_high=1,gap=5<=12 -> consecutive_high=2. score=80<85, consecutive_high=2 -> confirm, reason='consecutive'.",
+      "device_ts": "2026-10-06T14:45:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 50,
+      "steps_since_window": 500,
+      "walking_sec_10m": 80,
+      "walking_conf": "high",
+      "stationary_sec_10m": 10,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.87,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 3,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 80,
+        "decision": "confirm",
+        "consecutive_high": 2,
+        "confirm_reason": "consecutive"
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at_event_index": 3
+  }
+}

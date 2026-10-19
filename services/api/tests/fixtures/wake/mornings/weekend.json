@@ -1,0 +1,65 @@
+{
+  "name": "weekend",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekend",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "2026-10-10 Saturday. Window: 08:00-14:00 LA (PDT=UTC-7) = 15:00-21:00 UTC. 09:30 LA = 16:30 UTC. In window. No prev. steps=35->30; walking=60/high->20; unlocked=true(no prev)->15; charger=false->0; steps_window=150->5; wake=silent->0. Total=70. consecutive_high=1. decision=high.",
+      "device_ts": "2026-10-10T16:30:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 35,
+      "steps_since_window": 150,
+      "walking_sec_10m": 60,
+      "walking_conf": "high",
+      "stationary_sec_10m": 30,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.80,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "09:35 LA = 16:35 UTC. Gap=5min. prev=event0(unplugged,unlocked=true,consecutive_high=1). steps=40->30; walking=80/high->20; unlocked+bonus(prev=true,gap=5<=12)->25; charger=false->0; steps_window=250->5; wake=0. Total=80. consecutive_high=2. confirm, reason='consecutive'.",
+      "device_ts": "2026-10-10T16:35:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 40,
+      "steps_since_window": 250,
+      "walking_sec_10m": 80,
+      "walking_conf": "high",
+      "stationary_sec_10m": 15,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.79,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 80,
+        "decision": "confirm",
+        "consecutive_high": 2,
+        "confirm_reason": "consecutive"
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at_event_index": 1
+  }
+}

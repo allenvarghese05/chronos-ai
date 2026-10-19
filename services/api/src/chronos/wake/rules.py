@@ -143,6 +143,10 @@ class Thresholds(BaseModel):
     confirm: int = Field(ge=1, le=100)
     strong: int = Field(ge=1, le=100)
     dedupe_min: int = Field(ge=1, le=60)
+    confirm_max_gap_min: int = Field(default=12, ge=2, le=60)
+    """Two consecutive ticks >= ``confirm`` must be <= this many minutes apart
+    for the consecutive rule to fire.  Allows one missed tick at the default 5-min
+    interval (gap = 10 min < 12).  Bounds: [2, 60]."""
 
     @model_validator(mode="after")
     def _check_strong_lte_confirm(self) -> Thresholds:
@@ -326,6 +330,18 @@ class WakeRules(BaseModel):
             total = sum(self.reweight_without_pedometer.values())
             if total > 100:
                 raise ValueError(f"reweight_without_pedometer values sum to {total}; must be ≤ 100")
+
+        # 5. For reweighted rules with bonus_consecutive, value must exceed
+        #    bonus.points so that base_pts = value - bonus.points > 0.
+        rule_map = {rule.id: rule for rule in self.rules}
+        for key, value in self.reweight_without_pedometer.items():
+            rule = rule_map[key]
+            if rule.bonus_consecutive is not None and value <= rule.bonus_consecutive.points:
+                raise ValueError(
+                    f"reweight_without_pedometer.{key}: value {value} must be "
+                    f"> bonus_consecutive.points {rule.bonus_consecutive.points} "
+                    f"so that base_pts = value \u2212 bonus > 0"
+                )
 
         return self
 

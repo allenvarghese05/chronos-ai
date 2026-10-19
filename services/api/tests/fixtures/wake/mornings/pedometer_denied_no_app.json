@@ -1,0 +1,93 @@
+{
+  "name": "pedometer_denied_no_app",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "_description": "Without the owner foregrounding the app, the maximum reachable score when pedometer is denied is 35 (unlocked+bonus) + 25 (charger_disconnect) = 60, which never reaches confirm=70. The day cannot confirm via unlock+charger alone.",
+  "events": [
+    {
+      "_comment": "05:50 LA = 12:50 UTC. Before window. gate=closed. pedometer=denied. charging, unlocked=false.",
+      "device_ts": "2026-10-06T12:50:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 300,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.97,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:05 LA = 13:05 UTC. In window. silent_push. Pedometer=denied. prev=event0(charging, unlocked=false). Still on charger; owner picked up the phone and unlocked it. unlocked: reweighted, no bonus (prev.is_unlocked=false) -> base_pts=35-10=25, cap=35, pts=25. charger_disconnect: prev=charging, curr=charging -> false -> 0. foreground: silent_push -> 0. steps/walking/steps_window skipped (pedometer unavailable). Total=25. score=25<confirm=70 -> consecutive_high=0 -> decision=low.",
+      "device_ts": "2026-10-06T13:05:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 200,
+      "is_unlocked": true,
+      "battery_state": "charging",
+      "battery_level": 0.96,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 25,
+        "decision": "low",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:10 LA = 13:10 UTC. In window. silent_push. Gap=5min. prev=event1(charging, unlocked=true). Owner unplugged the phone but did NOT open the app. unlocked: reweighted, prev.is_unlocked=true, gap=5min<=12 -> bonus applies -> pts=reweight_value=35, cap=35. charger_disconnect: prev=charging, curr=unplugged -> true; reweighted -> pts=25, cap=25. foreground: silent_push -> 0. Total=35+25=60. score=60<confirm=70 -> consecutive_high=0 -> decision=low. This is the MAXIMUM score reachable without foreground (pedometer denied): 35+25=60 < 70 means the day can never confirm via unlock+charger alone.",
+      "device_ts": "2026-10-06T13:10:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 180,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.95,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 2,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 60,
+        "decision": "low",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at": null
+  }
+}

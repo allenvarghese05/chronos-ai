@@ -1,0 +1,92 @@
+{
+  "name": "worked_example",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "05:50 LA = 12:50 UTC, before window (06:00-11:00). Gate closed. Battery charging.",
+      "device_ts": "2026-10-06T12:50:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 300,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.95,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:07 LA = 13:07 UTC, in window. foreground wake. prev=event0(charging,locked). Arithmetic: steps_10m=20->18(row[20,18]), walking=30/medium->12(row[30,12]), unlocked=false->0, charger(prev=charging,curr=charging)=false->0, steps_window=0->0(threshold 100 not met), wake_source=foreground->40. Total=70. consecutive_high: score=70>=confirm=70, prev.consecutive_high=0 -> consecutive_high=1. decision=high.",
+      "device_ts": "2026-10-06T13:07:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "foreground",
+      "steps_10m": 20,
+      "steps_since_window": 0,
+      "walking_sec_10m": 30,
+      "walking_conf": "medium",
+      "stationary_sec_10m": 120,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.95,
+      "app_state": "active",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:12 LA = 13:12 UTC, in window. silent_push. prev=event1(charging,locked,consecutive_high=1). Arithmetic: steps_10m=48->row[35,30]=30, walking_10m=95/high->row[60,20]=20, unlocked=true+prev_unlocked=false->no bonus->15(cap=25), charger_disconnected(prev=charging,curr=unplugged)->true->15, steps_window=112->row[100,5]=5, wake_source=silent_push->no match->0. Total=30+20+15+15+5+0=85. gap=5min<=12. prev.consecutive_high=1>=1, gap_ok -> consecutive_high=2. score=85>=strong=85 AND consecutive_high=2 -> confirm, reason='both'.",
+      "device_ts": "2026-10-06T13:12:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 48,
+      "steps_since_window": 112,
+      "walking_sec_10m": 95,
+      "walking_conf": "high",
+      "stationary_sec_10m": 30,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.82,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 2,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 85,
+        "decision": "confirm",
+        "consecutive_high": 2,
+        "confirm_reason": "both"
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at_event_index": 2
+  }
+}

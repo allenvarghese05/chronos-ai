@@ -816,3 +816,172 @@ class TestWakeRulesWindowToWindowConfig:
         wc = w.to_window_config()
         assert datetime.date(2026, 12, 25) in wc.holidays
         assert datetime.date(2026, 1, 1) in wc.holidays
+
+
+# ---------------------------------------------------------------------------
+# T1.5 additions: confirm_max_gap_min and needs_pedometer
+# ---------------------------------------------------------------------------
+
+
+class TestConfirmMaxGapMin:
+    """Tests for Thresholds.confirm_max_gap_min (T1.5 schema addition)."""
+
+    def test_default_is_12(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate({"confirm": 70, "strong": 85, "dedupe_min": 2})
+        assert t.confirm_max_gap_min == 12
+
+    def test_explicit_value_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 20}
+        )
+        assert t.confirm_max_gap_min == 20
+
+    def test_lower_bound_2_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 2}
+        )
+        assert t.confirm_max_gap_min == 2
+
+    def test_upper_bound_60_accepted(self) -> None:
+        from chronos.wake.rules import Thresholds
+
+        t = Thresholds.model_validate(
+            {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 60}
+        )
+        assert t.confirm_max_gap_min == 60
+
+    def test_below_lower_bound_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from chronos.wake.rules import Thresholds
+
+        with pytest.raises(ValidationError):
+            Thresholds.model_validate(
+                {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 1}
+            )
+
+    def test_above_upper_bound_rejected(self) -> None:
+        from pydantic import ValidationError
+
+        from chronos.wake.rules import Thresholds
+
+        with pytest.raises(ValidationError):
+            Thresholds.model_validate(
+                {"confirm": 70, "strong": 85, "dedupe_min": 2, "confirm_max_gap_min": 61}
+            )
+
+    def test_confirm_max_gap_min_in_yaml(self) -> None:
+        """The live YAML file must include confirm_max_gap_min: 12."""
+        rules_path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+        rules = load_yaml(rules_path)
+        assert rules.thresholds.confirm_max_gap_min == 12
+
+
+class TestNeedsPedometer:
+    """Tests for SignalSpec.needs_pedometer flag (T1.5 addition)."""
+
+    def test_steps_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["steps_10m"].needs_pedometer is True
+
+    def test_walking_sec_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["walking_sec_10m"].needs_pedometer is True
+
+    def test_stationary_sec_10m_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["stationary_sec_10m"].needs_pedometer is True
+
+    def test_steps_since_window_needs_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["steps_since_window"].needs_pedometer is True
+
+    def test_is_unlocked_no_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["is_unlocked"].needs_pedometer is False
+
+    def test_charger_disconnected_no_pedometer(self) -> None:
+        from chronos.wake.signals import SIGNALS
+
+        assert SIGNALS["charger_disconnected"].needs_pedometer is False
+
+
+# ---------------------------------------------------------------------------
+# Edge case 15: reweight value must exceed bonus.points for bonus rules
+# ---------------------------------------------------------------------------
+
+
+class TestReweightBonusConstraint:
+    """Validator: for reweighted rules with bonus_consecutive, value > bonus.points."""
+
+    def _rules_with_reweight(self, unlocked_reweight: int) -> dict[str, Any]:
+        """Build a valid base dict then override the unlocked reweight value."""
+        import copy
+
+        base = copy.deepcopy(VALID_RULES)
+        # Add charger_disconnect and foreground rules so the reweight keys exist.
+        base["rules"] = [
+            {
+                "id": "unlocked",
+                "signal": "is_unlocked",
+                "points": [[True, 15]],
+                "cap": 25,
+                "bonus_consecutive": {"ticks": 2, "points": 10},
+            },
+            {
+                "id": "foreground",
+                "signal": "wake_source",
+                "points": [["foreground", 40]],
+                "cap": 40,
+            },
+        ]
+        base["reweight_without_pedometer"] = {
+            "unlocked": unlocked_reweight,
+            "foreground": 40,
+        }
+        return base
+
+    def test_reweight_value_gt_bonus_valid(self) -> None:
+        """reweight_value (35) > bonus.points (10) → valid."""
+        d = self._rules_with_reweight(35)
+        rules = WakeRules.model_validate(d)
+        assert rules.reweight_without_pedometer["unlocked"] == 35
+
+    def test_reweight_value_equals_bonus_invalid(self) -> None:
+        """reweight_value (10) == bonus.points (10) → ValidationError."""
+        # The error location should reference reweight_without_pedometer.unlocked.
+        d = self._rules_with_reweight(10)
+        with pytest.raises(ValidationError) as exc_info:
+            WakeRules.model_validate(d)
+        errors = exc_info.value.errors()
+        msgs = " ".join(e["msg"] for e in errors)
+        assert "reweight_without_pedometer.unlocked" in msgs
+
+    def test_reweight_value_less_than_bonus_invalid(self) -> None:
+        """reweight_value (5) < bonus.points (10) → ValidationError."""
+        d = self._rules_with_reweight(5)
+        with pytest.raises(ValidationError) as exc_info:
+            WakeRules.model_validate(d)
+        errors = exc_info.value.errors()
+        msgs = " ".join(e["msg"] for e in errors)
+        assert "reweight_without_pedometer.unlocked" in msgs
+
+    def test_reweight_bonus_rule_live_yaml_valid(self) -> None:
+        """The live YAML (unlocked: 35, bonus.points: 10) satisfies 35 > 10."""
+        rules_path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+        rules = load_yaml(rules_path)
+        unlocked_rule = next(r for r in rules.rules if r.id == "unlocked")
+        rw_val = rules.reweight_without_pedometer["unlocked"]
+        assert unlocked_rule.bonus_consecutive is not None
+        assert rw_val > unlocked_rule.bonus_consecutive.points
