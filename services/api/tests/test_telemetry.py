@@ -178,6 +178,31 @@ class TestTelemetryClockSkew:
 
 
 # ---------------------------------------------------------------------------
+# Signals validation (pydantic.ValidationError → 422 validation)
+# ---------------------------------------------------------------------------
+
+
+class TestTelemetrySignalsValidation:
+    def test_unknown_field_422_validation_not_clock_skew(
+        self, client: TestClient, test_settings: Settings
+    ) -> None:
+        """Payload with an extra unknown field
+        def422 'validation', not 'clock_skew'."""
+        import time_machine
+
+        plain, _ = _insert_device(test_settings)
+        frozen_now = datetime.datetime(2026, 10, 6, 13, 48, 0, tzinfo=datetime.UTC)
+        payload = _base_payload(device_ts=frozen_now.isoformat())
+        payload["unknown_field_xyz"] = "should_be_rejected"  # type: ignore[assignment]
+        with time_machine.travel(frozen_now + datetime.timedelta(seconds=5), tick=False):
+            r = client.post("/v1/telemetry", json=payload, headers=_auth(plain))
+        assert r.status_code == 422, r.text
+        body = r.json()
+        assert body["code"] == "validation", f"Expected 'validation', got {body['code']!r}"
+        assert body["code"] != "clock_skew"
+
+
+# ---------------------------------------------------------------------------
 # Valid payload shape test
 # ---------------------------------------------------------------------------
 

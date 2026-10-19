@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime
 from typing import Any
 
+import pydantic
 import structlog
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
@@ -99,12 +100,17 @@ async def post_telemetry(
     # ── 2. Parse and validate Signals ─────────────────────────────────────
     try:
         signals = Signals.model_validate_json(raw)
-    except Exception as exc:
+    except pydantic.ValidationError as exc:
+        errors = [{"loc": list(e["loc"]), "msg": e["msg"], "type": e["type"]} for e in exc.errors()]
+        detail = "; ".join(
+            f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in exc.errors()
+        )
         raise ProblemException(
             status_code=422,
             code="validation",
             title="Unprocessable Entity",
-            detail=str(exc),
+            detail=detail or "Validation error",
+            extensions={"errors": errors},
         ) from exc
 
     # ── 3. Load rules ─────────────────────────────────────────────────────
