@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
@@ -36,10 +35,7 @@ from chronos.errors import (
     validation_exception_handler,
 )
 from chronos.observability import configure as configure_logging
-from chronos.wake.rules import ensure_initial_version, reset_rules_cache
-
-# parents[2] of src/chronos/main.py is services/api/
-_YAML_PATH: Path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+from chronos.wake.rules import ensure_initial_version, reset_rules_cache, yaml_stale
 
 log = structlog.get_logger(__name__)
 
@@ -74,15 +70,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         log.info("chronos_startup", version=__version__, env=str(resolved.env))
 
         # Ensure at least one active rule version exists in the DB.
-        # Wrap in try/except so a bad DB URL (test scenario) still allows startup;
-        # the /readyz endpoint will then report 503 when it checks the DB.
-        try:
+        # POLICY: invalid or missing wake_rules.yaml MUST fail startup loudly.
+        # Only sqlalchemy.exc.OperationalError (DB temporarily unreachable) is
+        # tolerated — the /readyz endpoint will report 503 in that case.
+        # CHRONOS_SKIP_RULES_INIT=true is a TEST-ONLY escape hatch; it is logged
+        # loudly and must never be set in production.
+        if resolved.skip_rules_init:
+            log.warning(
+                "wake_rules_startup_skipped",
+                reason="CHRONOS_SKIP_RULES_INIT=true (TEST-ONLY flag — never set in production)",
+            )
+        else:
+            from sqlalchemy.exc import OperationalError as _OperationalError
             from sqlmodel import Session as _Session
 
-            with _Session(engine) as _session:
-                ensure_initial_version(_session, _YAML_PATH)
-        except Exception:
-            log.warning("wake_rules_startup_skipped", reason="DB not reachable at startup")
+            try:
+                with _Session(engine) as _session:
+                    ensure_initial_version(_session, resolved.wake_rules_path)
+                    if yaml_stale(_session, resolved.wake_rules_path):
+                        log.warning(
+                            "yaml_stale",
+                            path=str(resolved.wake_rules_path),
+                            hint="run `chronos config apply-yaml` to promote the updated YAML",
+                        )
+            except _OperationalError:
+                log.warning(
+                    "wake_rules_startup_skipped",
+                    reason="DB not reachable (OperationalError); /readyz will report 503",
+                )
 
         yield
         engine.dispose()
