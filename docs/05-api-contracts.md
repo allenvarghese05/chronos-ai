@@ -96,8 +96,32 @@ cannot set headers) — the signature *is* the auth.
 
 ## 4. Config and admin
 
-### `GET /v1/config/wake` → `{ "version": 3, "source": "api", "rules": { ...WakeRules... }, "created_at": "..." }`
-### `PUT /v1/config/wake` body `WakeRules` → validates whole document, creates version n+1, returns it. 422 `rules_invalid` with field paths.
+### `GET /v1/config/wake`
+
+Returns the currently active wake-engine rule version.
+
+```json
+{
+  "version": 3,
+  "source": "api",
+  "rules": { "...WakeRules..." },
+  "sha256": "<hex64>",
+  "yaml_sha256": "<hex64>",
+  "yaml_stale": false,
+  "created_at": "2026-10-19T06:00:00.000000Z",
+  "created_by": "api:<device_public_id>"
+}
+```
+
+- `yaml_sha256` — SHA-256 of `config/wake_rules.yaml` on disk.
+- `yaml_stale` — `true` if the YAML file on disk differs from the latest yaml-sourced version in the DB.
+
+### `PUT /v1/config/wake`
+
+Body: `WakeRules` JSON document (full schema, not a patch).
+Response `201` — new version created (`{ "version": n+1, "created": true }`).
+Response `200` — SHA matches active version; no-op (`{ "version": n, "created": false }`).
+Response `422 rules_invalid` (problem+json) with `"errors": [{"loc": [...], "msg": "...", "type": "..."}]` for each validation failure.
 ### `GET /v1/config` → effective settings with origin (`env` \| `yaml` \| `db`): `render_mode`, `llm_provider`, `pexels_enabled`, `tick_interval_min`, `retention`.
 ### `PATCH /v1/config` → subset of the above; stored in `settings`.
 ### `POST /v1/admin/run` `{ "local_date": "2026-10-06", "stages": ["ingest","script","assets","tts","captions","render"], "force": false }` → enqueues the chain; 202 with job ids. Used by the debug panel and `chronos run`.

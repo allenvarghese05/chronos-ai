@@ -21,6 +21,7 @@ from chronos.config import Settings, reset_settings
 from chronos.main import create_app
 from chronos.observability import reset_for_testing
 from chronos.ratelimit import reset_all as reset_rate_limiters
+from chronos.wake.rules import reset_rules_cache
 
 
 def _run_migrations(db_url: str) -> None:
@@ -50,6 +51,7 @@ def _reset_globals() -> None:
     reset_settings()
     reset_for_testing()
     reset_rate_limiters()
+    reset_rules_cache()
 
 
 @pytest.fixture()

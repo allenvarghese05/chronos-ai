@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI
@@ -23,6 +24,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from chronos import __version__
+from chronos.api.config_wake import router as config_wake_router
 from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
 from chronos.api.pair import router as pair_router
@@ -34,6 +36,10 @@ from chronos.errors import (
     validation_exception_handler,
 )
 from chronos.observability import configure as configure_logging
+from chronos.wake.rules import ensure_initial_version, reset_rules_cache
+
+# parents[2] of src/chronos/main.py is services/api/
+_YAML_PATH: Path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
 
 log = structlog.get_logger(__name__)
 
@@ -66,8 +72,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.db_engine = engine
         app.state.settings = resolved
         log.info("chronos_startup", version=__version__, env=str(resolved.env))
+
+        # Ensure at least one active rule version exists in the DB.
+        # Wrap in try/except so a bad DB URL (test scenario) still allows startup;
+        # the /readyz endpoint will then report 503 when it checks the DB.
+        try:
+            from sqlmodel import Session as _Session
+
+            with _Session(engine) as _session:
+                ensure_initial_version(_session, _YAML_PATH)
+        except Exception:
+            log.warning("wake_rules_startup_skipped", reason="DB not reachable at startup")
+
         yield
         engine.dispose()
+        reset_rules_cache()
         log.info("chronos_shutdown")
 
     app = FastAPI(
@@ -90,5 +109,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(pair_router, prefix="/v1")
     app.include_router(device_router, prefix="/v1")
+    app.include_router(config_wake_router, prefix="/v1")
 
     return app
