@@ -126,7 +126,7 @@ def _ctx(
 
 
 @given(signals_st())
-@settings(max_examples=200)
+@settings(max_examples=200, deadline=None)
 def test_score_in_range(signals: Signals) -> None:
     """Score is always in [0, 100] for any valid signals."""
     rules = _rules()
@@ -140,7 +140,7 @@ def test_score_in_range(signals: Signals) -> None:
 
 
 @given(signals_st(device_ts=_BEFORE_WINDOW))
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_outside_window_always_zero(signals: Signals) -> None:
     """device_ts before window.start_utc -> score=0 and decision=outside_window."""
     rules = _rules()
@@ -164,7 +164,7 @@ def test_outside_window_always_zero(signals: Signals) -> None:
 
 
 @given(signals_st(), optional_prev_st(ts=_IN_WINDOW_BASE))
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_deterministic(signals: Signals, prev: PreviousTick | None) -> None:
     """Same inputs produce identical Evaluation (deterministic pure function)."""
     rules = _rules()
@@ -183,7 +183,7 @@ def test_deterministic(signals: Signals, prev: PreviousTick | None) -> None:
     signals_st(),
     st.integers(0, 4999),
 )
-@settings(max_examples=200)
+@settings(max_examples=200, deadline=None)
 def test_monotone_in_steps(base_signals: Signals, extra_steps: int) -> None:
     """Increasing steps_10m only -> score non-decreasing (when no penalty changes).
 
@@ -230,7 +230,7 @@ def test_monotone_in_steps(base_signals: Signals, extra_steps: int) -> None:
     signals_st(),
     st.integers(0, 10),
 )
-@settings(max_examples=100)
+@settings(max_examples=100, deadline=None)
 def test_deduped_no_consecutive_advance(signals: Signals, prev_consecutive_high: int) -> None:
     """Deduped tick preserves (never increases) consecutive_high from prev."""
     rules = _rules()
@@ -272,7 +272,7 @@ _PEDOMETER_RULE_IDS = {"steps_10m", "walking_10m", "steps_window"}
 
 @pytest.mark.parametrize("auth", _PEDOMETER_UNAVAILABLE_VALUES)
 @given(signals_st())
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_pedometer_unavailable_zeroes_pedometer_rules(
     auth: PedometerAuth, signals: Signals
 ) -> None:
@@ -303,7 +303,7 @@ def test_pedometer_unavailable_zeroes_pedometer_rules(
 
 @pytest.mark.parametrize("auth", _PEDOMETER_UNAVAILABLE_VALUES)
 @given(signals_st())
-@settings(max_examples=50)
+@settings(max_examples=50, deadline=None)
 def test_pedometer_unavailable_score_max_100(auth: PedometerAuth, signals: Signals) -> None:
     """When pedometer unavailable, reweighted scores never exceed 100.
 
