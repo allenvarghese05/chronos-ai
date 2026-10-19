@@ -513,7 +513,7 @@ def evaluate(
         breakdown_list.append(
             RuleBreakdown(
                 rule_id=rule.id,
-                input=sig_val,  # type: ignore[arg-type]
+                input=sig_val,
                 points=pts,
                 cap=effective_cap,
                 note=note,
@@ -529,8 +529,8 @@ def evaluate(
         fired_conditions: list[str] = []
         for sig_name, raw_cond in penalty.when.items():
             val = sig_vals[sig_name]
-            cond = parse_condition(raw_cond)  # type: ignore[arg-type]
-            if not cond.evaluate(val):  # type: ignore[arg-type]
+            cond = parse_condition(raw_cond)
+            if not cond.evaluate(val):
                 all_met = False
                 break
             fired_conditions.append(f"{sig_name} {raw_cond}")
