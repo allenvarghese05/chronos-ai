@@ -19,6 +19,10 @@ from pathlib import Path
 
 import typer
 
+# Path to the canonical wake-rules YAML file (tests may monkeypatch this).
+# parents[2] of src/chronos/cli.py is services/api/
+_WAKE_YAML_PATH: Path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+
 app = typer.Typer(
     name="chronos",
     help="Chronos-AI — behavioural wake detection + morning reel API.",
@@ -115,11 +119,89 @@ def db_migrate() -> None:
 
 @config_app.command("validate")
 def config_validate() -> None:
-    """Validate YAML config files (wake rules, sources).
+    """Validate config/wake_rules.yaml against the WakeRules schema.
 
-    This is a stub; full validation is implemented in T1.4.
+    Exits 0 on success; exits 1 and prints field-level errors on failure.
     """
-    typer.echo("no config files yet (T1.4)")
+    import yaml
+    from pydantic import ValidationError
+
+    from chronos.wake.rules import load_yaml
+
+    yaml_path = _WAKE_YAML_PATH
+    if not yaml_path.exists():
+        typer.echo(f"✗ config file not found: {yaml_path}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        load_yaml(yaml_path)
+    except yaml.YAMLError as exc:
+        typer.echo(f"✗ YAML parse error in {yaml_path.name}:\n  {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    except ValidationError as exc:
+        typer.echo(f"✗ {yaml_path.name} has {exc.error_count()} validation error(s):", err=True)
+        for err in exc.errors():
+            loc = ".".join(str(p) for p in err["loc"])
+            typer.echo(f"  [{loc}] {err['msg']}", err=True)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # pragma: no cover
+        typer.echo(f"✗ Unexpected error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"✓ {yaml_path.name} is valid")
+
+
+@config_app.command("apply-yaml")
+def config_apply_yaml() -> None:
+    """Promote config/wake_rules.yaml as a new active rule version.
+
+    Loads and validates the YAML file, then calls activate_new_version with
+    ``source='yaml'`` and ``created_by='cli'``.  Prints the resulting version
+    number; exits 1 on validation or DB errors.
+    """
+    import yaml
+    from pydantic import ValidationError
+    from sqlmodel import Session
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.wake.rules import activate_new_version as _activate
+    from chronos.wake.rules import load_yaml
+
+    yaml_path = _WAKE_YAML_PATH
+    if not yaml_path.exists():
+        typer.echo(f"✗ config file not found: {yaml_path}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        rules = load_yaml(yaml_path)
+    except yaml.YAMLError as exc:
+        typer.echo(f"✗ YAML parse error in {yaml_path.name}:\n  {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    except ValidationError as exc:
+        typer.echo(f"✗ {yaml_path.name} has {exc.error_count()} validation error(s):", err=True)
+        for err in exc.errors():
+            loc = ".".join(str(p) for p in err["loc"])
+            typer.echo(f"  [{loc}] {err['msg']}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+    try:
+        with Session(engine) as session:
+            rv, created = _activate(session, rules, source="yaml", created_by="cli")
+            session.commit()
+            # Capture before session closes to avoid DetachedInstanceError.
+            rv_version = rv.version
+            rv_was_created = created
+    except Exception as exc:  # pragma: no cover
+        typer.echo(f"✗ DB error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    if rv_was_created:
+        typer.echo(f"✓ Applied wake_rules.yaml as rule version {rv_version}")
+    else:
+        typer.echo(f"✓ No change — active version {rv_version} already has matching SHA")
 
 
 # ── pair-code ─────────────────────────────────────────────────────────────────

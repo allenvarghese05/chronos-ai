@@ -56,3 +56,9 @@ repos:
         name: block data/ and secrets
         entry: bash -c 'for f in "$@"; do case "$f" in data/*|*.pem|*.p8|*.p12|*.mobileprovision|.env|.env.*) [ "$f" = ".env.example" ] || { echo "refusing to commit $f"; exit 1; };; esac; done' --
         language: system
+      - id: config-validate
+        name: chronos config validate
+        entry: bash -c 'cd services/api && uv run --locked chronos config validate'
+        language: system
+        files: ^services/api/config/.*\.ya?ml$
+        pass_filenames: false

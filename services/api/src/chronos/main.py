@@ -23,6 +23,7 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 
 from chronos import __version__
+from chronos.api.config_wake import router as config_wake_router
 from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
 from chronos.api.pair import router as pair_router
@@ -34,6 +35,7 @@ from chronos.errors import (
     validation_exception_handler,
 )
 from chronos.observability import configure as configure_logging
+from chronos.wake.rules import ensure_initial_version, reset_rules_cache, yaml_stale
 
 log = structlog.get_logger(__name__)
 
@@ -66,8 +68,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.db_engine = engine
         app.state.settings = resolved
         log.info("chronos_startup", version=__version__, env=str(resolved.env))
+
+        # Ensure at least one active rule version exists in the DB.
+        # POLICY: invalid or missing wake_rules.yaml MUST fail startup loudly.
+        # An unreachable database is also a hard failure — the process must not
+        # start in an inconsistent state.
+        # CHRONOS_SKIP_RULES_INIT=true is a TEST-ONLY escape hatch; it is logged
+        # loudly and must never be set in production.
+        if resolved.skip_rules_init:
+            log.warning(
+                "wake_rules_startup_skipped",
+                reason="CHRONOS_SKIP_RULES_INIT=true (TEST-ONLY flag — never set in production)",
+            )
+        else:
+            from sqlmodel import Session as _Session
+
+            with _Session(engine) as _session:
+                ensure_initial_version(_session, resolved.wake_rules_path)
+                if yaml_stale(_session, resolved.wake_rules_path):
+                    log.warning(
+                        "yaml_stale",
+                        path=str(resolved.wake_rules_path),
+                        hint="run `chronos config apply-yaml` to promote the updated YAML",
+                    )
+
         yield
         engine.dispose()
+        reset_rules_cache()
         log.info("chronos_shutdown")
 
     app = FastAPI(
@@ -90,5 +117,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(pair_router, prefix="/v1")
     app.include_router(device_router, prefix="/v1")
+    app.include_router(config_wake_router, prefix="/v1")
 
     return app

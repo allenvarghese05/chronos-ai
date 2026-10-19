@@ -15,6 +15,9 @@ from pathlib import Path
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Project root: services/api/ (three levels up from this file's package).
+_PROJECT_ROOT: Path = Path(__file__).parents[2]
+
 
 class Env(StrEnum):
     """Deployment environment."""
@@ -59,6 +62,14 @@ class Settings(BaseSettings):
     tls_cert: Path | None = None
     #: Path to TLS private key file (PEM). Required in prod.
     tls_key: Path | None = None
+
+    # ── wake rules ───────────────────────────────────────────────────────────
+    #: Path to the versioned wake-rules YAML (resolved relative to project root).
+    wake_rules_path: Path = _PROJECT_ROOT / "config" / "wake_rules.yaml"
+
+    #: TEST-ONLY — skip loading wake_rules.yaml at startup.
+    #: Must never be set in production. Logged loudly at startup if set.
+    skip_rules_init: bool = False
 
     # ── logging ─────────────────────────────────────────────────────────────
     log_dir: Path = Path("data/logs")

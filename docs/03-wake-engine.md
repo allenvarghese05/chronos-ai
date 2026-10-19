@@ -116,7 +116,7 @@ penalties:
     points: 0                            # no penalty; instead unlocked+charger weights are scaled (see below)
 reweight_without_pedometer:              # if pedometer is unavailable, redistribute to keep max 100
   unlocked: 35
-  charger_disconnect: 30
+  charger_disconnect: 25               # adjusted from 30 so values sum to ≤ 100 (35+25+40=100)
   foreground: 40
 ```
 
