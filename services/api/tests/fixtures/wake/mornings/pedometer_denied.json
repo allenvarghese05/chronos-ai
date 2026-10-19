@@ -1,0 +1,92 @@
+{
+  "name": "pedometer_denied",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "05:50 LA = 12:50 UTC. Before window (06:00-11:00 LA = 13:00-18:00 UTC). gate=closed. pedometer=denied.",
+      "device_ts": "2026-10-06T12:50:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 300,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.97,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:10 LA = 13:10 UTC. In window. Foreground. Pedometer=denied. prev=event0(charging,unlocked=false). Reweighting: unlocked_cap=35, charger_disconnect_cap=25, foreground_cap=40. steps_10m: needs_pedometer->skip->0; walking_10m: needs_pedometer->skip->0; unlocked=true(prev=false,no bonus)->15(cap=35); charger(prev=charging,curr=unplugged)=true->15(cap=25); steps_window: needs_pedometer->skip->0; foreground->40(cap=40). Penalty pedometer_denied(denied in [denied,restricted])->0pts(mark only). Total=15+15+40=70. score=70>=confirm=70, prev.consecutive_high=0 -> consecutive_high=1. decision=high.",
+      "device_ts": "2026-10-06T13:10:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "foreground",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 200,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.95,
+      "app_state": "active",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:15 LA = 13:15 UTC. In window. Foreground. Gap=5min. prev=event1(unplugged,unlocked=true,consecutive_high=1). steps_10m: skip->0; walking_10m: skip->0; unlocked+bonus(prev=true,gap=5<=12)->15+10=25(cap=35); charger(prev=unplugged,curr=unplugged)=false->0; steps_window: skip->0; foreground->40. Penalty pedometer_denied->0pts. Total=25+40=65. score=65<70 -> consecutive_high: 65<confirm=70 -> consecutive_high=0. decision=low. (Math note: max score without pedometer is 80 with fresh charger disconnect; second tick after disconnect is limited to 65. Fixture shows reweighting behavior correctly.)",
+      "device_ts": "2026-10-06T13:15:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "foreground",
+      "steps_10m": 0,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 180,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.94,
+      "app_state": "active",
+      "low_power_mode": false,
+      "pedometer_auth": "denied",
+      "seq": 2,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 65,
+        "decision": "low",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at": null
+  }
+}

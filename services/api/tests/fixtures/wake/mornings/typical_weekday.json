@@ -1,0 +1,65 @@
+{
+  "name": "typical_weekday",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "06:48 LA = 13:48 UTC. No prev. steps_10m=35->row[35,30]=30; walking=95/high->row[60,20]=20; unlocked=true(no prev)->15; charger=false->0; steps_window=120->row[100,5]=5; wake=silent->0. Total=70. score>=confirm=70, prev.consecutive_high=0 -> consecutive_high=1. decision=high.",
+      "device_ts": "2026-10-06T13:48:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 35,
+      "steps_since_window": 120,
+      "walking_sec_10m": 95,
+      "walking_conf": "high",
+      "stationary_sec_10m": 30,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.78,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 70,
+        "decision": "high",
+        "consecutive_high": 1,
+        "confirm_reason": null
+      }
+    },
+    {
+      "_comment": "06:53 LA = 13:53 UTC. Gap=5min. prev=event0(unplugged,unlocked=true,consecutive_high=1). steps=40->row[35,30]=30; walking=80/high->row[60,20]=20; unlocked+bonus(prev=true,gap=5<=12)->15+10=25(cap=25); charger(prev=unplugged,curr=unplugged)=false->0; steps_window=200->row[100,5]=5; wake=0. Total=80. prev.consecutive_high=1,gap=5<=12 -> consecutive_high=2. score=80<85(not strong), consecutive_high=2 -> confirm, reason='consecutive'.",
+      "device_ts": "2026-10-06T13:53:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 40,
+      "steps_since_window": 200,
+      "walking_sec_10m": 80,
+      "walking_conf": "high",
+      "stationary_sec_10m": 20,
+      "is_unlocked": true,
+      "battery_state": "unplugged",
+      "battery_level": 0.76,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 1,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "open",
+        "score": 80,
+        "decision": "confirm",
+        "consecutive_high": 2,
+        "confirm_reason": "consecutive"
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at_event_index": 1
+  }
+}

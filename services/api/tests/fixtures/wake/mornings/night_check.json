@@ -1,0 +1,38 @@
+{
+  "name": "night_check",
+  "tz": "America/Los_Angeles",
+  "day_kind": "weekday",
+  "rules_file": "config/wake_rules.yaml",
+  "events": [
+    {
+      "_comment": "03:10 LA = 10:10 UTC on 2026-10-07 (Wednesday). boundary=03:00; 03:10>=03:00 -> local_date=2026-10-07. Window for 2026-10-07 weekday: 06:00-11:00 LA = 13:00-18:00 UTC. 10:10 UTC < 13:00 UTC -> gate=closed. Score=0, outside_window.",
+      "device_ts": "2026-10-07T10:10:00+00:00",
+      "tz": "America/Los_Angeles",
+      "wake_source": "silent_push",
+      "steps_10m": 2,
+      "steps_since_window": 0,
+      "walking_sec_10m": 0,
+      "walking_conf": "low",
+      "stationary_sec_10m": 590,
+      "is_unlocked": false,
+      "battery_state": "charging",
+      "battery_level": 0.72,
+      "app_state": "background",
+      "low_power_mode": false,
+      "pedometer_auth": "authorized",
+      "seq": 0,
+      "app_version": "1.0.0",
+      "ios_version": "18.1",
+      "expect": {
+        "gate": "closed",
+        "score": 0,
+        "decision": "outside_window",
+        "consecutive_high": 0,
+        "confirm_reason": null
+      }
+    }
+  ],
+  "expect_day": {
+    "confirmed_at": null
+  }
+}
