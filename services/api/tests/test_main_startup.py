@@ -5,6 +5,7 @@ Covers
 - Invalid YAML at wake_rules_path must fail startup loudly (BLOCKING 2).
 - Missing YAML at wake_rules_path must fail startup loudly (BLOCKING 2).
 - Stale YAML at startup logs a ``yaml_stale`` warning (MINOR 8).
+- Unreachable DB path must fail startup loudly (MINOR, review finding 1).
 """
 
 from __future__ import annotations
@@ -103,6 +104,36 @@ class TestStartupRefusesOnBadYaml:
         app = create_app(settings=settings)
 
         with pytest.raises((ValidationError, ValueError)):
+            with TestClient(app):
+                pass  # pragma: no cover
+
+
+# ---------------------------------------------------------------------------
+# MINOR (review finding 1) — unreachable DB must fail startup, not be swallowed
+# ---------------------------------------------------------------------------
+
+
+class TestStartupFailsOnUnreachableDb:
+    def test_startup_unreachable_db_raises(self, tmp_path: Path) -> None:
+        """Startup must raise when the database path is not reachable.
+
+        Previously an OperationalError was swallowed and logged; after the fix
+        it propagates so the process never starts in an inconsistent state.
+        """
+        from sqlalchemy.exc import OperationalError
+
+        # A directory that does not exist → SQLite cannot create the file.
+        bad_db_url = f"sqlite:///{tmp_path / 'nodir' / 'test.db'}"
+
+        real_yaml = Path(__file__).parents[1] / "config" / "wake_rules.yaml"
+        temp_yaml = tmp_path / "wake_rules.yaml"
+        temp_yaml.write_text(real_yaml.read_text())
+
+        reset_rules_cache()
+        settings = _make_settings(bad_db_url, wake_rules_path=str(temp_yaml))
+        app = create_app(settings=settings)
+
+        with pytest.raises((OperationalError, OSError)):
             with TestClient(app):
                 pass  # pragma: no cover
 

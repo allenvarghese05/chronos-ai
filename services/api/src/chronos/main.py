@@ -71,8 +71,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
         # Ensure at least one active rule version exists in the DB.
         # POLICY: invalid or missing wake_rules.yaml MUST fail startup loudly.
-        # Only sqlalchemy.exc.OperationalError (DB temporarily unreachable) is
-        # tolerated — the /readyz endpoint will report 503 in that case.
+        # An unreachable database is also a hard failure — the process must not
+        # start in an inconsistent state.
         # CHRONOS_SKIP_RULES_INIT=true is a TEST-ONLY escape hatch; it is logged
         # loudly and must never be set in production.
         if resolved.skip_rules_init:
@@ -81,23 +81,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 reason="CHRONOS_SKIP_RULES_INIT=true (TEST-ONLY flag — never set in production)",
             )
         else:
-            from sqlalchemy.exc import OperationalError as _OperationalError
             from sqlmodel import Session as _Session
 
-            try:
-                with _Session(engine) as _session:
-                    ensure_initial_version(_session, resolved.wake_rules_path)
-                    if yaml_stale(_session, resolved.wake_rules_path):
-                        log.warning(
-                            "yaml_stale",
-                            path=str(resolved.wake_rules_path),
-                            hint="run `chronos config apply-yaml` to promote the updated YAML",
-                        )
-            except _OperationalError:
-                log.warning(
-                    "wake_rules_startup_skipped",
-                    reason="DB not reachable (OperationalError); /readyz will report 503",
-                )
+            with _Session(engine) as _session:
+                ensure_initial_version(_session, resolved.wake_rules_path)
+                if yaml_stale(_session, resolved.wake_rules_path):
+                    log.warning(
+                        "yaml_stale",
+                        path=str(resolved.wake_rules_path),
+                        hint="run `chronos config apply-yaml` to promote the updated YAML",
+                    )
 
         yield
         engine.dispose()
