@@ -257,7 +257,7 @@ class Penalty(BaseModel):
 
     id: str
     when: dict[str, str | list[str]]
-    points: int  # <= 0 (zero means "no points, just mark")
+    points: int = Field(le=0)  # 0 = mark only; negative = deduct
 
     @model_validator(mode="after")
     def _validate_conditions(self) -> Penalty:

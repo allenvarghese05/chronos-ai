@@ -438,6 +438,52 @@ class TestInvalidPenaltyCondition:
 
 
 # ---------------------------------------------------------------------------
+# Edge case 15: Penalty.points must be <= 0 (Field(le=0))
+# ---------------------------------------------------------------------------
+
+
+class TestInvalidPenaltyPointsPositive:
+    def test_penalty_points_positive_rejected(self) -> None:
+        """Positive penalty points are rejected; loc path must include penalties.0.points."""
+        import copy
+
+        d = copy.deepcopy(VALID_RULES)
+        d["penalties"] = [
+            {"id": "bad", "when": {"steps_10m": ">= 10"}, "points": 5},  # positive \ invalid
+        ]
+        with pytest.raises(ValidationError) as exc_info:
+            WakeRules.model_validate(d)
+        errors = exc_info.value.errors()
+        locs = [e["loc"] for e in errors]
+        # At least one error must point to penalties -> 0 -> points.
+        assert any(loc[0] == "penalties" and loc[1] == 0 and loc[2] == "points" for loc in locs), (
+            f"Expected penalties.0.points in error locs; got {locs}"
+        )
+
+    def test_penalty_points_zero_accepted(self) -> None:
+        """Zero penalty points (mark-only) must be accepted."""
+        import copy
+
+        d = copy.deepcopy(VALID_RULES)
+        d["penalties"] = [
+            {"id": "mark_only", "when": {"steps_10m": ">= 10"}, "points": 0},
+        ]
+        rules = WakeRules.model_validate(d)  # must not raise
+        assert rules.penalties[0].points == 0
+
+    def test_penalty_points_negative_accepted(self) -> None:
+        """Negative penalty points must be accepted."""
+        import copy
+
+        d = copy.deepcopy(VALID_RULES)
+        d["penalties"] = [
+            {"id": "deduct", "when": {"steps_10m": ">= 10"}, "points": -20},
+        ]
+        rules = WakeRules.model_validate(d)  # must not raise
+        assert rules.penalties[0].points == -20
+
+
+# ---------------------------------------------------------------------------
 # Canonical JSON
 # ---------------------------------------------------------------------------
 
