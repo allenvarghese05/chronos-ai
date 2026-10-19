@@ -32,7 +32,7 @@
       }
     },
     {
-      "_comment": "06:10 LA = 13:10 UTC. In window. Foreground. Pedometer=denied. prev=event0(charging,unlocked=false). Reweighting: unlocked_cap=35, charger_disconnect_cap=25, foreground_cap=40. steps_10m: needs_pedometer->skip->0; walking_10m: needs_pedometer->skip->0; unlocked=true(prev=false,no bonus)->15(cap=35); charger(prev=charging,curr=unplugged)=true->15(cap=25); steps_window: needs_pedometer->skip->0; foreground->40(cap=40). Penalty pedometer_denied(denied in [denied,restricted])->0pts(mark only). Total=15+15+40=70. score=70>=confirm=70, prev.consecutive_high=0 -> consecutive_high=1. decision=high.",
+      "_comment": "06:10 LA = 13:10 UTC. In window. Foreground. Pedometer=denied. prev=event0(charging, unlocked=false). Reweighting semantics (Owner Answer 17): a reweight value sets both cap AND pts. unlocked: reweight=35, bonus.pts=10 -> base_pts=35-10=25 (no bonus since prev.is_unlocked=false) -> pts=25, cap=35. charger_disconnect: prev=charging, curr=unplugged -> true; reweight=25, bool rule -> pts=25, cap=25. steps_10m/walking_10m/steps_window: needs_pedometer->skip->0. foreground: reweight=40, enum rule -> pts=40, cap=40. Penalty pedometer_denied(denied in [denied,restricted])->0pts(mark only); stationary 200s<540->no penalty. Total=25+25+40=90. score=90>=strong=85 -> confirm, confirm_reason=strong. consecutive_high: score>=confirm=70, prev.consecutive_high=0 -> consecutive_high=1.",
       "device_ts": "2026-10-06T13:10:00+00:00",
       "tz": "America/Los_Angeles",
       "wake_source": "foreground",
@@ -52,41 +52,14 @@
       "ios_version": "18.1",
       "expect": {
         "gate": "open",
-        "score": 70,
-        "decision": "high",
+        "score": 90,
+        "decision": "confirm",
         "consecutive_high": 1,
-        "confirm_reason": null
-      }
-    },
-    {
-      "_comment": "06:15 LA = 13:15 UTC. In window. Foreground. Gap=5min. prev=event1(unplugged,unlocked=true,consecutive_high=1). steps_10m: skip->0; walking_10m: skip->0; unlocked+bonus(prev=true,gap=5<=12)->15+10=25(cap=35); charger(prev=unplugged,curr=unplugged)=false->0; steps_window: skip->0; foreground->40. Penalty pedometer_denied->0pts. Total=25+40=65. score=65<70 -> consecutive_high: 65<confirm=70 -> consecutive_high=0. decision=low. (Math note: max score without pedometer is 80 with fresh charger disconnect; second tick after disconnect is limited to 65. Fixture shows reweighting behavior correctly.)",
-      "device_ts": "2026-10-06T13:15:00+00:00",
-      "tz": "America/Los_Angeles",
-      "wake_source": "foreground",
-      "steps_10m": 0,
-      "steps_since_window": 0,
-      "walking_sec_10m": 0,
-      "walking_conf": "low",
-      "stationary_sec_10m": 180,
-      "is_unlocked": true,
-      "battery_state": "unplugged",
-      "battery_level": 0.94,
-      "app_state": "active",
-      "low_power_mode": false,
-      "pedometer_auth": "denied",
-      "seq": 2,
-      "app_version": "1.0.0",
-      "ios_version": "18.1",
-      "expect": {
-        "gate": "open",
-        "score": 65,
-        "decision": "low",
-        "consecutive_high": 0,
-        "confirm_reason": null
+        "confirm_reason": "strong"
       }
     }
   ],
   "expect_day": {
-    "confirmed_at": null
+    "confirmed_at_event_index": 1
   }
 }
