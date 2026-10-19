@@ -26,7 +26,7 @@ version and expected per-event decisions. Required set:
 1. `typical_weekday.json` — unplug 06:48, unlock, 60 steps by 06:55 → confirm at second tick.
 2. `night_check.json` — 03:10 unlock, 0 steps → outside window, score 0.
 3. `snooze.json` — 06:30 unplug + unlock, back to sleep (0 steps, stationary) → never confirms until 07:40 walk.
-4. `pedometer_denied.json` — reweighting path confirms on unlock + charger + foreground.
+4. `pedometer_denied.json` — reweighting path: first in-window tick with unlock (base 25) + charger_disconnect (25) + foreground (40) = 90 ≥ strong 85 → **confirm on first tick** (`confirm_reason=strong`). Companion `pedometer_denied_no_app.json` shows that without foreground the maximum is 35 + 25 = 60 < confirm 70, so the day never auto-confirms.
 5. `early_walk.json` — 100 steps at 05:52 (bathroom), asleep again, real wake 08:10 → first window tick 06:00 sees `steps_10m` = 100 → high; next tick low → **no confirm** (2-tick rule) — then confirm at 08:15.
 6. `weekend.json` — same as 1 at 09:30 Saturday with the weekend window.
 7. `dst_fall_back.json` — America/New_York, 2026-11-01.

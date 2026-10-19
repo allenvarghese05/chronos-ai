@@ -120,12 +120,30 @@ penalties:
     when: { pedometer_auth: ["denied", "restricted"] }
     points: 0                            # no penalty; instead unlocked+charger weights are scaled (see below)
 reweight_without_pedometer:              # if pedometer is unavailable, redistribute to keep max 100
-  unlocked: 35
-  charger_disconnect: 25               # adjusted from 30 so values sum to ≤ 100 (35+25+40=100)
-  foreground: 40
+  unlocked: 35       # base row = 35 − bonus(10) = 25 pts; with consecutive bonus = 35 pts; cap = 35
+  charger_disconnect: 25               # bool rule: pts = 25, cap = 25 (35+25+40=100)
+  foreground: 40     # enum rule: pts = 40, cap = 40
 ```
 
-Semantics:
+`reweight_without_pedometer` semantics (applies when `pedometer_auth ∈ {denied, restricted, not_determined}`):
+
+- Each value sets **both the cap and the effective points** for that rule.
+- **Bool / enum rules** (no `bonus_consecutive`): the single row's points become the reweight
+  value (e.g. `charger_disconnect`: original pts 15 → reweighted pts 25).
+- **Rules with `bonus_consecutive`**: `base_pts = reweight_value − bonus.points`; the rule
+  awards `base_pts` without the bonus and `reweight_value` when the bonus fires
+  (e.g. `unlocked`: base 25, with bonus 35; requires `reweight_value > bonus.points`).
+- **Numeric rules**: rows scaled proportionally so the top row equals the reweight value
+  (none in the default YAML today; documented for future use).
+- The breakdown note for a reweighted rule states the effective pts.
+- Validator ensures `sum(reweight_values) ≤ 100` and `reweight_value > bonus.points`
+  for any rule that has `bonus_consecutive`.
+
+With these values: `unlocked (35) + charger_disconnect (25) + foreground (40) = 100`.
+First in-window tick with all three = 25+25+40 = 90 ≥ strong 85 → **confirm on first tick**
+(even without foreground the max is 35+25 = 60 < 70, so the day never auto-confirms).
+
+Other semantics:
 
 - The **window gate** is evaluated first. Outside the window the result is `decision=outside_window`,
   score 0, nothing else runs, nothing is confirmed.
