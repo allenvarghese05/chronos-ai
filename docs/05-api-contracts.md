@@ -48,6 +48,7 @@ Response 200:
 ```json
 {
   "evaluation_id": 9912, "local_date": "2026-10-06", "gate": "open", "score": 85, "decision": "confirm",
+  "confirm_reason": "both",
   "threshold": { "confirm": 70, "strong": 85 }, "consecutive_high": 2, "rule_version": 3,
   "breakdown": [
     { "rule_id": "steps_10m", "input": 48, "points": 30, "cap": 30 },
