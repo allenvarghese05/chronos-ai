@@ -145,7 +145,12 @@ def test_ingest_clock_skew_301_future_raises(db_session: Session) -> None:
 
     assert exc_info.value.status_code == 422
     assert exc_info.value.problem_code == "clock_skew"
-    assert "server_time" in exc_info.value.detail
+    # server_time is a structured extension member, not embedded in detail text.
+    assert exc_info.value.extensions is not None
+    st = exc_info.value.extensions["server_time"]
+    assert isinstance(st, str) and st.endswith("Z"), f"server_time not ISO/Z: {st!r}"
+    # The detail text still describes the skew.
+    assert "seconds" in exc_info.value.detail
 
     # No telemetry row must have been written.
     db_session.rollback()

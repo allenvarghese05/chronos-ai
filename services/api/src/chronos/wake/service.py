@@ -128,10 +128,8 @@ def ingest_telemetry(
             status_code=422,
             code="clock_skew",
             title="Clock Skew Too Large",
-            detail=(
-                f"Device clock is {int(skew_sec)} seconds from server time. "
-                f"server_time={server_time}"
-            ),
+            detail=f"Device clock is {int(skew_sec)} seconds from server time.",
+            extensions={"server_time": server_time},
         )
 
     # ── 2. Idempotency: check (device_id, seq) uniqueness ─────────────────

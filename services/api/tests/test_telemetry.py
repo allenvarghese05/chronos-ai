@@ -153,15 +153,28 @@ class TestTelemetryClockSkew:
     def test_clock_skew_422_with_server_time(
         self, client: TestClient, test_settings: Settings
     ) -> None:
-        """device_ts far in the past → 422 clock_skew with server_time in detail."""
+        """device_ts 600 s stale → 422 clock_skew; server_time is a structured extension member."""
+        import time_machine
+
         plain, _ = _insert_device(test_settings)
-        # 2020-01-01 is far in the past; server is 2026+.
-        payload = _base_payload(device_ts="2020-01-01T06:00:00+00:00")
-        r = client.post("/v1/telemetry", json=payload, headers=_auth(plain))
+        # Freeze server at a known UTC instant; send device_ts 600 s earlier.
+        frozen_now = datetime.datetime(2026, 10, 6, 13, 48, 0, tzinfo=datetime.UTC)
+        stale_ts = frozen_now - datetime.timedelta(seconds=600)
+        payload = _base_payload(device_ts=stale_ts.isoformat())
+        with time_machine.travel(frozen_now, tick=False):
+            r = client.post("/v1/telemetry", json=payload, headers=_auth(plain))
         assert r.status_code == 422
         body = r.json()
         assert body["code"] == "clock_skew"
-        assert "server_time" in body["detail"]
+        # detail still describes the skew in human-readable form.
+        assert "seconds" in body["detail"]
+        # server_time is a structured RFC 9457 extension member (not buried in detail text).
+        assert "server_time" in body, f"server_time missing from body: {body}"
+        server_time_str: str = body["server_time"]
+        parsed_st = datetime.datetime.fromisoformat(server_time_str.replace("Z", "+00:00"))
+        assert abs((parsed_st - frozen_now).total_seconds()) < 2, (
+            f"server_time {server_time_str!r} not close to frozen clock"
+        )
 
 
 # ---------------------------------------------------------------------------

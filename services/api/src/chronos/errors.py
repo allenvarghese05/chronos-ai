@@ -56,10 +56,12 @@ class ProblemException(HTTPException):
         title: str,
         detail: str,
         headers: dict[str, str] | None = None,
+        extensions: dict[str, object] | None = None,
     ) -> None:
         super().__init__(status_code=status_code, detail=detail, headers=headers)
         self.problem_code = code
         self.problem_title = title
+        self.extensions: dict[str, object] | None = extensions
 
 
 def make_problem(
@@ -68,15 +70,18 @@ def make_problem(
     title: str,
     detail: str,
     instance: str,
+    extensions: dict[str, object] | None = None,
 ) -> JSONResponse:
     """Build an RFC 9457 problem+json :class:`~fastapi.responses.JSONResponse`.
 
     Args:
-        status:   HTTP status code (e.g. 404).
-        code:     Short machine-readable code (e.g. ``"not_found"``).
-        title:    Human-readable problem title (stable across requests).
-        detail:   Instance-specific explanation.
-        instance: Request path that triggered the error.
+        status:     HTTP status code (e.g. 404).
+        code:       Short machine-readable code (e.g. ``"not_found"``).
+        title:      Human-readable problem title (stable across requests).
+        detail:     Instance-specific explanation.
+        instance:   Request path that triggered the error.
+        extensions: Optional RFC 9457 extension members merged into the body
+                    (e.g. ``{"server_time": "2026-10-06T07:12:04.000000Z"}``).
 
     Returns:
         A :class:`JSONResponse` with ``Content-Type: application/problem+json``.
@@ -89,6 +94,8 @@ def make_problem(
         "detail": detail,
         "instance": instance,
     }
+    if extensions:
+        body.update(extensions)
     return JSONResponse(
         content=body,
         status_code=status,
@@ -113,6 +120,7 @@ async def http_exception_handler(request: Request, exc: Exception) -> JSONRespon
             title=exc.problem_title,
             detail=str(exc.detail),
             instance=str(request.url.path),
+            extensions=exc.extensions,
         )
         if exc.headers:
             response.headers.update(exc.headers)
