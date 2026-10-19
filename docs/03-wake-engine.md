@@ -30,8 +30,6 @@ score 85 ≥ threshold 70 → "high"; previous tick was 72 → CONFIRMED
 ```
 Note: score 85 ≥ strong 85 (one-tick rule) AND consecutive_high 2 (two-tick rule) both fire;
 ``confirm_reason = "both"``.
-```
-```
 
 ## 2. Why these signals (and not the ones in the original brief)
 
