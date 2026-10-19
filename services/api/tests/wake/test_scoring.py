@@ -563,13 +563,137 @@ def test_reweight_skips_pedometer_rules() -> None:
     assert steps_bd.note == "pedometer unavailable"
 
 
-def test_reweight_adjusts_caps() -> None:
-    """pedometer_auth=denied → unlocked cap is 35 (from reweight YAML)."""
+def test_reweight_adjusts_caps_and_pts() -> None:
+    """pedometer_auth=denied → unlocked cap=35, pts=25.
+
+    base = reweight_value - bonus.pts = 35 - 10.
+
+    No bonus since prev=None.
+    """
     s = _base_signals(pedometer_auth=PedometerAuth.denied, is_unlocked=True)
-    ctx = _base_ctx()
+    ctx = _base_ctx()  # previous=None → no bonus
     ev = _eval(s, ctx)
     unlocked_bd = next(b for b in ev.breakdown if b.rule_id == "unlocked")
     assert unlocked_bd.cap == 35
+    assert unlocked_bd.points == 25  # base_pts = 35 - 10 = 25
+    assert unlocked_bd.note is not None and "reweighted" in unlocked_bd.note
+
+
+def test_reweight_bool_rule_pts_set_to_reweight_value() -> None:
+    """pedometer_auth=denied → charger_disconnect pts=25 (reweight value, not original 15)."""
+    # Set up a previous tick where battery was charging so charger_disconnect fires.
+    prev_ts = _IN_WINDOW_TS - datetime.timedelta(minutes=10)
+    _ld = local_date_for(prev_ts, _LA, _rules().window.to_window_config().day_boundary)
+    prev = PreviousTick(
+        device_ts=prev_ts,
+        local_date=_ld,
+        battery_state=BatteryState.charging,
+        is_unlocked=False,
+        score=0,
+        decision=EvaluationDecision.low,
+        consecutive_high=0,
+    )
+    s = _base_signals(
+        pedometer_auth=PedometerAuth.denied,
+        battery_state=BatteryState.unplugged,
+        is_unlocked=False,  # only testing charger rule
+    )
+    ctx = _base_ctx(previous=prev)
+    ev = _eval(s, ctx)
+    charger_bd = next(b for b in ev.breakdown if b.rule_id == "charger_disconnect")
+    assert charger_bd.points == 25  # reweight value, not original 15
+    assert charger_bd.cap == 25
+    assert charger_bd.note is not None and "reweighted" in charger_bd.note
+
+
+def test_reweight_bonus_rule_with_bonus_reaches_full_reweight_value() -> None:
+    """pedometer_auth=denied, prev.is_unlocked=True → bonus fires → pts=35 (full reweight value)."""
+    prev_ts = _IN_WINDOW_TS - datetime.timedelta(minutes=5)
+    _ld = local_date_for(prev_ts, _LA, _rules().window.to_window_config().day_boundary)
+    prev = PreviousTick(
+        device_ts=prev_ts,
+        local_date=_ld,
+        battery_state=BatteryState.unplugged,
+        is_unlocked=True,
+        score=30,
+        decision=EvaluationDecision.low,
+        consecutive_high=0,
+    )
+    s = _base_signals(
+        pedometer_auth=PedometerAuth.denied,
+        is_unlocked=True,
+        battery_state=BatteryState.unplugged,
+    )
+    ctx = _base_ctx(previous=prev)
+    ev = _eval(s, ctx)
+    unlocked_bd = next(b for b in ev.breakdown if b.rule_id == "unlocked")
+    assert unlocked_bd.points == 35  # full reweight value (25 base + 10 bonus)
+    assert unlocked_bd.cap == 35
+    assert unlocked_bd.note is not None
+    assert "consecutive bonus" in unlocked_bd.note
+    assert "reweighted" in unlocked_bd.note
+
+
+def test_reweight_pedometer_denied_first_tick_confirm() -> None:
+    """unlock+charger+foreground with pedometer denied → 25+25+40=90 ≥ strong=85 → confirm."""
+    prev_ts = _IN_WINDOW_TS - datetime.timedelta(minutes=20)
+    _ld = local_date_for(prev_ts, _LA, _rules().window.to_window_config().day_boundary)
+    prev = PreviousTick(
+        device_ts=prev_ts,
+        local_date=_ld,
+        battery_state=BatteryState.charging,
+        is_unlocked=False,
+        score=0,
+        decision=EvaluationDecision.outside_window,
+        consecutive_high=0,
+    )
+    s = _base_signals(
+        pedometer_auth=PedometerAuth.denied,
+        is_unlocked=True,
+        battery_state=BatteryState.unplugged,
+        wake_source=WakeSource.foreground,
+        steps_10m=0,
+        steps_since_window=0,
+        walking_sec_10m=0,
+        stationary_sec_10m=200,
+    )
+    ctx = _base_ctx(previous=prev)
+    ev = _eval(s, ctx)
+    assert ev.score == 90, f"Expected 90 (25+25+40), got {ev.score}"
+    assert ev.decision == EvaluationDecision.confirm
+    assert ev.confirm_reason == "strong"
+
+
+def test_reweight_no_foreground_max_60() -> None:
+    """unlock+charger with bonus, no foreground, pedometer denied.
+
+    Max reachable = 35+25 = 60 < confirm=70 → low.
+    """
+    prev_ts = _IN_WINDOW_TS - datetime.timedelta(minutes=5)
+    _ld = local_date_for(prev_ts, _LA, _rules().window.to_window_config().day_boundary)
+    prev = PreviousTick(
+        device_ts=prev_ts,
+        local_date=_ld,
+        battery_state=BatteryState.charging,  # was charging
+        is_unlocked=True,  # was unlocked (so bonus fires)
+        score=25,
+        decision=EvaluationDecision.low,
+        consecutive_high=0,
+    )
+    s = _base_signals(
+        pedometer_auth=PedometerAuth.denied,
+        is_unlocked=True,
+        battery_state=BatteryState.unplugged,
+        wake_source=WakeSource.silent_push,  # not foreground
+        steps_10m=0,
+        steps_since_window=0,
+        walking_sec_10m=0,
+        stationary_sec_10m=180,
+    )
+    ctx = _base_ctx(previous=prev)
+    ev = _eval(s, ctx)
+    assert ev.score == 60, f"Expected 60 (35+25), got {ev.score}"
+    assert ev.decision == EvaluationDecision.low
 
 
 def test_not_determined_is_unavailable() -> None:

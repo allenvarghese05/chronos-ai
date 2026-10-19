@@ -915,3 +915,73 @@ class TestNeedsPedometer:
         from chronos.wake.signals import SIGNALS
 
         assert SIGNALS["charger_disconnected"].needs_pedometer is False
+
+
+# ---------------------------------------------------------------------------
+# Edge case 15: reweight value must exceed bonus.points for bonus rules
+# ---------------------------------------------------------------------------
+
+
+class TestReweightBonusConstraint:
+    """Validator: for reweighted rules with bonus_consecutive, value > bonus.points."""
+
+    def _rules_with_reweight(self, unlocked_reweight: int) -> dict[str, Any]:
+        """Build a valid base dict then override the unlocked reweight value."""
+        import copy
+
+        base = copy.deepcopy(VALID_RULES)
+        # Add charger_disconnect and foreground rules so the reweight keys exist.
+        base["rules"] = [
+            {
+                "id": "unlocked",
+                "signal": "is_unlocked",
+                "points": [[True, 15]],
+                "cap": 25,
+                "bonus_consecutive": {"ticks": 2, "points": 10},
+            },
+            {
+                "id": "foreground",
+                "signal": "wake_source",
+                "points": [["foreground", 40]],
+                "cap": 40,
+            },
+        ]
+        base["reweight_without_pedometer"] = {
+            "unlocked": unlocked_reweight,
+            "foreground": 40,
+        }
+        return base
+
+    def test_reweight_value_gt_bonus_valid(self) -> None:
+        """reweight_value (35) > bonus.points (10) → valid."""
+        d = self._rules_with_reweight(35)
+        rules = WakeRules.model_validate(d)
+        assert rules.reweight_without_pedometer["unlocked"] == 35
+
+    def test_reweight_value_equals_bonus_invalid(self) -> None:
+        """reweight_value (10) == bonus.points (10) → ValidationError."""
+        # The error location should reference reweight_without_pedometer.unlocked.
+        d = self._rules_with_reweight(10)
+        with pytest.raises(ValidationError) as exc_info:
+            WakeRules.model_validate(d)
+        errors = exc_info.value.errors()
+        msgs = " ".join(e["msg"] for e in errors)
+        assert "reweight_without_pedometer.unlocked" in msgs
+
+    def test_reweight_value_less_than_bonus_invalid(self) -> None:
+        """reweight_value (5) < bonus.points (10) → ValidationError."""
+        d = self._rules_with_reweight(5)
+        with pytest.raises(ValidationError) as exc_info:
+            WakeRules.model_validate(d)
+        errors = exc_info.value.errors()
+        msgs = " ".join(e["msg"] for e in errors)
+        assert "reweight_without_pedometer.unlocked" in msgs
+
+    def test_reweight_bonus_rule_live_yaml_valid(self) -> None:
+        """The live YAML (unlocked: 35, bonus.points: 10) satisfies 35 > 10."""
+        rules_path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+        rules = load_yaml(rules_path)
+        unlocked_rule = next(r for r in rules.rules if r.id == "unlocked")
+        rw_val = rules.reweight_without_pedometer["unlocked"]
+        assert unlocked_rule.bonus_consecutive is not None
+        assert rw_val > unlocked_rule.bonus_consecutive.points

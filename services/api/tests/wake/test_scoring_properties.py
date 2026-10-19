@@ -291,3 +291,29 @@ def test_pedometer_unavailable_zeroes_pedometer_rules(
             assert bd.note == "pedometer unavailable", (
                 f"rule {bd.rule_id!r} note expected 'pedometer unavailable', got {bd.note!r}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Property 7: pedometer-unavailable score max ≤ 100
+# ---------------------------------------------------------------------------
+# With reweight values unlocked=35, charger_disconnect=25, foreground=40,
+# the sum is exactly 100, so score ≤ 100 holds.  This is already enforced by
+# test_score_in_range; this targeted test makes the intent explicit.
+
+
+@pytest.mark.parametrize("auth", _PEDOMETER_UNAVAILABLE_VALUES)
+@given(signals_st())
+@settings(max_examples=50)
+def test_pedometer_unavailable_score_max_100(auth: PedometerAuth, signals: Signals) -> None:
+    """When pedometer unavailable, reweighted scores never exceed 100.
+
+    Sum of reweight caps: unlocked=35 + charger_disconnect=25 + foreground=40 = 100.
+    """
+    rules = _rules()
+    s = signals.model_copy(update={"pedometer_auth": auth})
+    ctx = _ctx()
+    ev = evaluate(s, rules, _IN_WINDOW_BASE, ctx)
+    assert ev.score <= 100, (
+        f"pedometer_auth={auth}: score={ev.score} exceeds 100; "
+        "reweight caps unlocked=35+charger=25+foreground=40 must sum to ≤ 100"
+    )
