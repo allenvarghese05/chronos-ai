@@ -338,6 +338,51 @@ class TestPutConfigWakeOpenApiAndSize:
         assert "msg" in first_err
         assert "type" in first_err
 
+    def test_put_oversized_without_content_length_returns_413(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        """413 for oversized body even when Content-Length header is absent (chunked)."""
+        client, token = authed_client
+        # Build a payload that genuinely exceeds 65 536 bytes.
+        large_body = ("x" * 70_000).encode()
+        resp = client.put(
+            "/v1/config/wake",
+            content=large_body,
+            headers={
+                # Deliberately omit Content-Length; send raw bytes.
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        assert resp.status_code == 413, resp.text
+        data = resp.json()
+        assert data["status"] == 413
+        assert "payload_too_large" in data["type"]
+
+    def test_put_invalid_json_returns_422_rules_invalid(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        """Malformed JSON body returns 422 rules_invalid with an errors entry."""
+        client, token = authed_client
+        resp = client.put(
+            "/v1/config/wake",
+            content=b"{not valid json",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {token}",
+            },
+        )
+        assert resp.status_code == 422, resp.text
+        data = resp.json()
+        assert data["type"] == "urn:chronos:error:rules_invalid"
+        assert data["status"] == 422
+        assert isinstance(data["errors"], list)
+        assert len(data["errors"]) > 0
+        err = data["errors"][0]
+        assert "loc" in err
+        assert "msg" in err
+        assert "type" in err
+        assert err["type"] == "json_invalid"
+
 
 # ---------------------------------------------------------------------------
 # CLI: chronos config validate

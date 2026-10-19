@@ -11,19 +11,20 @@ Endpoints
 Both endpoints require the device bearer token (via
 :func:`~chronos.auth.require_device`) and the default rate limit.
 
-The PUT handler accepts the raw JSON body as ``Any`` and validates it
-manually against :class:`~chronos.wake.rules.WakeRules` so that validation
-errors surface as a ``422 rules_invalid`` problem+json with per-field paths
-in the ``errors`` list (RFC 9457 extension).
+The PUT handler reads the raw request bytes, enforces the size limit (both
+a Content-Length pre-check and an actual ``len(raw)`` check for chunked
+transfers), then decodes via ``json.loads`` before validating against
+:class:`~chronos.wake.rules.WakeRules`; errors surface as ``422 rules_invalid``
+problem+json with per-field paths in the ``errors`` list (RFC 9457 extension).
 """
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
-from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Body, Depends, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlmodel import Session
@@ -128,8 +129,8 @@ def get_config_wake(
 _MAX_BODY_BYTES: int = 65_536  # 64 KiB
 
 # openapi_extra declares the WakeRules request-body schema so that the generated
-# OpenAPI spec is accurate, while the handler still receives body as Any and
-# performs manual validation to emit rules_invalid problem+json on failure.
+# OpenAPI spec is accurate; the handler reads raw bytes and validates manually
+# to emit rules_invalid problem+json on failure.
 _PUT_OPENAPI_EXTRA: dict[str, object] = {
     "requestBody": {
         "required": True,
@@ -143,17 +144,19 @@ _PUT_OPENAPI_EXTRA: dict[str, object] = {
 
 
 @router.put("/wake", status_code=201, openapi_extra=_PUT_OPENAPI_EXTRA)
-def put_config_wake(
+async def put_config_wake(
     request: Request,
-    body: Annotated[Any, Body()],
     device: Device = Depends(require_device),
     session: Session = Depends(get_session_dep),
     _rl: None = Depends(_default_rate_limit),
 ) -> JSONResponse:
     """Validate and activate a new WakeRules document.
 
-    The body is accepted as ``Any`` so that validation errors are caught here
-    and re-emitted as ``422 rules_invalid`` problem+json with per-field paths.
+    Raw request bytes are read so that both the Content-Length pre-check AND
+    an actual ``len(raw) > _MAX_BODY_BYTES`` guard cover chunked transfers
+    where ``Content-Length`` is absent.  The bytes are decoded with
+    ``json.loads`` before Pydantic validation so that malformed JSON surfaces
+    as ``422 rules_invalid`` rather than a bare 400.
     Requests exceeding ``_MAX_BODY_BYTES`` are rejected with **413**.
 
     Returns:
@@ -164,28 +167,52 @@ def put_config_wake(
         :class:`~chronos.errors.ProblemException` 422 ``rules_invalid`` with
             ``errors: [{loc, msg, type}]`` on validation failure.
     """
-    # Content-Length guard: reject oversized payloads before expensive validation.
+    _413 = JSONResponse(
+        status_code=413,
+        content={
+            "type": "urn:chronos:error:payload_too_large",
+            "title": "Payload Too Large",
+            "status": 413,
+            "detail": f"Request body must not exceed {_MAX_BODY_BYTES} bytes.",
+            "instance": str(request.url.path),
+        },
+        headers={"Content-Type": PROBLEM_CONTENT_TYPE},
+    )
+
+    # Content-Length pre-check: fast rejection before reading the body.
     content_length_raw = request.headers.get("content-length")
     if content_length_raw is not None:
         try:
             if int(content_length_raw) > _MAX_BODY_BYTES:
-                return JSONResponse(
-                    status_code=413,
-                    content={
-                        "type": "urn:chronos:error:payload_too_large",
-                        "title": "Payload Too Large",
-                        "status": 413,
-                        "detail": f"Request body must not exceed {_MAX_BODY_BYTES} bytes.",
-                        "instance": str(request.url.path),
-                    },
-                    headers={"Content-Type": PROBLEM_CONTENT_TYPE},
-                )
+                return _413
         except ValueError:
-            pass  # non-integer Content-Length header; let body parsing handle it
+            pass  # non-integer Content-Length header; fall through to byte check
 
-    # Manual validation so we can re-emit field-level errors in problem+json.
+    # Read raw bytes; actual size check covers chunked / absent Content-Length.
+    raw = await request.body()
+    if len(raw) > _MAX_BODY_BYTES:
+        return _413
+
+    # Parse JSON before Pydantic so malformed JSON gives a structured error.
     try:
-        rules = WakeRules.model_validate(body)
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "type": "urn:chronos:error:rules_invalid",
+                "title": "Wake Rules Validation Failed",
+                "status": 422,
+                "detail": "Request body is not valid JSON",
+                "instance": str(request.url.path),
+                "errors": [{"loc": ["body"], "msg": str(exc), "type": "json_invalid"}],
+            },
+            headers={"Content-Type": PROBLEM_CONTENT_TYPE},
+        )
+
+    # Pydantic validation: re-emit field-level errors in problem+json.
+    try:
+        rules = WakeRules.model_validate(data)
     except ValidationError as exc:
         errors = [
             {
