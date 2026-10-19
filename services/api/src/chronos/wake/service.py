@@ -197,7 +197,10 @@ def ingest_telemetry(
     local_date_str = local_date.isoformat()
     prev_we_stmt = (
         select(WakeEvaluation, TelemetryEvent)
-        .join(TelemetryEvent, WakeEvaluation.telemetry_event_id == TelemetryEvent.id)
+        .join(  # type: ignore[call-overload]
+            TelemetryEvent,
+            WakeEvaluation.telemetry_event_id == TelemetryEvent.id,  # type: ignore[arg-type]
+        )
         .where(
             TelemetryEvent.device_id == device.id,
             TelemetryEvent.local_date == local_date_str,
@@ -271,6 +274,7 @@ def ingest_telemetry(
 
     # ── 9. INSERT WakeEvaluation ──────────────────────────────────────────
     breakdown_json = json.dumps(evaluation.model_dump(mode="json"))
+    assert te.id is not None, "TelemetryEvent must have an id after flush"
     wake_eval = WakeEvaluation(
         telemetry_event_id=te.id,
         rule_version_id=rule_version.id,

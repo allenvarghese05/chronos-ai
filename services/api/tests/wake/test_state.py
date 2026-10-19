@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import datetime
 import sqlite3
+from collections.abc import Iterator
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -47,7 +48,7 @@ def _rules() -> WakeRules:
 
 
 @pytest.fixture()
-def db_session(tmp_path: Path) -> Session:  # type: ignore[type-arg]
+def db_session(tmp_path: Path) -> Iterator[Session]:
     """Create a fresh migrated SQLite DB and yield an open Session."""
     db_url = f"sqlite:///{tmp_path / 'test_state.db'}"
     ini_path = Path(__file__).parents[2] / "alembic.ini"
