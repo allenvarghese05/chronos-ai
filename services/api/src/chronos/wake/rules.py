@@ -331,6 +331,18 @@ class WakeRules(BaseModel):
             if total > 100:
                 raise ValueError(f"reweight_without_pedometer values sum to {total}; must be ≤ 100")
 
+        # 5. For reweighted rules with bonus_consecutive, value must exceed
+        #    bonus.points so that base_pts = value - bonus.points > 0.
+        rule_map = {rule.id: rule for rule in self.rules}
+        for key, value in self.reweight_without_pedometer.items():
+            rule = rule_map[key]
+            if rule.bonus_consecutive is not None and value <= rule.bonus_consecutive.points:
+                raise ValueError(
+                    f"reweight_without_pedometer.{key}: value {value} must be "
+                    f"> bonus_consecutive.points {rule.bonus_consecutive.points} "
+                    f"so that base_pts = value \u2212 bonus > 0"
+                )
+
         return self
 
 
