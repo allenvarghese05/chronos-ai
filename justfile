@@ -115,7 +115,7 @@ test:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{justfile_directory()}}"
-    if [ -f services/api/pyproject.toml ]; then (cd services/api && uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion"); else echo "services/api not yet scaffolded, skipping test"; fi
+    if [ -f services/api/pyproject.toml ]; then (cd services/api && uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion" --cov=chronos.wake --cov-fail-under=90 --cov-report=term-missing:skip-covered); else echo "services/api not yet scaffolded, skipping test"; fi
     if [ -f apps/mobile/package.json ]; then (cd apps/mobile && pnpm exec jest --ci); else echo "apps/mobile not yet scaffolded, skipping test"; fi
     if [ -f packages/renderer/package.json ]; then (cd packages/renderer && pnpm exec vitest run); else echo "packages/renderer not yet scaffolded, skipping test"; fi
 
@@ -176,7 +176,7 @@ check-api:
     uv run --locked ruff check .
     uv run --locked ruff format --check .
     uv run --locked pyright
-    uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion"
+    uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion" --cov=chronos.wake --cov-fail-under=90 --cov-report=term-missing:skip-covered
     uv run --locked bandit -q -r src -ll
     if uv run --locked chronos config validate --help >/dev/null 2>&1; then uv run --locked chronos config validate; fi
     echo "just check-api: all steps passed"
