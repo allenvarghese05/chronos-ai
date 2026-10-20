@@ -241,7 +241,7 @@ Indexes: `(device_id, received_at)`, `(local_date)`.
 | device_id | FK | |
 | kind | TEXT | `tick` (silent) \| `reel_ready` \| `text_fallback` \| `test` |
 | local_date | TEXT | |
-| reel_id | FK NULL | |
+| reel_id | INTEGER NULL | No FK constraint until T4.1 (reels table created then) |
 | tick_seq | INTEGER NULL | |
 | payload_json | TEXT | what was sent (no token) |
 | ticket_id | TEXT NULL | Expo ticket |
