@@ -91,11 +91,12 @@ class TestMigration0001:
             "days",
             "day_transitions",
             "settings",
+            "push_notifications",
         }
     )
 
-    def test_upgrade_creates_all_8_tables(self, tmp_path: Path) -> None:
-        """After ``upgrade head`` all 8 application tables must exist."""
+    def test_upgrade_creates_all_9_tables(self, tmp_path: Path) -> None:
+        """After ``upgrade head`` all 9 application tables must exist."""
         db_url = f"sqlite:///{tmp_path / 'tables_test.db'}"
         cfg = _alembic_cfg(db_url)
         command.upgrade(cfg, "head")

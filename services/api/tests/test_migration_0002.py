@@ -22,12 +22,6 @@ from chronos.db import create_db_engine
 _ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
 
 
-def _make_engine(tmp_path: Path) -> Engine:
-    db_url = f"sqlite:///{tmp_path / 'test.db'}"
-    engine = create_db_engine(db_url)
-    return engine
-
-
 def _run_upgrade(tmp_path: Path) -> tuple[Engine, str]:
     db_url = f"sqlite:///{tmp_path / 'test.db'}"
     cfg = Config(str(_ALEMBIC_INI))
@@ -110,7 +104,9 @@ class TestMigration0002:
         _engine, db_url = _run_upgrade(tmp_path)
 
         # Import all models to register them with SQLModel.metadata
-        import chronos.models  # noqa: F401 - side-effect: registers all table classes
+        import chronos.models as _cm
+
+        _ = _cm  # suppress unused-import warning from pyright
 
         cfg = Config(str(_ALEMBIC_INI))
         cfg.set_main_option("sqlalchemy.url", db_url)

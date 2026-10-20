@@ -7,15 +7,19 @@ Part 2: Scheduler simulation with FakeClock + FakePushClient + temp DB.
 from __future__ import annotations
 
 import datetime
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
-from sqlmodel import select
+from sqlmodel import Session, select
 
+from chronos.config import Settings
 from chronos.delivery.push import FakePushClient
 from chronos.enums import DayState, PushKind, TransitionCause
 from chronos.models.delivery import PushNotification
+from chronos.models.devices import Device
 from chronos.models.wake import Day, DayTransition
 from chronos.scheduler import (
     Action,
@@ -37,13 +41,6 @@ TZ = ZoneInfo("America/Los_Angeles")  # UTC-7 (PDT during summer)
 
 # Weekday window: 06:00-11:00 local = 13:00-18:00 UTC (PDT offset -7)
 WEEKDAY_DATE = datetime.date(2026, 10, 6)  # Tuesday
-
-
-def _utc(hour: int, minute: int = 0, date: datetime.date = WEEKDAY_DATE) -> datetime.datetime:
-    """Build a UTC-aware datetime for the test date."""
-    # For America/Los_Angeles on 2026-10-06: PDT (UTC-7)
-    # 06:00 local = 13:00 UTC
-    return datetime.datetime(date.year, date.month, date.day, hour, minute, tzinfo=UTC)
 
 
 def _make_window() -> Window:
@@ -72,7 +69,7 @@ def _make_weekend_window() -> Window:
     return window_for(datetime.date(2026, 10, 10), TZ, cfg)
 
 
-def _fake_device(expo_token: str | None = "ExponentPushToken[abc]") -> object:  # noqa: S107
+def _fake_device(expo_token: str | None = "ExponentPushToken[abc]") -> Device:  # noqa: S107
     """Return a Device for plan() tests (not persisted)."""
     import hashlib
 
@@ -101,7 +98,7 @@ def _fake_day(
     *,
     state: str = DayState.idle.value,
     ticks_sent: int = 0,
-) -> object:
+) -> Day:
     """Return a Day for plan() tests (not persisted)."""
     from chronos.models.wake import Day
 
@@ -296,7 +293,7 @@ class TestPlan:
 # ---------------------------------------------------------------------------
 
 
-def _make_test_settings(tmp_path: Path) -> object:
+def _make_test_settings(tmp_path: Path) -> Settings:
     """Build minimal Settings for scheduler tests."""
     from tests.conftest import make_settings
 
@@ -315,28 +312,29 @@ def _make_test_settings(tmp_path: Path) -> object:
     )
 
 
-def _make_session_factory(settings: object) -> object:
+def _make_session_factory(settings: Settings) -> Callable[[], Session]:
     from chronos.db import create_db_engine
 
-    engine = create_db_engine(settings.database_url)  # type: ignore[union-attr]
+    engine = create_db_engine(settings.database_url)
     from sqlmodel import Session as _Session
 
     return lambda: _Session(engine)
 
 
-async def _run_scheduler_step(
-    scheduler: Scheduler,
-    now: datetime.datetime,
-) -> None:
-    """Run one run_due step at `now`."""
-    await scheduler.run_due(now)
+@dataclass
+class _SimSetup:
+    scheduler: Scheduler
+    fake_push: FakePushClient
+    session_factory: Callable[[], Session]
+    device_id: int
+    settings: Settings
 
 
 class TestSchedulerSimulation:
     """Full-day simulation: 05:50 → 11:05 in 1-min steps."""
 
     @pytest.fixture()
-    def setup(self, tmp_path: Path) -> dict:  # type: ignore[type-arg]
+    def setup(self, tmp_path: Path) -> _SimSetup:
         """Set up scheduler with warm rules cache and a device with push token."""
         settings = _make_test_settings(tmp_path)
         session_factory = _make_session_factory(settings)
@@ -356,7 +354,7 @@ class TestSchedulerSimulation:
         scheduler = Scheduler(
             session_factory=session_factory,
             push_client=fake_push,
-            settings=settings,  # type: ignore[arg-type]
+            settings=settings,
         )
 
         # Create device with token
@@ -372,22 +370,23 @@ class TestSchedulerSimulation:
             session.commit()
             device_id: int = device.id  # type: ignore[assignment]
 
-        return {
-            "scheduler": scheduler,
-            "fake_push": fake_push,
-            "session_factory": session_factory,
-            "device_id": device_id,
-        }
+        return _SimSetup(
+            scheduler=scheduler,
+            fake_push=fake_push,
+            session_factory=session_factory,
+            device_id=device_id,
+            settings=settings,
+        )
 
     @pytest.mark.anyio
-    async def test_full_weekday_60_ticks(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_full_weekday_60_ticks(self, setup: _SimSetup) -> None:
         """Simulate 05:50-11:05 in 1-min steps.
 
         Expect 60 ticks + StartMonitoring + Fallback."""
-        scheduler: Scheduler = setup["scheduler"]
-        fake_push: FakePushClient = setup["fake_push"]
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        scheduler: Scheduler = setup.scheduler
+        fake_push: FakePushClient = setup.fake_push
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         # America/Los_Angeles on 2026-10-06 is PDT (UTC-7)
         # 06:00 local = 13:00 UTC, 11:00 local = 18:00 UTC
@@ -420,7 +419,7 @@ class TestSchedulerSimulation:
             assert len(ticks) == 60, f"Expected 60 ticks, got {len(ticks)}"
 
             # Tick seqs 0-59
-            seqs = sorted(t.tick_seq for t in ticks)
+            seqs = sorted(int(t.tick_seq) for t in ticks if t.tick_seq is not None)
             assert seqs == list(range(60))
 
             # All tickets ok
@@ -460,12 +459,12 @@ class TestSchedulerSimulation:
         assert len(fake_push.sent) == 60
 
     @pytest.mark.anyio
-    async def test_stops_on_confirm(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_stops_on_confirm(self, setup: _SimSetup) -> None:
         """Confirm injected at 07:12 local → no ticks after that."""
-        scheduler: Scheduler = setup["scheduler"]
-        fake_push: FakePushClient = setup["fake_push"]
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        scheduler: Scheduler = setup.scheduler
+        fake_push: FakePushClient = setup.fake_push
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         window = _make_window()
         local_date = WEEKDAY_DATE.isoformat()
@@ -505,17 +504,17 @@ class TestSchedulerSimulation:
         )
 
     @pytest.mark.anyio
-    async def test_rate_limited_delays_next_tick(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_rate_limited_delays_next_tick(self, setup: _SimSetup) -> None:
         """MessageRateExceeded on tick 2 → next send skips seq 2, sends seq 3 next."""
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         # Use a fake push client that errors on 3rd call
         fake_push = FakePushClient(outcomes=["ok", "ok", "MessageRateExceeded", "ok"])
         scheduler = Scheduler(
             session_factory=session_factory,
             push_client=fake_push,
-            settings=setup["scheduler"]._settings,
+            settings=setup.settings,
         )
 
         window = _make_window()
@@ -566,16 +565,16 @@ class TestSchedulerSimulation:
         assert 3 in seqs, f"Expected seq 3 to be sent after rate limit; got seqs={seqs}"
 
     @pytest.mark.anyio
-    async def test_device_not_registered_clears_token(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_device_not_registered_clears_token(self, setup: _SimSetup) -> None:
         """DeviceNotRegistered → expo_push_token cleared, no further ticks."""
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         fake_push = FakePushClient(outcomes=["DeviceNotRegistered"])
         scheduler = Scheduler(
             session_factory=session_factory,
             push_client=fake_push,
-            settings=setup["scheduler"]._settings,
+            settings=setup.settings,
         )
 
         window = _make_window()
@@ -599,10 +598,10 @@ class TestSchedulerSimulation:
         assert len(fake_push.sent) == sent_before, "Ticks sent after token cleared"
 
     @pytest.mark.anyio
-    async def test_restart_mid_window_continues_tick_seq(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_restart_mid_window_continues_tick_seq(self, setup: _SimSetup) -> None:
         """New Scheduler instance re-derives tick_seq from push_notifications."""
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         window = _make_window()
         local_date = WEEKDAY_DATE.isoformat()
@@ -678,7 +677,7 @@ class TestSchedulerSimulation:
         scheduler2 = Scheduler(
             session_factory=session_factory,
             push_client=fake_push2,
-            settings=setup["scheduler"]._settings,
+            settings=setup.settings,
         )
 
         # Run at tick_seq 6's instant (30 min into window)
@@ -702,10 +701,10 @@ class TestSchedulerSimulation:
         assert seqs.count(6) == 1, "seq 6 sent more than once"
 
     @pytest.mark.anyio
-    async def test_receipts_recorded_after_15_min(self, setup: dict) -> None:  # type: ignore[type-arg]
+    async def test_receipts_recorded_after_15_min(self, setup: _SimSetup) -> None:
         """Receipts are fetched and recorded for tickets ≥ 15 min old."""
-        session_factory = setup["session_factory"]
-        device_id: int = setup["device_id"]
+        session_factory = setup.session_factory
+        device_id: int = setup.device_id
 
         # Create a receipt response
         ticket_id_1 = "receipt-ticket-1"
@@ -714,12 +713,11 @@ class TestSchedulerSimulation:
             receipt_outcomes={ticket_id_1: "ok"},
         )
         # Override the send to return a specific ticket_id
-        receipt_push._receipt_outcomes = {ticket_id_1: "ok"}
 
         scheduler = Scheduler(
             session_factory=session_factory,
             push_client=receipt_push,
-            settings=setup["scheduler"]._settings,
+            settings=setup.settings,
         )
 
         window = _make_window()

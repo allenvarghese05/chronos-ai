@@ -8,7 +8,7 @@ Endpoint contract (docs/05-api-contracts.md §2):
 - 422 clock_skew if |device_ts - server_now| > 300 s (with server_time in detail).
 - Idempotent on (device_id, seq): returns stored evaluation with 200.
 - Response: TelemetryResponse (see below).
-- next_tick_in_sec: always null (T1.7 scheduler fills this).
+- next_tick_in_sec: seconds until next scheduled tick (null if not monitoring or no scheduler).
 """
 
 from __future__ import annotations
@@ -138,6 +138,16 @@ async def post_telemetry(
     breakdown: list[dict[str, Any]] = [b.model_dump(mode="json") for b in evaluation.breakdown]
     penalties: list[dict[str, Any]] = [p.model_dump(mode="json") for p in evaluation.penalties]
 
+    # Fill next_tick_in_sec from the scheduler's in-memory state.
+    next_tick_in_sec: int | None = None
+    if hasattr(request.app.state, "scheduler"):
+        scheduler = request.app.state.scheduler
+        assert device.id is not None
+        nxt = scheduler.get_next_tick_for(device.id)
+        if nxt is not None:
+            delta = (nxt - now).total_seconds()
+            next_tick_in_sec = max(0, int(delta))
+
     return TelemetryResponse(
         evaluation_id=result.evaluation_id,
         local_date=result.local_date.isoformat(),
@@ -151,5 +161,5 @@ async def post_telemetry(
         breakdown=breakdown,
         penalties=penalties,
         day_state=result.day_state.value,
-        next_tick_in_sec=None,
+        next_tick_in_sec=next_tick_in_sec,
     )
