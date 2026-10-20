@@ -78,8 +78,14 @@ class Settings(BaseSettings):
     ollama_endpoint: str = "http://localhost:11434"
     llm_provider: str = "ollama"
 
+    # ── scheduler ────────────────────────────────────────────────────────────
+    #: Set to False to disable the background scheduler (tests, debug).
+    scheduler_enabled: bool = True
+
     # ── Expo push ────────────────────────────────────────────────────────────
     expo_access_token: SecretStr | None = None
+    #: Base URL for the Expo push API. Override in tests with a mock server URL.
+    expo_push_base_url: str = "https://exp.host/--/api/v2"
 
     # ── public URL (pairing response) ────────────────────────────────────────
     #: The base URL returned in the pairing response (docs/05 §1).
