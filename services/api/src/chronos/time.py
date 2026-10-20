@@ -28,6 +28,30 @@ def utc_now_iso() -> str:
     return now.isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def format_utc_iso(dt: datetime.datetime) -> str:
+    """Format a UTC-aware (or naive-UTC) :class:`datetime` as ISO-8601 with a ``Z`` suffix.
+
+    Uses microsecond precision, matching :func:`utc_now_iso`.  Naive datetimes
+    are treated as UTC (no conversion performed).
+
+    Args:
+        dt: A :class:`datetime.datetime`, tz-aware or naive.
+
+    Returns:
+        A string of the form ``YYYY-MM-DDTHH:MM:SS.ffffffZ``.
+
+    Example::
+
+        >>> import datetime
+        >>> format_utc_iso(datetime.datetime(2026, 10, 6, 7, 12, 4, tzinfo=datetime.UTC))
+        '2026-10-06T07:12:04.000000Z'
+    """
+    if dt.tzinfo is not None:
+        utc = dt.astimezone(datetime.UTC)
+        return utc.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
+
+
 def parse_utc_iso(s: str) -> datetime.datetime:
     """Parse a ``Z``-suffix ISO-8601 UTC string into a tz-aware :class:`datetime`.
 

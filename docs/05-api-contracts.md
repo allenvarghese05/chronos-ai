@@ -9,6 +9,9 @@
 - Errors: RFC 9457 problem+json: `{ "type": "urn:chronos:error:<code>", "title", "status", "detail", "instance" }`.
   Codes: `validation`, `clock_skew`, `unauthorized`, `revoked`, `pairing_invalid`, `pairing_expired`,
   `rate_limited`, `not_found`, `conflict`, `rules_invalid`, `media_expired`, `internal`.
+  RFC 9457 extension members may appear alongside the required fields.
+  `clock_skew` 422 includes `"server_time": "<ISO-8601 UTC Z>"` so the client can
+  correct its clock without parsing the `detail` string.
 - Rate limits (in-memory token bucket, per IP): pairing 5/min; telemetry 30/min; everything else 120/min.
 - Idempotency: telemetry `(device, seq)` unique → repeat returns the stored evaluation with 200.
 
