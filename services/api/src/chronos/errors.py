@@ -86,6 +86,8 @@ def make_problem(
     Returns:
         A :class:`JSONResponse` with ``Content-Type: application/problem+json``.
     """
+    _RESERVED: frozenset[str] = frozenset({"type", "title", "status", "detail", "instance", "code"})
+
     body: dict[str, Any] = {
         "type": f"urn:chronos:error:{code}",
         "code": code,  # extension member: machine-readable shorthand (RFC 9457 §3.2)
@@ -95,6 +97,12 @@ def make_problem(
         "instance": instance,
     }
     if extensions:
+        collisions = _RESERVED & extensions.keys()
+        if collisions:
+            raise ValueError(
+                f"make_problem: extension keys collide with reserved RFC 9457 members: "
+                f"{sorted(collisions)}"
+            )
         body.update(extensions)
     return JSONResponse(
         content=body,
