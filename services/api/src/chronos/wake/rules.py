@@ -48,6 +48,7 @@ from typing import Any
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import text
+from sqlalchemy.orm import make_transient
 from sqlmodel import Session, select
 
 from chronos.models.wake import RuleVersion
@@ -429,6 +430,13 @@ class RulesCache:
                     "No active rule version found in DB. Call ensure_initial_version() on startup."
                 )
             rules = WakeRules.model_validate_json(rv.rules_json)
+            # Load all column attributes into the instance state, then detach
+            # it from the session so the cached object is usable across
+            # requests that carry a different session.  make_transient() marks
+            # it as a plain Python object; all columns that were populated by
+            # the SELECT above remain accessible without a live session.
+            session.expunge(rv)
+            make_transient(rv)
             self._rules = rules
             self._rv = rv
             return rules, rv
