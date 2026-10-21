@@ -132,8 +132,11 @@ def test_operation_ids_unique() -> None:
     for path_item in paths.values():
         ops = cast(dict[str, Any], path_item if isinstance(path_item, dict) else {})
         for op in ops.values():
-            if isinstance(op, dict) and "operationId" in op:
-                seen.append(str(op["operationId"]))
+            if not isinstance(op, dict):
+                continue
+            op_d = cast(dict[str, Any], op)
+            if "operationId" in op_d:
+                seen.append(str(op_d.get("operationId", "")))
     assert len(seen) == len(set(seen)), (
         f"Duplicate operationIds: {[x for x in seen if seen.count(x) > 1]}"
     )
@@ -148,8 +151,11 @@ def test_operation_ids_pattern() -> None:
     for path_item in paths.values():
         ops = cast(dict[str, Any], path_item if isinstance(path_item, dict) else {})
         for op in ops.values():
-            if isinstance(op, dict) and "operationId" in op:
-                oid = str(op["operationId"])
+            if not isinstance(op, dict):
+                continue
+            op_d = cast(dict[str, Any], op)
+            if "operationId" in op_d:
+                oid = str(op_d.get("operationId", ""))
                 if not pattern.match(oid):
                     bad.append(oid)
     assert not bad, f"operationIds not matching pattern <tag>_<name>: {bad}"
@@ -175,9 +181,10 @@ def test_responses_401_on_auth_routes() -> None:
         for method, op in ops.items():
             if not isinstance(op, dict):
                 continue
-            if "operationId" not in op:
+            op_d = cast(dict[str, Any], op)
+            if "operationId" not in op_d:
                 continue
-            responses = cast(dict[str, Any], op.get("responses") or {})
+            responses = cast(dict[str, Any], op_d.get("responses") or {})
             if "401" not in responses:
                 missing.append(f"{str(method).upper()} {path}")
     assert not missing, f"Authenticated routes without 401 response: {missing}"
