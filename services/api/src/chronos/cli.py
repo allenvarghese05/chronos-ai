@@ -2,12 +2,13 @@
 
 Commands
 --------
-``chronos serve``            — Start the API server with uvicorn.
-``chronos db migrate``       — Apply pending Alembic migrations.
-``chronos config validate``  — Validate YAML config files (stub, T1.4).
-``chronos doctor``           — System health check (stub, T0.6).
-``chronos pair-code``        — Generate a pairing code and print/QR it.
-``chronos device revoke``    — Revoke the active device (or all).
+``chronos serve``                   -- Start the API server with uvicorn.
+``chronos db migrate``              -- Apply pending Alembic migrations.
+``chronos config validate``         -- Validate YAML config files (stub, T1.4).
+``chronos doctor``                  -- Real system health check (T0.6).
+``chronos ops in-deploy-window``    -- Exit 0 inside deploy exclusion window.
+``chronos pair-code``               -- Generate a pairing code and print/QR it.
+``chronos device revoke``           -- Revoke the active device (or all).
 """
 
 from __future__ import annotations
@@ -341,13 +342,137 @@ def device_revoke(
     typer.echo(f"Revoked {count} device(s).")
 
 
+# ── ops subgroup ─────────────────────────────────────────────────────────────
+
+ops_app = typer.Typer(name="ops", help="Operational utilities (T0.6).", no_args_is_help=True)
+app.add_typer(ops_app, name="ops")
+
+
+@ops_app.command("in-deploy-window")
+def ops_in_deploy_window(
+    tz: str = typer.Option(
+        "America/Los_Angeles",
+        "--tz",
+        help="Local IANA timezone (default: America/Los_Angeles).",
+    ),
+) -> None:
+    """Exit 0 if the current time is inside the deploy exclusion window.
+
+    The deploy exclusion window is [window_start - 45 min, window_end).
+    scripts/deploy.sh calls this; exit 0 means 'skip the deploy'.
+    """
+    import datetime
+    from zoneinfo import ZoneInfo
+
+    import yaml
+    from pydantic import ValidationError
+
+    from chronos.ops.deploy_window import in_deploy_window
+    from chronos.wake.rules import load_yaml
+
+    yaml_path = _WAKE_YAML_PATH
+    if not yaml_path.exists():
+        typer.echo(f"wake_rules.yaml not found at {yaml_path}; assuming outside window", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        rules = load_yaml(yaml_path)
+    except (yaml.YAMLError, ValidationError) as exc:
+        typer.echo(f"Could not load wake_rules.yaml: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    try:
+        local_tz = ZoneInfo(tz)
+    except Exception as exc:
+        typer.echo(f"Invalid timezone {tz!r}: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    now = datetime.datetime.now(datetime.UTC)
+    inside = in_deploy_window(now, rules, local_tz)
+
+    local_now = now.astimezone(local_tz).strftime("%H:%M")
+    if inside:
+        typer.echo(f"deploy-window: INSIDE exclusion at {local_now} {tz}")
+        raise typer.Exit(code=0)  # exit 0 = skip deploy
+    else:
+        typer.echo(f"deploy-window: outside exclusion at {local_now} {tz}")
+        raise typer.Exit(code=1)  # exit 1 = proceed with deploy
+
+
 # ── doctor ────────────────────────────────────────────────────────────────────
 
 
 @app.command()
-def doctor() -> None:
-    """Check this Mac: pins, models, certs, DB. (Stub — implemented in T0.6.)"""
-    typer.echo("doctor: not yet implemented (T0.6)")
+def doctor(
+    repo_root: Path = typer.Option(
+        None,
+        "--repo-root",
+        help="Repository root (default: auto-detected from cli.py location).",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Output JSONL instead of a table."),
+) -> None:
+    """Check this Mac: certs, models, Ollama, LaunchAgents, pmset, disk, DB.
+
+    Exits 0 if all checks pass or only advisory warnings were found.
+    Exits 1 if any blocking failure is detected.
+    """
+    import json
+
+    from chronos.ops.doctor import FAIL, OK, WARN, DoctorProbes, run_doctor
+
+    # Repo root: services/api is parents[2] from src/chronos/cli.py;
+    # the actual repo root is one level above services/api.
+    _default_root = Path(__file__).parents[3]
+    root = repo_root or _default_root
+
+    # Try to load settings for public_base_url; best-effort.
+    try:
+        from chronos.config import get_settings
+
+        settings = get_settings()
+    except Exception:
+        settings = None
+
+    # Read ollama pins from justfile if available.
+    ollama_model = "qwen2.5:7b-instruct"
+    ollama_digest = ""
+    justfile = root / "justfile"
+    if justfile.exists():
+        for line in justfile.read_text().splitlines():
+            if line.strip().startswith("ollama_model"):
+                parts = line.split(":=", 1)
+                if len(parts) == 2:
+                    ollama_model = parts[1].strip().strip('"')
+            if line.strip().startswith("ollama_digest"):
+                parts = line.split(":=", 1)
+                if len(parts) == 2:
+                    ollama_digest = parts[1].strip().strip('"')
+
+    rows, has_blocking = run_doctor(
+        root,
+        settings=settings,
+        probes=DoctorProbes(),
+        ollama_model=ollama_model,
+        ollama_digest=ollama_digest,
+    )
+
+    if json_output:
+        for row in rows:
+            typer.echo(json.dumps({"name": row.name, "status": row.status, "message": row.message}))
+    else:
+        # Human-readable table
+        col_w = max((len(r.name) for r in rows), default=10) + 2
+        symbols = {OK: "[ok]  ", WARN: "[warn]", FAIL: "[FAIL]", "skip": "[skip]"}
+        for row in rows:
+            sym = symbols.get(row.status, "[????]")
+            typer.echo(f"  {sym}  {row.name:<{col_w}} {row.message}")
+        typer.echo("")
+        if has_blocking:
+            typer.echo("chronos doctor: BLOCKING failures found (exit 1)", err=True)
+        else:
+            typer.echo("chronos doctor: all checks passed (warnings are advisory)")
+
+    raise typer.Exit(code=1 if has_blocking else 0)
 
 
 # ── openapi export ────────────────────────────────────────────────────────────
