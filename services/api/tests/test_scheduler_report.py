@@ -54,8 +54,13 @@ _IN_WINDOW = datetime.datetime(2026, 10, 6, 13, 48, 0, tzinfo=_UTC)
 
 
 @pytest.fixture()
-def db_session(tmp_path: Path) -> Iterator[Session]:
-    db_url = f"sqlite:///{tmp_path / 'test_sched_report.db'}"
+def _db_url(tmp_path: Path) -> str:
+    return f"sqlite:///{tmp_path / 'test_sched_report.db'}"
+
+
+@pytest.fixture()
+def db_session(tmp_path: Path, _db_url: str) -> Iterator[Session]:
+    db_url = _db_url
     ini_path = Path(__file__).parent / ".." / "alembic.ini"
     cfg = Config(str(ini_path))
     cfg.set_main_option("sqlalchemy.url", db_url)
@@ -73,12 +78,14 @@ def db_session(tmp_path: Path) -> Iterator[Session]:
     engine.dispose()
 
 
-def _make_scheduler(db_session: Session, reports_dir: Path) -> tuple[Scheduler, Session]:
+def _make_scheduler(
+    db_session: Session, reports_dir: Path, db_url: str = "sqlite://"
+) -> tuple[Scheduler, Session]:
     """Create a Scheduler with a fake push client and the given reports_dir."""
     from tests.conftest import make_settings
 
     settings = make_settings(
-        database_url=str(db_session.get_bind().url),
+        database_url=db_url,
         reports_dir=reports_dir,
     )
 
@@ -152,11 +159,11 @@ def _ingest_fixture(session: Session, device: Device, rv: object) -> None:
 
 
 def test_scheduler_run_reports_writes_file_after_boundary(
-    db_session: Session, tmp_path: Path
+    db_session: Session, tmp_path: Path, _db_url: str
 ) -> None:
     """run_reports writes the previous day's report after boundary + 15 min grace."""
     reports_dir = tmp_path / "reports"
-    scheduler, session = _make_scheduler(db_session, reports_dir)
+    scheduler, session = _make_scheduler(db_session, reports_dir, _db_url)
 
     device, rv = _insert_device_and_rules(session)
     _ingest_fixture(session, device, rv)
@@ -169,11 +176,13 @@ def test_scheduler_run_reports_writes_file_after_boundary(
     assert "# Morning Report" in content
 
 
-def test_scheduler_run_reports_idempotent(db_session: Session, tmp_path: Path) -> None:
+def test_scheduler_run_reports_idempotent(
+    db_session: Session, tmp_path: Path, _db_url: str
+) -> None:
     """run_reports skips writing if the file already exists."""
     reports_dir = tmp_path / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
-    scheduler, session = _make_scheduler(db_session, reports_dir)
+    scheduler, session = _make_scheduler(db_session, reports_dir, _db_url)
 
     device, rv = _insert_device_and_rules(session)
     _ingest_fixture(session, device, rv)
@@ -188,10 +197,12 @@ def test_scheduler_run_reports_idempotent(db_session: Session, tmp_path: Path) -
     assert report_file.read_text(encoding="utf-8") == "# Existing Report"
 
 
-def test_scheduler_run_reports_not_before_boundary(db_session: Session, tmp_path: Path) -> None:
+def test_scheduler_run_reports_not_before_boundary(
+    db_session: Session, tmp_path: Path, _db_url: str
+) -> None:
     """run_reports does NOT write before boundary + 15 min grace."""
     reports_dir = tmp_path / "reports"
-    scheduler, session = _make_scheduler(db_session, reports_dir)
+    scheduler, session = _make_scheduler(db_session, reports_dir, _db_url)
 
     device, rv = _insert_device_and_rules(session)
     _ingest_fixture(session, device, rv)
@@ -203,10 +214,12 @@ def test_scheduler_run_reports_not_before_boundary(db_session: Session, tmp_path
     assert not report_file.exists(), "Should not write before boundary + grace"
 
 
-def test_scheduler_run_reports_no_day_row(db_session: Session, tmp_path: Path) -> None:
+def test_scheduler_run_reports_no_day_row(
+    db_session: Session, tmp_path: Path, _db_url: str
+) -> None:
     """run_reports skips gracefully when no day row exists for the previous date."""
     reports_dir = tmp_path / "reports"
-    scheduler, session = _make_scheduler(db_session, reports_dir)
+    scheduler, session = _make_scheduler(db_session, reports_dir, _db_url)
 
     # Insert device + rules but no day row.
     _insert_device_and_rules(session)

@@ -255,6 +255,7 @@ def test_build_day_report_anomaly_force_quit(db_session: Session) -> None:
     )
     db_session.add(te)
     db_session.flush()
+    assert te.id is not None
 
     rv_row = db_session.exec(  # type: ignore[call-overload]
         select(RuleVersion).where(RuleVersion.id == rv_force_quit.id)

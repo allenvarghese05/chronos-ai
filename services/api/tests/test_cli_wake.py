@@ -20,7 +20,7 @@ from typer.testing import CliRunner
 from chronos.cli import app
 from chronos.models.wake import Day, RuleVersion
 from chronos.wake.replay import load_fixture
-from chronos.wake.rules import canonical_json, load_yaml, rules_sha256
+from chronos.wake.rules import load_yaml
 from chronos.wake.service import ingest_telemetry
 
 _UTC = datetime.UTC
@@ -57,41 +57,6 @@ def _make_session(db_path: Path) -> Session:
         dbapi_conn.cursor().execute("PRAGMA foreign_keys=ON")
 
     return Session(engine)
-
-
-def _setup_db(db_path: Path) -> tuple[object, object]:
-    """Insert device + rule version; return (device, ActiveRuleVersion)."""
-    from chronos.time import utc_now_iso
-    from chronos.wake.rules import ActiveRuleVersion
-    from tests.factories import make_device
-
-    with _make_session(db_path) as session:
-        device = make_device(session)
-        session.commit()
-
-        rules = load_yaml(_RULES_PATH)
-        rv_orm = RuleVersion(
-            version=1,
-            source="yaml",
-            rules_json=canonical_json(rules),
-            sha256=rules_sha256(rules),
-            created_at=utc_now_iso(),
-            created_by="test",
-            active=1,
-        )
-        session.add(rv_orm)
-        session.commit()
-        assert rv_orm.id is not None
-
-        rv = ActiveRuleVersion(
-            id=rv_orm.id,
-            version=rv_orm.version,
-            source=rv_orm.source,
-            sha256=rv_orm.sha256,
-            created_at=rv_orm.created_at,
-            created_by=rv_orm.created_by,
-        )
-        return device, rv
 
 
 def _ingest_fixture_db(db_path: Path) -> None:

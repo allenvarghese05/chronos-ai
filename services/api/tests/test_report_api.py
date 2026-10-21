@@ -37,9 +37,15 @@ def _make_report_client(
     tmp_db_url: str,
 ) -> Iterator[tuple[TestClient, Settings]]:
     """Create a TestClient + Settings with an isolated reports_dir."""
-    from tests.conftest import _run_migrations, make_settings
+    from alembic import command as _alembic_command
+    from alembic.config import Config as _AlembicConfig
 
-    _run_migrations(tmp_db_url)
+    from tests.conftest import make_settings
+
+    _ini = Path(__file__).parent / ".." / "alembic.ini"
+    _cfg = _AlembicConfig(str(_ini))
+    _cfg.set_main_option("sqlalchemy.url", tmp_db_url)
+    _alembic_command.upgrade(_cfg, "head")
     settings = make_settings(
         database_url=tmp_db_url,
         reports_dir=tmp_path / "reports",

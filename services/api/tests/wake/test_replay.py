@@ -79,56 +79,6 @@ def _make_device(session: Session) -> Device:
     return d
 
 
-def _make_rv(session: Session) -> ActiveRuleVersion:
-    from tests.factories import make_rule_version
-
-    rv_orm = make_rule_version(session, active=1)
-    session.commit()
-    assert rv_orm.id is not None
-    return ActiveRuleVersion(
-        id=rv_orm.id,
-        version=rv_orm.version,
-        source=rv_orm.source,
-        sha256=rv_orm.sha256,
-        created_at=rv_orm.created_at,
-        created_by=rv_orm.created_by,
-    )
-
-
-def _signals(
-    *,
-    device_ts: datetime.datetime = _IN_WINDOW,
-    seq: int = 0,
-    steps_10m: int = 35,
-    is_unlocked: bool = True,
-) -> Signals:
-    return Signals.model_validate(
-        {
-            "device_ts": device_ts,
-            "tz": "America/Los_Angeles",
-            "wake_source": "silent_push",
-            "steps_10m": steps_10m,
-            "steps_since_window": 120,
-            "walking_sec_10m": 95,
-            "walking_conf": "high",
-            "stationary_sec_10m": 30,
-            "is_unlocked": is_unlocked,
-            "battery_state": "unplugged",
-            "battery_level": 0.78,
-            "app_state": "background",
-            "low_power_mode": False,
-            "pedometer_auth": "authorized",
-            "seq": seq,
-            "app_version": "1.0.0",
-            "ios_version": "18.1",
-        }
-    )
-
-
-def _raw(sig: Signals) -> bytes:
-    return sig.model_dump_json().encode()
-
-
 # ---------------------------------------------------------------------------
 # load_fixture tests
 # ---------------------------------------------------------------------------
@@ -500,6 +450,7 @@ def test_replay_db_range_skips_invalid_raw_json(db_session: Session) -> None:
     )
     db_session.add(bad_te)
     db_session.flush()
+    assert bad_te.id is not None
 
     bad_we = WakeEvaluation(
         telemetry_event_id=bad_te.id,
