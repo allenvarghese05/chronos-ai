@@ -98,6 +98,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Start scheduler if enabled.
         _scheduler_task: asyncio.Task[None] | None = None
         _stop_event: asyncio.Event | None = None
+        _push_client: ExpoPushClient | None = None
         if resolved.scheduler_enabled:
             import httpx as _httpx
             from sqlmodel import Session as _SchedSession
@@ -132,6 +133,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await asyncio.wait_for(_scheduler_task, timeout=5.0)
             except TimeoutError:
                 log.warning("scheduler_stop_timeout")
+        if _push_client is not None:
+            await _push_client.close()
 
         engine.dispose()
         reset_rules_cache()

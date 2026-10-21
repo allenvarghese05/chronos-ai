@@ -291,3 +291,52 @@ class TestExpoPushClient:
 # ---------------------------------------------------------------------------
 
 pytest_plugins = ("anyio",)
+
+
+# ---------------------------------------------------------------------------
+# MINOR 3: ExpoPushClient.close() closes the httpx.AsyncClient
+# ---------------------------------------------------------------------------
+
+
+class TestExpoPushClientClose:
+    """close() must call aclose() on the injected http_client."""
+
+    @pytest.mark.anyio
+    async def test_close_calls_aclose_on_injected_client(self) -> None:
+        """close() releases the httpx.AsyncClient connection pool."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_http = MagicMock(spec=httpx.AsyncClient)
+        mock_http.aclose = AsyncMock()
+
+        client = ExpoPushClient(
+            base_url="https://exp.host/--/api/v2",
+            http_client=mock_http,
+        )
+        await client.close()
+
+        mock_http.aclose.assert_awaited_once()
+
+    @pytest.mark.anyio
+    async def test_close_noop_without_injected_client(self) -> None:
+        """close() is a no-op when no http_client was injected (per-request mode)."""
+        client = ExpoPushClient(base_url="https://exp.host/--/api/v2")
+        # Must not raise
+        await client.close()
+
+    @pytest.mark.anyio
+    async def test_close_is_idempotent(self) -> None:
+        """close() can be called multiple times without error."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_http = MagicMock(spec=httpx.AsyncClient)
+        mock_http.aclose = AsyncMock()
+
+        client = ExpoPushClient(
+            base_url="https://exp.host/--/api/v2",
+            http_client=mock_http,
+        )
+        await client.close()
+        await client.close()
+
+        assert mock_http.aclose.await_count == 2
