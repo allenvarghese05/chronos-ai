@@ -9,6 +9,9 @@ Commands
 ``chronos ops in-deploy-window``    -- Exit 0 inside deploy exclusion window.
 ``chronos pair-code``               -- Generate a pairing code and print/QR it.
 ``chronos device revoke``           -- Revoke the active device (or all).
+``chronos wake replay``             -- Re-score stored mornings under two rule versions (T1.8).
+``chronos wake annotate``           -- Record actual wake time for a local date (T1.8).
+``chronos report build``            -- Build the nightly Markdown report for a date (T1.8).
 """
 
 from __future__ import annotations
@@ -526,3 +529,351 @@ def openapi_export(
     content = json.dumps(schema, sort_keys=True, indent=2) + "\n"
     out.write_text(content, encoding="utf-8")
     typer.echo(f"✓ OpenAPI schema written to {out} ({len(content)} bytes)")
+
+
+# ── wake subgroup ─────────────────────────────────────────────────────────────
+wake_app = typer.Typer(name="wake", help="Wake-engine commands (T1.8).", no_args_is_help=True)
+app.add_typer(wake_app, name="wake")
+
+
+@wake_app.command("replay")
+def wake_replay(
+    from_date: str = typer.Option(..., "--from", help="Start date (YYYY-MM-DD)."),
+    to_date: str = typer.Option(..., "--to", help="End date (YYYY-MM-DD)."),
+    device_public_id: str | None = typer.Option(None, "--device", help="Device public_id."),
+    rules_path: Path | None = typer.Option(None, "--rules", help="Candidate rules YAML path."),
+    rule_version: int | None = typer.Option(
+        None, "--rule-version", help="Candidate rule version number."
+    ),
+    early_min: int = typer.Option(30, "--early-min", help="Early-confirm threshold (minutes)."),
+    json_output: bool = typer.Option(False, "--json", help="Output JSON instead of a table."),
+    fixture: Path | None = typer.Option(
+        None, "--fixture", help="Fixture JSON path (mutually exclusive with --from/--to DB query)."
+    ),
+) -> None:
+    """Re-score stored mornings under two rule versions and print a comparison table."""
+    import datetime as _dt
+    import json as _json
+
+    from sqlmodel import Session, select
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.models.devices import Device
+    from chronos.wake.replay import (
+        build_comparisons,
+        candidate_rules_from_path_or_version,
+        load_fixture,
+        replay_db_range,
+        replay_fixture,
+        summary_line,
+    )
+    from chronos.wake.rules import load_yaml
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+
+    try:
+        from_dt = _dt.date.fromisoformat(from_date)
+        to_dt = _dt.date.fromisoformat(to_date)
+    except ValueError as exc:
+        typer.echo(f"Error: invalid date format: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    if fixture is not None:
+        # Fixture mode: no DB query needed.
+        if not fixture.exists():
+            typer.echo(f"Error: fixture file not found: {fixture}", err=True)
+            raise typer.Exit(code=1)
+
+        baseline_rules = load_yaml(_WAKE_YAML_PATH)
+        if rules_path is not None:
+            candidate_rules_obj = load_yaml(rules_path)
+        else:
+            candidate_rules_obj = baseline_rules
+
+        fd = load_fixture(fixture)
+        replay_day = replay_fixture(
+            fd, baseline_rules=baseline_rules, candidate_rules=candidate_rules_obj
+        )
+        replay_days = [replay_day]
+    else:
+        # DB mode.
+        with Session(engine) as session:
+            # Resolve device.
+            if device_public_id:
+                dev_row = session.exec(  # type: ignore[call-overload]
+                    select(Device).where(Device.public_id == device_public_id)
+                ).first()
+            else:
+                devs = list(session.exec(select(Device).where(Device.status == "active")).all())  # type: ignore[call-overload]
+                if len(devs) == 0:
+                    typer.echo("Error: no active devices found.", err=True)
+                    raise typer.Exit(code=1)
+                if len(devs) > 1:
+                    typer.echo("Error: multiple active devices; specify --device.", err=True)
+                    raise typer.Exit(code=1)
+                dev_row = devs[0]
+
+            if dev_row is None:
+                typer.echo("Error: device not found.", err=True)
+                raise typer.Exit(code=1)
+            assert dev_row.id is not None
+
+            candidate_rules_obj, candidate_version = candidate_rules_from_path_or_version(
+                session, rules_path, rule_version
+            )
+            replay_days = replay_db_range(
+                session=session,
+                device_id=dev_row.id,
+                from_date=from_dt,
+                to_date=to_dt,
+                candidate_rules=candidate_rules_obj,
+                candidate_rule_version_number=candidate_version,
+            )
+
+    comparisons = build_comparisons(replay_days, candidate_rules_obj, early_min=early_min)
+
+    if json_output:
+        rows: list[dict[str, object]] = []
+        for c in comparisons:
+            b_str = c.baseline_confirm_time.strftime("%H:%M") if c.baseline_confirm_time else None
+            ca_str = (
+                c.candidate_confirm_time.strftime("%H:%M") if c.candidate_confirm_time else None
+            )
+            rows.append(
+                {
+                    "local_date": c.local_date.isoformat(),
+                    "kind": c.kind,
+                    "actual_wake_local": c.actual_wake_local,
+                    "baseline_confirm": b_str,
+                    "candidate_confirm": ca_str,
+                    "latency_min": c.latency_min,
+                    "ticks_ge_confirm": c.ticks_ge_confirm,
+                    "is_early": c.is_early,
+                }
+            )
+        out_dict: dict[str, object] = {"days": rows, "summary": summary_line(comparisons)}
+        typer.echo(_json.dumps(out_dict, indent=2))
+        return
+
+    # Rich table output.
+    try:
+        from rich.console import Console
+        from rich.table import Table
+
+        table = Table(title="Replay Comparison", show_lines=True)
+        table.add_column("date", style="cyan")
+        table.add_column("kind")
+        table.add_column("actual_wake")
+        table.add_column("baseline_confirm")
+        table.add_column("candidate_confirm")
+        table.add_column("latency_min")
+        table.add_column("ticks>=confirm")
+        table.add_column("early?")
+
+        for c in comparisons:
+
+            def _fmt_confirm(t: object) -> str:
+                if t is None:
+                    return "(no confirm)"
+                import datetime as _dt2
+
+                if isinstance(t, _dt2.time):
+                    return t.strftime("%H:%M")
+                return str(t)
+
+            table.add_row(
+                c.local_date.isoformat(),
+                c.kind or "?",
+                c.actual_wake_local or "n/a",
+                _fmt_confirm(c.baseline_confirm_time),
+                _fmt_confirm(c.candidate_confirm_time),
+                str(c.latency_min) if c.latency_min is not None else "n/a",
+                str(c.ticks_ge_confirm),
+                "yes" if c.is_early else "",
+            )
+
+        console = Console()
+        console.print(table)
+    except ImportError:
+        # Fallback: plain text.
+        c0, c1, c2, c3, c4, c5, c6, c7 = (
+            "date",
+            "kind",
+            "actual",
+            "baseline",
+            "candidate",
+            "latency",
+            "ticks>=c",
+            "early",
+        )
+        header = f"{c0:<12} {c1:<8} {c2:<8} {c3:<10} {c4:<10} {c5:>8} {c6:>8} {c7}"
+        typer.echo(header)
+        typer.echo("-" * len(header))
+        for c in comparisons:
+            b_str = c.baseline_confirm_time.strftime("%H:%M") if c.baseline_confirm_time else "-"
+            ca_str = c.candidate_confirm_time.strftime("%H:%M") if c.candidate_confirm_time else "-"
+            typer.echo(
+                f"{c.local_date.isoformat():<12} {c.kind:<8} "
+                f"{c.actual_wake_local or 'n/a':<8} {b_str:<10} {ca_str:<10} "
+                f"{str(c.latency_min) if c.latency_min is not None else 'n/a':>8} "
+                f"{c.ticks_ge_confirm:>8} {'yes' if c.is_early else ''}"
+            )
+
+    typer.echo(f"\nSummary: {summary_line(comparisons)}")
+
+
+@wake_app.command("annotate")
+def wake_annotate(
+    date_str: str = typer.Argument(..., help="Local date (YYYY-MM-DD)."),
+    actual: str = typer.Option(..., "--actual", help="Actual wake time (HH:MM, 24-hour)."),
+    device_public_id: str | None = typer.Option(None, "--device", help="Device public_id."),
+) -> None:
+    """Record the owner's actual wake time for a local date.
+
+    Updates ``days.actual_wake_local`` for the given date.
+    Idempotent: overwrites any previous annotation.
+    """
+    import datetime as _dt
+    import re
+
+    from sqlmodel import Session, select
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.models.devices import Device
+    from chronos.models.wake import Day
+    from chronos.time import utc_now_iso
+
+    # Validate date.
+    try:
+        _dt.date.fromisoformat(date_str)
+    except ValueError as exc:
+        typer.echo(f"Error: invalid date {date_str!r}: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    # Validate HH:MM.
+    if not re.match(r"^([01][0-9]|2[0-3]):[0-5][0-9]$", actual):
+        typer.echo(
+            f"Error: --actual must be HH:MM (24-hour), e.g. '07:05'; got {actual!r}", err=True
+        )
+        raise typer.Exit(code=1)
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+
+    with Session(engine) as session:
+        # Resolve device.
+        if device_public_id:
+            dev_row = session.exec(  # type: ignore[call-overload]
+                select(Device).where(Device.public_id == device_public_id)
+            ).first()
+        else:
+            devs = list(session.exec(select(Device).where(Device.status == "active")).all())  # type: ignore[call-overload]
+            if len(devs) == 0:
+                typer.echo("Error: no active devices found.", err=True)
+                raise typer.Exit(code=1)
+            if len(devs) > 1:
+                typer.echo("Error: multiple active devices; specify --device.", err=True)
+                raise typer.Exit(code=1)
+            dev_row = devs[0]
+
+        if dev_row is None:
+            typer.echo("Error: device not found.", err=True)
+            raise typer.Exit(code=1)
+        assert dev_row.id is not None
+
+        day = session.exec(  # type: ignore[call-overload]
+            select(Day).where(Day.local_date == date_str, Day.device_id == dev_row.id)
+        ).first()
+        if day is None:
+            typer.echo(
+                f"Error: no day row for {date_str!r}. Has any telemetry been received?", err=True
+            )
+            raise typer.Exit(code=1)
+
+        day.actual_wake_local = actual
+        day.updated_at = utc_now_iso()
+        session.add(day)
+        session.commit()
+
+    typer.echo(f"✓ Annotated {date_str}: actual_wake_local = {actual}")
+
+
+# ── report subgroup ───────────────────────────────────────────────────────────
+report_app = typer.Typer(name="report", help="Report commands (T1.8).", no_args_is_help=True)
+app.add_typer(report_app, name="report")
+
+
+@report_app.command("build")
+def report_build(
+    date_str: str | None = typer.Option(
+        None, "--date", help="Local date (YYYY-MM-DD). Default: yesterday."
+    ),
+    device_public_id: str | None = typer.Option(None, "--device", help="Device public_id."),
+    stdout: bool = typer.Option(
+        False, "--stdout", help="Print to stdout instead of writing to file."
+    ),
+) -> None:
+    """Build the Markdown report for a local date.
+
+    Writes to ``settings.reports_dir/{date}.md`` unless ``--stdout`` is set.
+    """
+    import datetime as _dt
+    from pathlib import Path as _Path
+
+    from sqlmodel import Session, select
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.models.devices import Device
+    from chronos.report.builder import build_day_report, write_day_report
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+
+    # Resolve date.
+    if date_str is None:
+        local_date = _dt.date.today() - _dt.timedelta(days=1)
+    else:
+        try:
+            local_date = _dt.date.fromisoformat(date_str)
+        except ValueError as exc:
+            typer.echo(f"Error: invalid date {date_str!r}: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+    with Session(engine) as session:
+        # Resolve device.
+        if device_public_id:
+            dev_row = session.exec(  # type: ignore[call-overload]
+                select(Device).where(Device.public_id == device_public_id)
+            ).first()
+        else:
+            devs = list(session.exec(select(Device).where(Device.status == "active")).all())  # type: ignore[call-overload]
+            if len(devs) == 0:
+                typer.echo("Error: no active devices found.", err=True)
+                raise typer.Exit(code=1)
+            if len(devs) > 1:
+                typer.echo("Error: multiple active devices; specify --device.", err=True)
+                raise typer.Exit(code=1)
+            dev_row = devs[0]
+
+        if dev_row is None:
+            typer.echo("Error: device not found.", err=True)
+            raise typer.Exit(code=1)
+        assert dev_row.id is not None
+
+        now = _dt.datetime.now(tz=_dt.UTC)
+        try:
+            content = build_day_report(session, dev_row.id, local_date, now)
+        except ValueError as exc:
+            typer.echo(f"Error: {exc}", err=True)
+            raise typer.Exit(code=1) from exc
+
+        if stdout:
+            typer.echo(content)
+            return
+
+        report_path = write_day_report(content, local_date, _Path(settings.reports_dir))
+        typer.echo(f"✓ Report written to {report_path}")
