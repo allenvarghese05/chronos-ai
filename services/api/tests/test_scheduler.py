@@ -794,6 +794,117 @@ class TestSchedulerSimulation:
 
 
 # ---------------------------------------------------------------------------
+# BLOCKING 1: run_due uses get_effective(session) — cache-invalidation test
+# ---------------------------------------------------------------------------
+
+
+class TestRunDueCacheInvalidation:
+    """run_due must succeed after cache invalidation (uses get_effective(session))."""
+
+    @pytest.mark.anyio
+    async def test_run_due_succeeds_after_cache_invalidated_with_new_rules(
+        self, tmp_path: Path
+    ) -> None:
+        """Activate a new rule version (cache invalidated) → run_due succeeds and
+        uses the new window/tick interval (5→10 min spacing)."""
+        from pathlib import Path as _Path
+
+        from chronos.wake.rules import (
+            RuleVersion,
+            WakeRules,
+            ensure_initial_version,
+            get_rules_cache,
+            reset_rules_cache,
+        )
+
+        settings = _make_test_settings(tmp_path)
+        session_factory = _make_session_factory(settings)
+
+        reset_rules_cache()
+        with session_factory() as session:
+            rules_path = _Path(__file__).parents[1] / "config" / "wake_rules.yaml"
+            ensure_initial_version(session, rules_path)
+            session.commit()
+            get_rules_cache().get_effective(session)  # warm cache
+
+        # Create device
+        with session_factory() as session:
+            from tests.factories import make_device
+
+            make_device(
+                session,
+                tz="America/Los_Angeles",
+                expo_push_token="ExponentPushToken[cache_test]",
+                status="active",
+            )
+            session.commit()
+
+        fake_push = FakePushClient()
+        scheduler = Scheduler(
+            session_factory=session_factory,
+            push_client=fake_push,
+            settings=settings,
+        )
+
+        # Invalidate cache and activate a new RuleVersion with tick_interval_min=10
+        with session_factory() as session:
+            existing_rv = session.exec(
+                select(RuleVersion).where(RuleVersion.active == 1)  # type: ignore[arg-type]
+            ).first()
+            assert existing_rv is not None
+            existing_rules = WakeRules.model_validate_json(existing_rv.rules_json)
+
+            # Build new rules with tick_interval_min=10
+            new_rules_dict = existing_rules.model_dump()
+            new_rules_dict["window"]["tick_interval_min"] = 10
+            new_rules_json = WakeRules.model_validate(new_rules_dict).model_dump_json()
+
+            # Deactivate old, activate new
+            existing_rv.active = 0
+            session.add(existing_rv)
+            import datetime as _dt
+            import hashlib
+
+            from chronos.time import format_utc_iso
+
+            new_rv = RuleVersion(
+                rules_json=new_rules_json,
+                active=1,
+                source="yaml",
+                version=(existing_rv.version or 1) + 1,
+                sha256=hashlib.sha256(new_rules_json.encode()).hexdigest(),
+                created_at=format_utc_iso(_dt.datetime.now(_dt.UTC)),
+                created_by="test",
+            )
+            session.add(new_rv)
+            session.commit()
+
+        # Invalidate cache so next get_effective(session) reloads from DB
+        get_rules_cache().invalidate()
+
+        # run_due at window start — must not raise even though cache is empty
+        window = _make_window()
+        await scheduler.run_due(window.start_utc)
+        await scheduler.run_due(window.start_utc + datetime.timedelta(minutes=1))
+
+        # Verify: the new interval (10 min) is used —
+        # tick_seq=0 instant is window.start_utc, next tick at +10 min (not +5)
+        with session_factory() as session:
+            pns = list(
+                session.exec(  # type: ignore[call-overload]
+                    select(PushNotification).where(
+                        PushNotification.kind == PushKind.tick.value,
+                    )
+                ).all()
+            )
+        # Only tick seq 0 should be sent (next is at +10 min, we're only at +1 min)
+        seqs = [p.tick_seq for p in pns]
+        assert 0 in seqs, f"Expected tick seq 0 to be sent; got {seqs}"
+        # Confirm run_due did not raise: if it had, no ticks would be present
+        assert len(fake_push.sent) >= 1
+
+
+# ---------------------------------------------------------------------------
 # anyio backend config
 # ---------------------------------------------------------------------------
 

@@ -268,7 +268,7 @@ class Scheduler:
         if device.expo_push_token is None:
             from zoneinfo import ZoneInfo
 
-            rules, _ = get_rules_cache().get_effective_no_session()
+            rules, _ = get_rules_cache().get_effective(session)
             tz_obj = ZoneInfo(device.tz)
             local_date = local_date_for(now, tz_obj, rules.window.to_window_config().day_boundary)
             local_date_str = local_date.isoformat()
@@ -284,7 +284,7 @@ class Scheduler:
 
         from zoneinfo import ZoneInfo
 
-        rules, _rule_version = get_rules_cache().get_effective_no_session()
+        rules, _rule_version = get_rules_cache().get_effective(session)
         window_cfg = rules.window.to_window_config()
         tz_obj = ZoneInfo(device.tz)
         local_date = local_date_for(now, tz_obj, window_cfg.day_boundary)

@@ -433,19 +433,6 @@ class RulesCache:
             self._rv = rv
             return rules, rv
 
-    def get_effective_no_session(self) -> tuple[WakeRules, RuleVersion]:
-        """Return the cached ``(WakeRules, RuleVersion)`` pair without a DB session.
-
-        Only safe to call after :meth:`get_effective` has been called at least once
-        (i.e. after startup).  Raises :exc:`RuntimeError` if the cache is empty.
-        """
-        with self._lock:
-            if self._rules is not None and self._rv is not None:
-                return self._rules, self._rv
-        raise RuntimeError(
-            "RulesCache is empty. Call get_effective(session) first (during startup)."
-        )
-
     def invalidate(self) -> None:
         """Clear the cache so the next call to :meth:`get_effective` reloads from DB."""
         with self._lock:
