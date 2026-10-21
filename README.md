@@ -70,12 +70,20 @@ project settings (previously `.npmrc`). See `docs/plans/T0.4-plan.md` §2 Design
 ## Setup (macOS, Apple Silicon)
 
 1. Tools: [uv](https://docs.astral.sh/uv/), Node 22 (`.nvmrc`), pnpm via `corepack enable`,
-   `brew install just gitleaks mkcert ffmpeg whisper-cpp ollama`, Xcode 16 with command-line tools.
+   `brew install just gitleaks mkcert shellcheck ffmpeg whisper-cpp ollama`, Xcode 16 with command-line tools.
 2. `just setup` — Python 3.12, semgrep/pre-commit/actionlint pins, hooks, dependencies.
-3. `just models` — Kokoro and whisper model files (checksummed), `ollama pull`, Remotion browser.
-4. `just certs` — local HTTPS certificate; install the printed root CA profile on the iPhone.
-5. `just laptop-setup` — LaunchAgents (API, deploy), `pmset` wake schedule, log directories.
-6. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator;
+3. `just certs` — generate mkcert leaf cert into `data/certs/` (mode 600). Prints a
+   `mkcert -install` banner if the root CA is not yet in the system keychain (requires sudo;
+   run manually once). Install the `data/certs/rootCA.pem` profile on the iPhone.
+4. `just models` — Kokoro ONNX + voices, whisper.cpp model (SHA256-verified against
+   `scripts/models.lock`), `ollama pull qwen2.5:7b-instruct`, Remotion browser.
+   After the first run, copy the printed digest into `ollama_digest` in `justfile`.
+5. `just laptop-setup` — creates `services/api/.env` (mode 600, random `CHRONOS_SECRET_KEY`),
+   renders and loads `com.chronos.api` + `com.chronos.deploy` LaunchAgents, starts Ollama.
+   Prints a RUN-THIS banner for the `sudo pmset repeat` wake schedule (run it manually).
+6. `just doctor` — verify the full system health. All checks should be OK or warn; exit 1
+   means a blocking issue (typically: Ollama model not pulled, cert not generated, or disk full).
+7. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator;
    the app displays "Hello from ChronosSensors!" (Swift native module). Requires Xcode with
    Swift ≥ 6.3.1 (Xcode 17 or newer; verified with Xcode 27.1 / Swift 6.4). Physical device
    install is deferred to T2.4. To override the simulator:
@@ -124,7 +132,8 @@ when asked so `.pi/prompts` become slash commands.
 | pyright | 1.1.414 | `services/api/pyproject.toml` dev deps |
 | pytest | 9.1.1 | `services/api/pyproject.toml` dev deps |
 | bandit | 1.9.4 | `services/api/pyproject.toml` dev deps |
-| Ollama model | qwen2.5:7b-instruct @ digest | justfile `ollama_model`, `ollama_digest` (T0.6) |
+| Ollama model | qwen2.5:7b-instruct @ digest | justfile `ollama_model`, `ollama_digest` (T0.6; set after first `just models`) |
+| shellcheck | brew (latest) | shell script linting for `scripts/*.sh` |
 
 Library versions are pinned by `services/api/uv.lock`, `apps/mobile/pnpm-lock.yaml` and
 `packages/renderer/pnpm-lock.yaml`.

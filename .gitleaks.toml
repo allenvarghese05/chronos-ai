@@ -16,3 +16,19 @@ description = "Generated iOS Pods and xcframework code-signing files (gitignored
 paths = [
   "apps/mobile/ios/",
 ]
+
+[[allowlists]]
+# data/certs/ holds the mkcert-generated TLS private key for the LAN API.
+# This directory is gitignored; the key is intentionally on disk.
+description = "mkcert TLS private key (gitignored, never committed)"
+paths = [
+  "data/certs/",
+]
+
+[[allowlists]]
+# services/api/.env holds CHRONOS_SECRET_KEY and other runtime secrets.
+# This file is gitignored; it is created by scripts/laptop-setup.sh (T0.6).
+description = "API .env runtime secrets (gitignored, never committed)"
+paths = [
+  "services/api/.env",
+]

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.chronos.deploy</string>
+
+    <!-- Run scripts/deploy.sh every 600 seconds (10 minutes) -->
+    <key>StartInterval</key>
+    <integer>600</integer>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__REPO_ROOT__/scripts/deploy.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_ROOT__</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>CHRONOS_ENV</key>
+        <string>prod</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__REPO_ROOT__/data/logs/deploy.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_ROOT__/data/logs/deploy.err.log</string>
+</dict>
+</plist>

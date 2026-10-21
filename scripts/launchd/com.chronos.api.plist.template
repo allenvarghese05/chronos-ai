@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+    "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.chronos.api</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__UV__</string>
+        <string>run</string>
+        <string>--locked</string>
+        <string>chronos</string>
+        <string>serve</string>
+    </array>
+
+    <!-- WorkingDirectory must be services/api (where uv.lock lives) -->
+    <key>WorkingDirectory</key>
+    <string>__REPO_ROOT__/services/api</string>
+
+    <!-- KeepAlive: restart automatically if the process exits -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- RunAtLoad: start on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- ProcessType: Interactive prevents App Nap throttling -->
+    <key>ProcessType</key>
+    <string>Interactive</string>
+
+    <!-- LowPriorityIO: false so DB writes are not deprioritised -->
+    <key>LowPriorityIO</key>
+    <false/>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- Include Homebrew paths so uv, git, etc. are found -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>CHRONOS_ENV</key>
+        <string>prod</string>
+    </dict>
+
+    <!-- Separate stdout/stderr log files (structlog JSON goes to data/logs/api.jsonl) -->
+    <key>StandardOutPath</key>
+    <string>__REPO_ROOT__/data/logs/api.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_ROOT__/data/logs/api.err.log</string>
+</dict>
+</plist>
