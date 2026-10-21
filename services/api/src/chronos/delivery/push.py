@@ -84,6 +84,8 @@ class PushMessage(BaseModel):
 class Ticket(BaseModel):
     """Expo ticket returned from POST /push/send for one message."""
 
+    # extra="allow": Expo may add new fields to tickets in future API versions;
+    # permitting extra fields avoids validation errors on forward-compatible changes.
     model_config = ConfigDict(extra="allow")
 
     status: str  # "ok" | "error"
@@ -95,6 +97,7 @@ class Ticket(BaseModel):
 class Receipt(BaseModel):
     """Expo receipt returned from POST /push/getReceipts for one ticket."""
 
+    # extra="allow": same rationale as Ticket \ Expo may add fields in future API versions.
     model_config = ConfigDict(extra="allow")
 
     status: str  # "ok" | error code
