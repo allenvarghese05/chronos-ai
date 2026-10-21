@@ -13,7 +13,6 @@ The runner also tracks ``confirmed_at_event_index`` and compares it to
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -21,6 +20,7 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from chronos.enums import DayState, EvaluationDecision
+from chronos.wake.replay import load_fixture
 from chronos.wake.rules import WakeRules, load_yaml
 from chronos.wake.scoring import (
     EvalContext,
@@ -40,19 +40,22 @@ assert _ALL_FIXTURES, f"No fixture files found in {FIXTURE_DIR}"
 @pytest.mark.parametrize("fixture_path", _ALL_FIXTURES, ids=lambda p: p.stem)
 def test_morning(fixture_path: Path) -> None:
     """Replay all events in a morning fixture and assert expectations."""
-    data: dict[str, Any] = json.loads(fixture_path.read_text())
+    import json
+
+    fixture = load_fixture(fixture_path)
+    # Keep the raw file for `expect` fields (load_fixture strips them).
+    raw_data: dict[str, Any] = json.loads(fixture_path.read_text())
     rules: WakeRules = load_yaml(RULES_PATH)
-    tz = ZoneInfo(data["tz"])
+    tz = ZoneInfo(fixture.tz)
     window_cfg = rules.window.to_window_config()
 
     prev: PreviousTick | None = None
     ticks_today = 0
     confirmed_at_idx: int | None = None
 
-    for i, event in enumerate(data["events"]):
-        # Remove meta-keys so Signals.model_validate only sees the 17 fields.
-        raw = {k: v for k, v in event.items() if not k.startswith("_") and k != "expect"}
-        signals = Signals.model_validate(raw)
+    for i, event in enumerate(fixture.events):
+        # fixture.events already has meta-keys and "expect" stripped.
+        signals = Signals.model_validate(event)
         device_ts = signals.device_ts
         local_date = local_date_for(device_ts, tz, window_cfg.day_boundary)
         window = window_for(local_date, tz, window_cfg)
@@ -71,7 +74,7 @@ def test_morning(fixture_path: Path) -> None:
         # Use device_ts as "now" for fixture replay.
         evaluation = evaluate(signals, rules, device_ts, ctx)
 
-        exp: dict[str, Any] = event["expect"]
+        exp: dict[str, Any] = raw_data["events"][i]["expect"]
         assert evaluation.gate.value == exp["gate"], (
             f"{fixture_path.stem} event {i}: gate expected={exp['gate']!r} "
             f"got={evaluation.gate.value!r}"
@@ -110,8 +113,8 @@ def test_morning(fixture_path: Path) -> None:
         ticks_today += 1
 
     # Verify day-level expectations.
-    if "expect_day" in data:
-        exp_day: dict[str, Any] = data["expect_day"]
+    if fixture.expect_day is not None:
+        exp_day: dict[str, Any] = fixture.expect_day
         if "confirmed_at_event_index" in exp_day:
             assert confirmed_at_idx == exp_day["confirmed_at_event_index"], (
                 f"{fixture_path.stem}: confirmed_at_event_index expected="

@@ -1607,6 +1607,82 @@
         ]
       }
     },
+    "/v1/report/{local_date_str}": {
+      "get": {
+        "description": "Return the Markdown report for a local date as ``text/markdown``.\n\nServes the pre-written file from ``settings.reports_dir`` if it exists;\notherwise builds the report on-the-fly from the DB (no caching).\n\nArgs:\n    local_date_str: Local date in ``YYYY-MM-DD`` format.\n\nReturns:\n    200 with Markdown content.\n    401 if no valid bearer token provided.\n    404 ``not_found`` if no day row exists for this device + date.\n    422 ``validation`` if date format is invalid.",
+        "operationId": "report_get_report",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "local_date_str",
+            "required": true,
+            "schema": {
+              "title": "Local Date Str",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Report",
+        "tags": [
+          "report"
+        ]
+      }
+    },
     "/v1/telemetry": {
       "post": {
         "description": "Receive, validate, score and store one telemetry snapshot.\n\nReturns:\n    200 with full scoring breakdown and updated day state.\n\nRaises:\n    422 clock_skew: |device_ts - server_now| > 300 s.\n    422 validation: Body exceeds 64 KiB or fails Signals schema.\n    429 rate_limited: > 30 req/min per IP.\n    401 unauthorized: Missing/invalid bearer token.\n    403 revoked: Device revoked.",

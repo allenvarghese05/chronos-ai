@@ -27,7 +27,7 @@ from chronos.enums import DeviceStatus
 from chronos.ids import new_ulid
 from chronos.main import create_app
 from chronos.models.devices import Device
-from chronos.ratelimit import TokenBucket, reset_all
+from chronos.ratelimit import TokenBucket
 from chronos.time import utc_now_iso
 
 
@@ -276,9 +276,15 @@ class TestDeviceRateLimit:
         assert not allowed
         assert retry_after >= 1
 
-    def test_121st_request_returns_429(self, test_settings: Settings) -> None:
-        """121 rapid requests to GET /v1/device/me → 429 on the last."""
-        reset_all()
+    def test_121st_request_returns_429(
+        self, test_settings: Settings, frozen_rate_limit_clocks: None
+    ) -> None:
+        """121 rapid requests to GET /v1/device/me → 429 on the last.
+
+        Uses a frozen monotonic clock (via the ``frozen_rate_limit_clocks``
+        fixture) so the token bucket cannot refill between requests regardless
+        of machine speed.
+        """
         app = create_app(settings=test_settings)
         plain, _ = _insert_device(test_settings)
         with TestClient(app) as c:

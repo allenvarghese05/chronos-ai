@@ -148,6 +148,23 @@ class TokenBucket:
         with self._lock:
             self._buckets.clear()
 
+    def set_clock(self, clock: Callable[[], float]) -> None:
+        """Replace the clock and re-anchor existing bucket timestamps (tests only).
+
+        After replacing the clock, every existing bucket's ``last_refill`` is
+        reset to the new clock's current value so that the next :meth:`check`
+        call sees zero elapsed time instead of a potentially huge or negative
+        delta between the old monotonic epoch and the new fake epoch.
+
+        Args:
+            clock: New callable returning monotonic seconds.
+        """
+        with self._lock:
+            self._clock = clock
+            now = clock()
+            for b in self._buckets.values():
+                b.last_refill = now
+
 
 # Module-level registry maps ``"name:per_minute"`` → ``TokenBucket``.
 # Using a registry ensures that the same name always hits the same bucket,
@@ -167,6 +184,25 @@ def _get_or_create(
         if reg_key not in _registry:
             _registry[reg_key] = TokenBucket(per_minute=per_minute, clock=clock)
         return _registry[reg_key]
+
+
+def set_clock_for(name: str, per_minute: int, clock: Callable[[], float]) -> None:
+    """Override the clock for a registered :class:`TokenBucket` (tests only).
+
+    Calls :meth:`TokenBucket.set_clock` on the bucket identified by the
+    ``name:per_minute`` registry key.  Does nothing if no such bucket is
+    registered yet (the next :func:`rate_limit` call will use the given clock).
+
+    Args:
+        name:       Logical limiter name (e.g. ``"default"``, ``"pairing"``).
+        per_minute: Rate associated with the bucket to update.
+        clock:      New injectable clock to install.
+    """
+    reg_key = f"{name}:{per_minute}"
+    with _registry_lock:
+        bucket = _registry.get(reg_key)
+    if bucket is not None:
+        bucket.set_clock(clock)
 
 
 def reset_all() -> None:

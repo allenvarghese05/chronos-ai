@@ -137,6 +137,17 @@ Response `422 rules_invalid` (problem+json) with `"errors": [{"loc": [...], "msg
 ### `GET /v1/jobs?status=&limit=` → job list for the debug panel.
 ### `GET /v1/report/{local_date}` → the nightly Markdown report as text.
 
+**Auth:** Bearer device token required.
+**Response:** `200 text/markdown; charset=utf-8` with the Markdown report.
+  Serves the pre-written file from `data/logs/reports/{date}.md` if it exists;
+  otherwise builds on-the-fly from the DB (no caching).
+**Errors:** `401` no token, `404 not_found` if no `days` row, `422 validation` if date format invalid.
+
+Report sections: header (date, kind, timezone, window), state (status, confirm time, actual wake,
+latency, G1 pass/fail), tick counts (sent/received/evaluations/deduped/outside_window), score
+timeline table, Unicode sparkline (▁▂▃▄▅▆▇█, fixed 0-100 scale), state transitions, push
+notification summary, scoring metadata (rule version + sha256), and anomaly notes.
+
 ## 5. Health
 
 - `GET /healthz` → `{ "ok": true, "version": "0.3.1" }` (no auth; liveness).

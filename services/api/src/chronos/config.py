@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     # ── logging ─────────────────────────────────────────────────────────────
     log_dir: Path = Path("data/logs")
 
+    # ── reports ──────────────────────────────────────────────────────────────
+    #: Directory where nightly Markdown reports are written.
+    #: Relative paths are resolved from the working directory at runtime.
+    reports_dir: Path = Path("data/logs/reports")
+
     # ── tool endpoints ───────────────────────────────────────────────────────
     ollama_endpoint: str = "http://localhost:11434"
     llm_provider: str = "ollama"

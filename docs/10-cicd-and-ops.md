@@ -141,9 +141,12 @@ before `launchctl bootstrap`.
   `chronos_telemetry_received_total{source}`, `chronos_wake_score` (last), `chronos_day_state`,
   `chronos_push_errors_total`, process RSS. Scraped by nothing by default; visible in the debug
   screen through `/v1/report`.
-- Nightly report `data/logs/reports/<date>.md`: timeline of ticks/scores, confirm time vs actual,
-  pipeline stage durations, failures, source health, disk usage. Also posted as a visible push if
-  there was a failure (`kind=report`, opt-in).
+- Nightly report `data/logs/reports/<date>.md`: written by the scheduler after 03:00 local + 15 min
+  grace for the previous day; also buildable on-demand via `chronos report build --date <date>` or
+  served by `GET /v1/report/<date>`. Content: score timeline (Unicode sparkline, fixed 0-100 scale),
+  state transitions, push counts, anomaly flags (force-quit, pedometer denied, ticks lost),
+  G1 pass/fail. Report retention policy: files live indefinitely until T5.1 purges old ones.
+  Pipeline stage durations will be added in M3/M4.
 - `chronos doctor` (`just doctor`) — implemented in `services/api/src/chronos/ops/doctor.py`
   with fully injectable probes (no subprocess calls in tests). Checks:
 
