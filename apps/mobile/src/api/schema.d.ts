@@ -238,6 +238,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/report/{local_date_str}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Report
+         * @description Return the Markdown report for a local date as ``text/markdown``.
+         *
+         *     Serves the pre-written file from ``settings.reports_dir`` if it exists;
+         *     otherwise builds the report on-the-fly from the DB (no caching).
+         *
+         *     Args:
+         *         local_date_str: Local date in ``YYYY-MM-DD`` format.
+         *
+         *     Returns:
+         *         200 with Markdown content.
+         *         401 if no valid bearer token provided.
+         *         404 ``not_found`` if no day row exists for this device + date.
+         *         422 ``validation`` if date format is invalid.
+         */
+        get: operations["report_get_report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/telemetry": {
         parameters: {
             query?: never;
@@ -1193,6 +1225,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_get_report: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                local_date_str: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
                 };
             };
         };
