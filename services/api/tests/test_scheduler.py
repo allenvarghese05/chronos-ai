@@ -944,7 +944,7 @@ class TestRunDuePerDeviceErrorIsolation:
 
         window = _make_window()
 
-        original_process = scheduler._process_device  # type: ignore[reportPrivateUsage]
+        original_process = scheduler._process_device  # type: ignore[reportPrivateUsage]  # patching private method in test only
 
         async def patched_process(session: object, device: object, now: object) -> None:
             from chronos.models.devices import Device as _Dev
