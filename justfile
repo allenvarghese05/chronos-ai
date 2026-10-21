@@ -72,6 +72,13 @@ laptop-setup:
     if [ ! -x scripts/laptop-setup.sh ]; then echo "scripts/laptop-setup.sh not yet implemented (T0.6), skipping"; exit 0; fi
     scripts/laptop-setup.sh
 
+# Run laptop-setup.sh --dry-run smoke tests (no files written). (T0.6)
+test-dry-run:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{justfile_directory()}}"
+    bash scripts/tests/test_laptop_setup_dry_run.sh
+
 # ───────────────────────────── check ─────────────────────────────
 
 # Lint every app (ruff; biome ci).

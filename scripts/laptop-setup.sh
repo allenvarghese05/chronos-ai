@@ -13,7 +13,8 @@
 #   A. mkcert -install (handled inside scripts/certs.sh)
 #   B. pmset repeat (wake schedule)
 #
-# Usage: scripts/laptop-setup.sh [--skip-certs] [--skip-plists]
+# Usage: scripts/laptop-setup.sh [--skip-certs] [--skip-plists] [--dry-run]
+#   --dry-run  Print every action without writing files, calling launchctl/brew/sudo.
 #
 # After running this script, manually complete the owner checklist printed at the end.
 
@@ -25,11 +26,13 @@ LAUNCHAGENTS_DIR="${HOME}/Library/LaunchAgents"
 
 SKIP_CERTS=0
 SKIP_PLISTS=0
+DRY_RUN=0
 
 for arg in "$@"; do
     case "$arg" in
         --skip-certs)  SKIP_CERTS=1  ;;
         --skip-plists) SKIP_PLISTS=1 ;;
+        --dry-run)     DRY_RUN=1     ;;
         *) echo "Unknown argument: $arg" >&2; exit 1 ;;
     esac
 done
@@ -38,6 +41,15 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "  → $*"; }
 ok()   { echo "  ✓ $*"; }
 warn() { echo "  ⚠ $*"; }
+
+# dry: in --dry-run mode, print the command instead of running it.
+dry() {
+    if [ "${DRY_RUN}" = "1" ]; then
+        echo "  [dry-run] $*"
+        return 0
+    fi
+    "$@"
+}
 
 is_interactive() { [ -t 0 ] && [ -t 1 ]; }
 
@@ -51,8 +63,11 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Create data directories
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "${DRY_RUN}" = "1" ]; then
+    echo "  [dry-run] mode enabled — no files will be written, no services started."
+fi
 echo "Step 1: Creating data directories..."
-mkdir -p \
+dry mkdir -p \
     "${REPO_ROOT}/data/logs" \
     "${REPO_ROOT}/data/models/kokoro" \
     "${REPO_ROOT}/data/models/whisper" \
@@ -68,6 +83,9 @@ ENV_FILE="${REPO_ROOT}/services/api/.env"
 if [ ! -f "${ENV_FILE}" ]; then
     info "Creating ${ENV_FILE} from template..."
 
+    if [ "${DRY_RUN}" = "1" ]; then
+        echo "  [dry-run] Would create ${ENV_FILE} with random CHRONOS_SECRET_KEY"
+    else
     # Detect LAN IP
     LAN_IP="${CHRONOS_LAN_IP:-$(ipconfig getifaddr en0 2>/dev/null || echo "127.0.0.1")}"
     HOSTNAME_LOCAL="$(scutil --get LocalHostName 2>/dev/null || echo "allen-macbook").local"
@@ -110,9 +128,10 @@ EOF
     chmod 600 "${ENV_FILE}"
     ok ".env created with random secret key (mode 600)."
     info "Detected LAN IP: ${LAN_IP} — verify this is correct."
+    fi  # end dry-run guard
 else
     # Ensure .env is mode 600
-    chmod 600 "${ENV_FILE}"
+    dry chmod 600 "${ENV_FILE}"
     ok ".env already exists (mode set to 600)."
 fi
 
@@ -123,7 +142,7 @@ echo "Step 3: Generating TLS certificates..."
 if [ "${SKIP_CERTS}" = "1" ]; then
     warn "Skipping cert generation (--skip-certs)."
 else
-    bash "${SCRIPT_DIR}/certs.sh"
+    dry bash "${SCRIPT_DIR}/certs.sh"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -134,7 +153,7 @@ echo "Step 4: Installing LaunchAgent plists..."
 if [ "${SKIP_PLISTS}" = "1" ]; then
     warn "Skipping plist installation (--skip-plists)."
 else
-    mkdir -p "${LAUNCHAGENTS_DIR}"
+    dry mkdir -p "${LAUNCHAGENTS_DIR}"
 
     # Detect uv binary path
     UV_BIN="$(command -v uv || echo "/opt/homebrew/bin/uv")"
@@ -145,26 +164,32 @@ else
 
         [ -f "${TEMPLATE}" ] || die "Template not found: ${TEMPLATE}"
 
-        # Render template: replace __REPO_ROOT__, __HOME__, __UV__
-        sed \
-            -e "s|__REPO_ROOT__|${REPO_ROOT}|g" \
-            -e "s|__HOME__|${HOME}|g" \
-            -e "s|__UV__|${UV_BIN}|g" \
-            "${TEMPLATE}" > "${DEST}"
+        if [ "${DRY_RUN}" = "1" ]; then
+            echo "  [dry-run] Would render ${TEMPLATE} → ${DEST}"
+            echo "  [dry-run] Would run: launchctl bootout gui/${UID} ${DEST}"
+            echo "  [dry-run] Would run: launchctl bootstrap gui/${UID} ${DEST}"
+        else
+            # Render template: replace __REPO_ROOT__, __HOME__, __UV__
+            sed \
+                -e "s|__REPO_ROOT__|${REPO_ROOT}|g" \
+                -e "s|__HOME__|${HOME}|g" \
+                -e "s|__UV__|${UV_BIN}|g" \
+                "${TEMPLATE}" > "${DEST}"
 
-        # Validate the rendered plist (macOS built-in)
-        if ! plutil -lint "${DEST}" >/dev/null 2>&1; then
-            die "plutil -lint failed for ${DEST}. This is a bug in the template."
+            # Validate the rendered plist (macOS built-in)
+            if ! plutil -lint "${DEST}" >/dev/null 2>&1; then
+                die "plutil -lint failed for ${DEST}. This is a bug in the template."
+            fi
+
+            info "Rendered and validated: ${DEST}"
+
+            # Unload if already loaded (idempotent); ignore errors
+            launchctl bootout "gui/${UID}" "${DEST}" 2>/dev/null || true
+
+            # Load the agent
+            launchctl bootstrap "gui/${UID}" "${DEST}"
+            ok "Loaded: com.chronos.${AGENT}"
         fi
-
-        info "Rendered and validated: ${DEST}"
-
-        # Unload if already loaded (idempotent); ignore errors
-        launchctl bootout "gui/${UID}" "${DEST}" 2>/dev/null || true
-
-        # Load the agent
-        launchctl bootstrap "gui/${UID}" "${DEST}"
-        ok "Loaded: com.chronos.${AGENT}"
     done
 fi
 
@@ -173,7 +198,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 echo "Step 5: Starting Ollama..."
 if command -v brew >/dev/null 2>&1; then
-    brew services start ollama 2>/dev/null || true
+    dry brew services start ollama
     ok "Ollama service started (or already running)."
 else
     warn "brew not found; start Ollama manually: ollama serve"
@@ -192,7 +217,7 @@ if pmset -g sched 2>/dev/null | grep -q "05:25"; then
 else
     if is_interactive; then
         echo "  Setting wake schedule (requires sudo)..."
-        sudo pmset repeat wakeorpoweron MTWRF 05:25:00 SU 07:25:00
+        dry sudo pmset repeat wakeorpoweron MTWRF 05:25:00 SU 07:25:00
         ok "Wake schedule set."
     else
         echo ""
