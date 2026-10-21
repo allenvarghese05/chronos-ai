@@ -1,4 +1,4 @@
-"""Chronos-AI scheduler: pure planner + asyncio Scheduler class (T1.7).
+"""Chronos-AI scheduler: pure planner + asyncio Scheduler class (T1.7 / T1.8).
 
 Architecture
 ------------
@@ -15,6 +15,7 @@ Public API
 - :class:`StartMonitoring` — transition idle → monitoring.
 - :class:`SendTick`        — send one silent push tick.
 - :class:`Fallback`        — transition monitoring → fallback at window end.
+- :class:`WriteReport`     — write the nightly Markdown report (T1.8).
 - :class:`Noop`            — no action; carries a reason string.
 - :data:`Action`           — union type of all actions.
 - :func:`plan`             — pure planner; no I/O.
@@ -73,13 +74,21 @@ class Fallback:
 
 
 @dataclass(frozen=True)
+class WriteReport:
+    """Write the nightly Markdown report for *local_date* (T1.8)."""
+
+    local_date: datetime.date
+    device_id: int
+
+
+@dataclass(frozen=True)
 class Noop:
     """No action required; *reason* is for logging."""
 
     reason: str
 
 
-Action = StartMonitoring | SendTick | Fallback | Noop
+Action = StartMonitoring | SendTick | Fallback | WriteReport | Noop
 
 # ---------------------------------------------------------------------------
 # Pure planner
@@ -327,6 +336,8 @@ class Scheduler:
                 )
             elif isinstance(action, Fallback):
                 await self._do_fallback(session, device, day, now)
+            elif isinstance(action, WriteReport):
+                pass  # WriteReport is executed by run_reports(), not _process_device()
             else:
                 log.debug(
                     "scheduler_noop",
@@ -636,6 +647,90 @@ class Scheduler:
     # run_forever
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # run_reports (T1.8)
+    # ------------------------------------------------------------------
+
+    async def run_reports(self, now: datetime.datetime) -> None:
+        """After the day boundary + 15 min grace, write previous day's report once.
+
+        Called from :meth:`run_forever` after every ``run_due`` cycle.
+        Idempotent: skips if the report file already exists.
+        No-op if ``settings.reports_dir`` is not configured.
+        """
+        with self._session_factory() as session:
+            devices: list[Device] = list(
+                session.exec(  # type: ignore[call-overload]
+                    select(Device).where(Device.status == "active")
+                ).all()
+            )
+            for device in devices:
+                try:
+                    await self._write_device_report(session, device, now)
+                except Exception:
+                    log.exception("scheduler_report_error", device_id=device.id)
+            session.commit()
+
+    async def _write_device_report(
+        self,
+        session: Session,
+        device: Device,
+        now: datetime.datetime,
+    ) -> None:
+        """Write previous day's report if the day boundary + 15 min grace has passed."""
+        from pathlib import Path as _Path
+        from zoneinfo import ZoneInfo
+
+        from chronos.report.builder import build_day_report, write_day_report
+
+        rules, _ = get_rules_cache().get_effective(session)
+        window_cfg = rules.window.to_window_config()
+        tz_obj = ZoneInfo(device.tz)
+
+        # "Today" in device-local time; previous day is what we report.
+        today_local = local_date_for(now, tz_obj, window_cfg.day_boundary)
+        prev_local = today_local - datetime.timedelta(days=1)
+        prev_local_str = prev_local.isoformat()
+
+        # Check if past boundary + 15 min grace (boundary = day_boundary in local time).
+        boundary_time = window_cfg.day_boundary  # datetime.time
+        boundary_local = datetime.datetime(
+            today_local.year,
+            today_local.month,
+            today_local.day,
+            boundary_time.hour,
+            boundary_time.minute,
+            tzinfo=tz_obj,
+        )
+        grace = datetime.timedelta(minutes=15)
+        if now < boundary_local.astimezone(datetime.UTC) + grace:
+            return  # not yet time
+
+        # Idempotency: skip if file already exists.
+        reports_dir = _Path(self._settings.reports_dir)
+        report_file = reports_dir / f"{prev_local_str}.md"
+        if report_file.exists():
+            return
+
+        # Require a day row; skip if none (device may be new).
+        assert device.id is not None
+        day = session.exec(  # type: ignore[call-overload]
+            select(Day).where(
+                Day.local_date == prev_local_str,
+                Day.device_id == device.id,
+            )
+        ).first()
+        if day is None:
+            return
+
+        content = build_day_report(session, device.id, prev_local, now)
+        write_day_report(content, prev_local, reports_dir)
+        log.info(
+            "scheduler_report_written",
+            local_date=prev_local_str,
+            device_id=device.id,
+        )
+
     async def run_forever(self, stop_event: asyncio.Event) -> None:
         """Main loop: run_due every 60 s, run_receipts every 15 min.
 
@@ -658,6 +753,11 @@ class Scheduler:
                 except Exception:
                     log.exception("scheduler_run_receipts_error")
                 last_receipts_check = now
+
+            try:
+                await self.run_reports(now)
+            except Exception:
+                log.exception("scheduler_run_reports_error")
 
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=60.0)
