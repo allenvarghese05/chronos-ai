@@ -536,13 +536,9 @@ class Scheduler:
                     local_date=day.local_date,
                     reason="DeviceNotRegistered",
                 )
-            elif error == "MessageRateExceeded":
-                log.warning(
-                    "tick_rate_limited",
-                    device_id=device.id,
-                    local_date=day.local_date,
-                    tick_seq=tick_seq,
-                )
+            # MessageRateExceeded: the error is stored in push_notifications; on the
+            # next run_due the rate-limited seq will be in sent_tick_seqs, so plan()
+            # skips it and advances to the next tick instant (one interval later).
 
         session.flush()
 

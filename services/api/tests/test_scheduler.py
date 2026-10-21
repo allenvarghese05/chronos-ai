@@ -794,6 +794,103 @@ class TestSchedulerSimulation:
 
 
 # ---------------------------------------------------------------------------
+# MINOR 4: MessageRateExceeded backoff — 1-min loop simulation
+# ---------------------------------------------------------------------------
+
+
+class TestRateLimitedBackoffSimulation:
+    """1-min loop: rate-limit at 06:10 -> no send 06:11-06:14, send at 06:15."""
+
+    @pytest.mark.anyio
+    async def test_rate_limited_suppresses_sends_until_next_interval(self, tmp_path: Path) -> None:
+        """MessageRateExceeded at 06:10 -> no sends 06:11-06:14; send at 06:15.
+
+        Test must FAIL if the suppression is removed (i.e. if _get_sent_tick_seqs
+        were changed to exclude error-status rows from sent_tick_seqs, so that the
+        rate-limited seq would not appear in sent and plan() would re-send it).
+        """
+        settings = _make_test_settings(tmp_path)
+        session_factory = _make_session_factory(settings)
+
+        from chronos.wake.rules import ensure_initial_version, get_rules_cache, reset_rules_cache
+
+        reset_rules_cache()
+        with session_factory() as session:
+            rules_path = Path(__file__).parents[1] / "config" / "wake_rules.yaml"
+            ensure_initial_version(session, rules_path)
+            session.commit()
+            get_rules_cache().get_effective(session)
+
+        with session_factory() as session:
+            from tests.factories import make_device
+
+            make_device(
+                session,
+                tz="America/Los_Angeles",
+                expo_push_token="ExponentPushToken[rl_backoff]",
+                status="active",
+            )
+            session.commit()
+
+        # outcomes: StartMonitoring (no push), tick 0=ok, tick 1=ok,
+        #           tick 2=MessageRateExceeded, tick 3=ok
+        fake_push = FakePushClient(outcomes=["ok", "ok", "MessageRateExceeded", "ok"])
+        scheduler = Scheduler(
+            session_factory=session_factory,
+            push_client=fake_push,
+            settings=settings,
+        )
+
+        # 5-min interval window: ticks at 06:00, 06:05, 06:10, 06:15, ...
+        # America/Los_Angeles PDT = UTC-7; 06:00 LA = 13:00 UTC
+        window = _make_window()
+        # tick2 at 06:10 is rate-limited; tick3 at 06:15 is the first send after backoff
+        tick3 = window.start_utc + datetime.timedelta(minutes=15)
+
+        local_date = WEEKDAY_DATE.isoformat()
+
+        # Step the scheduler in 1-min increments from 05:59 to 06:16
+        start_sim = window.start_utc - datetime.timedelta(minutes=1)
+        end_sim = tick3 + datetime.timedelta(minutes=1)
+        current = start_sim
+        while current <= end_sim:
+            await scheduler.run_due(current)
+            current += datetime.timedelta(minutes=1)
+
+        # Verify sends recorded in push_notifications
+        with session_factory() as session:
+            pns = list(
+                session.exec(  # type: ignore[call-overload]
+                    select(PushNotification)
+                    .where(
+                        PushNotification.kind == PushKind.tick.value,
+                        PushNotification.local_date == local_date,
+                    )
+                    .order_by(PushNotification.tick_seq)  # type: ignore[union-attr]
+                ).all()
+            )
+
+        seqs = [p.tick_seq for p in pns]
+        statuses = {p.tick_seq: p.ticket_status for p in pns}
+        errors = {p.tick_seq: p.error for p in pns}
+
+        # seq 0 and 1 ok
+        assert 0 in seqs and statuses[0] == "ok", f"seq 0 should be ok; got {statuses}"
+        assert 1 in seqs and statuses[1] == "ok", f"seq 1 should be ok; got {statuses}"
+
+        # seq 2 rate-limited (error recorded, seq consumed)
+        assert 2 in seqs, f"seq 2 (rate-limited) should be recorded; seqs={seqs}"
+        assert errors[2] == "MessageRateExceeded", f"seq 2 error wrong: {errors[2]}"
+
+        # seq 3 sent after backoff (at 06:15, one interval after rate-limit at 06:10)
+        assert 3 in seqs, f"seq 3 should be sent at 06:15 after rate-limit backoff; seqs={seqs}"
+        assert statuses[3] == "ok", f"seq 3 should be ok; got {statuses.get(3)}"
+
+        # Only seqs 0,1,2,3 should appear (no 06:11-06:14 sends since they are not tick instants)
+        assert set(seqs) <= {0, 1, 2, 3}, f"Unexpected seqs: {set(seqs) - {0, 1, 2, 3}}"
+
+
+# ---------------------------------------------------------------------------
 # MINOR 2: run_due per-device try/except — one device error does not stop others
 # ---------------------------------------------------------------------------
 
