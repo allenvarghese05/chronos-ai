@@ -16,6 +16,15 @@
 		}
 	},
 	"files": {
-		"includes": ["**", "!node_modules", "!.expo", "!.expo-export", "!ios", "!android", "!dist"]
+		"includes": [
+			"**",
+			"!node_modules",
+			"!.expo",
+			"!.expo-export",
+			"!ios",
+			"!android",
+			"!dist",
+			"!src/api/schema.d.ts"
+		]
 	}
 }

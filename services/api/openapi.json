@@ -1,0 +1,1678 @@
+{
+  "components": {
+    "schemas": {
+      "ActualWakeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "actual_wake_local": {
+            "title": "Actual Wake Local",
+            "type": "string"
+          }
+        },
+        "required": [
+          "actual_wake_local"
+        ],
+        "title": "ActualWakeBody",
+        "type": "object"
+      },
+      "BonusConsecutive": {
+        "additionalProperties": false,
+        "description": "Consecutive-tick bonus configuration.",
+        "properties": {
+          "points": {
+            "minimum": 0.0,
+            "title": "Points",
+            "type": "integer"
+          },
+          "ticks": {
+            "minimum": 2.0,
+            "title": "Ticks",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ticks",
+          "points"
+        ],
+        "title": "BonusConsecutive",
+        "type": "object"
+      },
+      "ConfigWakeResponse": {
+        "additionalProperties": false,
+        "description": "Response body for GET /v1/config/wake.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/WakeRules"
+          },
+          "sha256": {
+            "title": "Sha256",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "yaml_sha256": {
+            "title": "Yaml Sha256",
+            "type": "string"
+          },
+          "yaml_stale": {
+            "title": "Yaml Stale",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "version",
+          "source",
+          "rules",
+          "sha256",
+          "yaml_sha256",
+          "yaml_stale",
+          "created_at",
+          "created_by"
+        ],
+        "title": "ConfigWakeResponse",
+        "type": "object"
+      },
+      "DayResponse": {
+        "additionalProperties": false,
+        "description": "Response schema for all day endpoints.",
+        "properties": {
+          "actual_wake_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Wake Local"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "delivered_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered At"
+          },
+          "fallback_used": {
+            "title": "Fallback Used",
+            "type": "boolean"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "reel": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reel"
+          },
+          "score_timeline": {
+            "items": {
+              "$ref": "#/components/schemas/ScoreTimelinePoint"
+            },
+            "title": "Score Timeline",
+            "type": "array"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "ticks_received": {
+            "title": "Ticks Received",
+            "type": "integer"
+          },
+          "ticks_sent": {
+            "title": "Ticks Sent",
+            "type": "integer"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "window": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Window",
+            "type": "object"
+          }
+        },
+        "required": [
+          "local_date",
+          "kind",
+          "tz",
+          "window",
+          "state",
+          "confirmed_at",
+          "delivered_at",
+          "fallback_used",
+          "ticks_sent",
+          "ticks_received",
+          "reel",
+          "score_timeline",
+          "actual_wake_local"
+        ],
+        "title": "DayResponse",
+        "type": "object"
+      },
+      "DeviceInfo": {
+        "additionalProperties": false,
+        "description": "Device metadata sent at pairing time.",
+        "properties": {
+          "app_version": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "App Version",
+            "type": "string"
+          },
+          "ios_version": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Ios Version",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "tz": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "model",
+          "ios_version",
+          "app_version",
+          "tz"
+        ],
+        "title": "DeviceInfo",
+        "type": "object"
+      },
+      "DevicePatch": {
+        "additionalProperties": false,
+        "description": "Partial update body for ``PATCH /v1/device/me``.\n\nAll fields are optional; only supplied fields are written.\n``extra=\"forbid\"`` causes a 422 if unknown fields are sent.",
+        "properties": {
+          "app_version": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Version"
+          },
+          "expo_push_token": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expo Push Token"
+          },
+          "ios_version": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ios Version"
+          },
+          "tz": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tz"
+          }
+        },
+        "title": "DevicePatch",
+        "type": "object"
+      },
+      "DeviceResponse": {
+        "additionalProperties": false,
+        "description": "Device record returned by GET and PATCH (no token field).",
+        "properties": {
+          "app_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "App Version"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "expo_push_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expo Push Token"
+          },
+          "ios_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ios Version"
+          },
+          "last_seen_at": {
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "name",
+          "model",
+          "ios_version",
+          "app_version",
+          "tz",
+          "expo_push_token",
+          "status",
+          "created_at",
+          "last_seen_at",
+          "revoked_at"
+        ],
+        "title": "DeviceResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "PairRequest": {
+        "additionalProperties": false,
+        "description": "Body of ``POST /v1/pair``.",
+        "properties": {
+          "code": {
+            "maxLength": 9,
+            "minLength": 8,
+            "title": "Code",
+            "type": "string"
+          },
+          "device": {
+            "$ref": "#/components/schemas/DeviceInfo"
+          }
+        },
+        "required": [
+          "code",
+          "device"
+        ],
+        "title": "PairRequest",
+        "type": "object"
+      },
+      "PairResponse": {
+        "description": "201 response body of ``POST /v1/pair``.",
+        "properties": {
+          "api_base": {
+            "title": "Api Base",
+            "type": "string"
+          },
+          "device_id": {
+            "title": "Device Id",
+            "type": "string"
+          },
+          "server_time": {
+            "title": "Server Time",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "device_id",
+          "token",
+          "api_base",
+          "server_time"
+        ],
+        "title": "PairResponse",
+        "type": "object"
+      },
+      "Penalty": {
+        "additionalProperties": false,
+        "description": "One scoring penalty.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "points": {
+            "maximum": 0.0,
+            "title": "Points",
+            "type": "integer"
+          },
+          "when": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              ]
+            },
+            "title": "When",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "when",
+          "points"
+        ],
+        "title": "Penalty",
+        "type": "object"
+      },
+      "Problem": {
+        "additionalProperties": true,
+        "description": "RFC 9457 problem+json response body (OpenAPI component schema \u2014 T0.7).\n\nUsed as the ``model=`` reference in ``responses=`` on authenticated routers\nso that FastAPI generates a shared ``Problem`` component in the OpenAPI schema.\nActual error responses are produced by :func:`make_problem` (not validated\nthrough this model at runtime).",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "unauthorized"
+            ],
+            "title": "Code"
+          },
+          "detail": {
+            "examples": [
+              "Missing or malformed Authorization header."
+            ],
+            "title": "Detail",
+            "type": "string"
+          },
+          "instance": {
+            "examples": [
+              "/v1/device/me"
+            ],
+            "title": "Instance",
+            "type": "string"
+          },
+          "status": {
+            "examples": [
+              401
+            ],
+            "title": "Status",
+            "type": "integer"
+          },
+          "title": {
+            "examples": [
+              "Unauthorized"
+            ],
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "examples": [
+              "urn:chronos:error:unauthorized"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance"
+        ],
+        "title": "Problem",
+        "type": "object"
+      },
+      "Rule": {
+        "additionalProperties": false,
+        "description": "One scoring rule.\n\n``points`` is a list of ``[threshold, points]`` rows; the first row\nwhose threshold is satisfied awards its points.",
+        "properties": {
+          "bonus_consecutive": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BonusConsecutive"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "cap": {
+            "minimum": 0.0,
+            "title": "Cap",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "points": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Points",
+            "type": "array"
+          },
+          "requires": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requires"
+          },
+          "signal": {
+            "title": "Signal",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "signal",
+          "points",
+          "cap"
+        ],
+        "title": "Rule",
+        "type": "object"
+      },
+      "ScoreTimelinePoint": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "at",
+          "score"
+        ],
+        "title": "ScoreTimelinePoint",
+        "type": "object"
+      },
+      "TelemetryResponse": {
+        "additionalProperties": false,
+        "description": "Response body for POST /v1/telemetry (docs/05-api-contracts.md \u00a72).",
+        "properties": {
+          "breakdown": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "confirm_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Reason"
+          },
+          "consecutive_high": {
+            "title": "Consecutive High",
+            "type": "integer"
+          },
+          "day_state": {
+            "title": "Day State",
+            "type": "string"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "evaluation_id": {
+            "title": "Evaluation Id",
+            "type": "integer"
+          },
+          "gate": {
+            "title": "Gate",
+            "type": "string"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "next_tick_in_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Tick In Sec"
+          },
+          "penalties": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Penalties",
+            "type": "array"
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "threshold": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Threshold",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evaluation_id",
+          "local_date",
+          "gate",
+          "score",
+          "decision",
+          "confirm_reason",
+          "threshold",
+          "consecutive_high",
+          "rule_version",
+          "breakdown",
+          "penalties",
+          "day_state",
+          "next_tick_in_sec"
+        ],
+        "title": "TelemetryResponse",
+        "type": "object"
+      },
+      "Thresholds": {
+        "additionalProperties": false,
+        "description": "Scoring threshold configuration.",
+        "properties": {
+          "confirm": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Confirm",
+            "type": "integer"
+          },
+          "confirm_max_gap_min": {
+            "default": 12,
+            "maximum": 60.0,
+            "minimum": 2.0,
+            "title": "Confirm Max Gap Min",
+            "type": "integer"
+          },
+          "dedupe_min": {
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Dedupe Min",
+            "type": "integer"
+          },
+          "strong": {
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Strong",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirm",
+          "strong",
+          "dedupe_min"
+        ],
+        "title": "Thresholds",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WakeRules": {
+        "additionalProperties": false,
+        "description": "Complete wake-engine rules document.\n\n``version`` is the schema/document version (integer, monotonically\nincreasing in the DB).  It is **not** the DB ``RuleVersion.version``\ncolumn \u2014 that is assigned by :func:`activate_new_version`.",
+        "properties": {
+          "penalties": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/Penalty"
+            },
+            "title": "Penalties",
+            "type": "array"
+          },
+          "reweight_without_pedometer": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "Reweight Without Pedometer",
+            "type": "object"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/Thresholds"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "window": {
+            "$ref": "#/components/schemas/WakeRulesWindow"
+          }
+        },
+        "required": [
+          "version",
+          "window",
+          "thresholds",
+          "rules"
+        ],
+        "title": "WakeRules",
+        "type": "object"
+      },
+      "WakeRulesWindow": {
+        "additionalProperties": false,
+        "description": "Window section of ``wake_rules.yaml``.\n\nParses the nested ``weekday: {start, end}`` / ``weekend: {start, end}``\nshape from the YAML file and exposes :meth:`to_window_config` for the\nscoring engine.\n\n``holidays_as_weekend`` is a list of ISO-8601 date strings (e.g.\n``\"2026-12-25\"``); invalid dates raise a ``ValueError``.",
+        "properties": {
+          "day_boundary": {
+            "default": "03:00",
+            "title": "Day Boundary",
+            "type": "string"
+          },
+          "holidays_as_weekend": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Holidays As Weekend",
+            "type": "array"
+          },
+          "tick_interval_min": {
+            "default": 5,
+            "maximum": 30.0,
+            "minimum": 2.0,
+            "title": "Tick Interval Min",
+            "type": "integer"
+          },
+          "weekday": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Weekday",
+            "type": "object"
+          },
+          "weekend": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Weekend",
+            "type": "object"
+          }
+        },
+        "required": [
+          "weekday",
+          "weekend"
+        ],
+        "title": "WakeRulesWindow",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Behavioural wake detection + morning reel delivery.",
+    "title": "Chronos-AI API",
+    "version": "0.0.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Return ``{\"ok\": true, \"version\": \"<version>\"}`` with HTTP 200.\n\nThis endpoint never checks external dependencies; a 200 means the process\nis running and imports are intact.",
+        "operationId": "health_healthz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Healthz",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Return readiness of the service and its dependencies.\n\nHTTP 200 when all checks pass; HTTP 503 when any check fails.\nResponse body always contains ``{\"ok\": bool, \"db\": \"<status>\"}``.",
+        "operationId": "health_readyz",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/config/wake": {
+      "get": {
+        "description": "Return the currently active wake-engine rule version.\n\nRaises:\n    :class:`~chronos.errors.ProblemException` 500 if no active version\n        exists (startup guard should prevent this in prod).",
+        "operationId": "config_get_config_wake",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigWakeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config Wake",
+        "tags": [
+          "config"
+        ]
+      },
+      "put": {
+        "description": "Validate and activate a new WakeRules document.\n\nRaw request bytes are read so that both the Content-Length pre-check AND\nan actual ``len(raw) > _MAX_BODY_BYTES`` guard cover chunked transfers\nwhere ``Content-Length`` is absent.  The bytes are decoded with\n``json.loads`` before Pydantic validation so that malformed JSON surfaces\nas ``422 rules_invalid`` rather than a bare 400.\nRequests exceeding ``_MAX_BODY_BYTES`` are rejected with **413**.\n\nReturns:\n    ``200`` \u2014 SHA matches active version (no-op).\n    ``201`` \u2014 New version created.\n\nRaises:\n    :class:`~chronos.errors.ProblemException` 422 ``rules_invalid`` with\n        ``errors: [{loc, msg, type}]`` on validation failure.",
+        "operationId": "config_put_config_wake",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WakeRules"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Config Wake",
+        "tags": [
+          "config"
+        ]
+      }
+    },
+    "/v1/day/today": {
+      "get": {
+        "description": "Return the day row for the device's current local date.\n\nUses ``device.tz`` (from the DB row) + server UTC now to derive local_date.\n\nReturns:\n    200 with day shape, or 404 if no telemetry received yet for today.",
+        "operationId": "day_get_day_today",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Day Today",
+        "tags": [
+          "day"
+        ]
+      }
+    },
+    "/v1/day/{local_date_str}": {
+      "get": {
+        "description": "Return the day row for a specific local date.\n\nReturns:\n    200 with day shape, or 404 if not found, or 422 if date format invalid.",
+        "operationId": "day_get_day",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "local_date_str",
+            "required": true,
+            "schema": {
+              "title": "Local Date Str",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Day",
+        "tags": [
+          "day"
+        ]
+      }
+    },
+    "/v1/day/{local_date_str}/actual-wake": {
+      "put": {
+        "description": "Set the owner's actual wake time for a local date (idempotent overwrite).\n\nArgs:\n    local_date_str: YYYY-MM-DD local date.\n    body: JSON body with ``actual_wake_local`` in HH:MM format.\n\nReturns:\n    200 with the updated day shape.",
+        "operationId": "day_put_actual_wake",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "local_date_str",
+            "required": true,
+            "schema": {
+              "title": "Local Date Str",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualWakeBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DayResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Put Actual Wake",
+        "tags": [
+          "day"
+        ]
+      }
+    },
+    "/v1/device/me": {
+      "delete": {
+        "description": "Revoke the device token.\n\nSets ``status = revoked`` and ``revoked_at = now``.  Any subsequent\nrequest with the same token returns 403 ``revoked``.",
+        "operationId": "device_delete_device",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Revoke the authenticated device token.",
+        "tags": [
+          "device"
+        ]
+      },
+      "get": {
+        "description": "Return the device record for the authenticated device.\n\nThe bearer token is **not** included in the response.",
+        "operationId": "device_get_device",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Return the authenticated device record.",
+        "tags": [
+          "device"
+        ]
+      },
+      "patch": {
+        "description": "Partially update the authenticated device.\n\nOnly fields present in the request body are updated.  Sends an empty body\n``{}`` to make a no-op update (useful to refresh ``last_seen_at``).",
+        "operationId": "device_patch_device",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DevicePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update push token, timezone, or version strings.",
+        "tags": [
+          "device"
+        ]
+      }
+    },
+    "/v1/pair": {
+      "post": {
+        "description": "Pair a new device.\n\nThe pairing code is validated against the most recently generated active\ncode (non-consumed, tracked by attempt count).  A correct code issues a\nfresh bearer token; an incorrect code increments the attempt counter and\nburns the code after 5 failures.\n\nReturns:\n    201 with :class:`PairResponse`.\n\nRaises:\n    :class:`~chronos.errors.ProblemException` 409 if an active device exists.\n    :class:`~chronos.errors.ProblemException` 400 for invalid/burned codes.\n    :class:`~chronos.errors.ProblemException` 410 for expired codes.\n    :class:`~chronos.errors.ProblemException` 429 when rate-limited.",
+        "operationId": "pairing_create_pair",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange a one-time pairing code for a device bearer token.",
+        "tags": [
+          "pairing"
+        ]
+      }
+    },
+    "/v1/telemetry": {
+      "post": {
+        "description": "Receive, validate, score and store one telemetry snapshot.\n\nReturns:\n    200 with full scoring breakdown and updated day state.\n\nRaises:\n    422 clock_skew: |device_ts - server_now| > 300 s.\n    422 validation: Body exceeds 64 KiB or fails Signals schema.\n    429 rate_limited: > 30 req/min per IP.\n    401 unauthorized: Missing/invalid bearer token.\n    403 revoked: Device revoked.",
+        "operationId": "telemetry_post_telemetry",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TelemetryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Post Telemetry",
+        "tags": [
+          "telemetry"
+        ]
+      }
+    }
+  }
+}

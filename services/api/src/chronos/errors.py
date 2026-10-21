@@ -24,11 +24,43 @@ import structlog
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
 from starlette.exceptions import HTTPException
 
 log = structlog.get_logger(__name__)
 
 PROBLEM_CONTENT_TYPE = "application/problem+json"
+
+
+class Problem(BaseModel):
+    """RFC 9457 problem+json response body (OpenAPI component schema — T0.7).
+
+    Used as the ``model=`` reference in ``responses=`` on authenticated routers
+    so that FastAPI generates a shared ``Problem`` component in the OpenAPI schema.
+    Actual error responses are produced by :func:`make_problem` (not validated
+    through this model at runtime).
+    """
+
+    # extra="allow" (not "forbid"): RFC 9457 §3.1 permits extension members such as
+    # server_time / errors; this is the documented exception to the AGENTS.md rule.
+    model_config = ConfigDict(extra="allow")
+
+    type: str = Field(examples=["urn:chronos:error:unauthorized"])
+    title: str = Field(examples=["Unauthorized"])
+    status: int = Field(examples=[401])
+    detail: str = Field(examples=["Missing or malformed Authorization header."])
+    instance: str = Field(examples=["/v1/device/me"])
+    code: str | None = Field(default=None, examples=["unauthorized"])
+
+
+# Shared responses= dict for authenticated routers (device, config, telemetry, day).
+# 401/403/422/429 all return application/problem+json with the Problem schema.
+PROBLEM_RESPONSES: dict[int | str, dict[str, Any]] = {
+    401: {"model": Problem, "description": "Unauthorized — missing or invalid bearer token."},
+    403: {"model": Problem, "description": "Forbidden — device token revoked."},
+    422: {"model": Problem, "description": "Unprocessable Entity — validation failed."},
+    429: {"model": Problem, "description": "Too Many Requests — rate limit exceeded."},
+}
 
 
 class ProblemException(HTTPException):

@@ -60,10 +60,14 @@ jobs:
         run: just check-api
       - name: Ruleset contexts match CI job names
         run: just ruleset-check
-      - name: Generated types are current
+      - name: Generated types are current (openapi.json)
         run: |
-          just gen-types
-          git diff --exit-code -- packages/renderer/src/schema.json packages/renderer/src/schema.ts apps/mobile/src/api/schema.d.ts || { echo "run just gen-types and commit"; exit 1; }
+          cd services/api
+          uv run --locked chronos openapi export --out /tmp/openapi.json
+          diff -u openapi.json /tmp/openapi.json || {
+            echo "openapi.json is stale — run 'just gen-types' and commit"
+            exit 1
+          }
       - name: Install semgrep (version from the justfile)
         run: uv tool install "semgrep==$(just --evaluate semgrep_version)"
       - name: Security (semgrep, whole repository; no skip in CI)
@@ -113,6 +117,18 @@ jobs:
       - name: Install dependencies (frozen lockfile)
         run: |
           if [ -f apps/mobile/package.json ]; then (cd apps/mobile && pnpm install --frozen-lockfile); else echo "apps/mobile not yet scaffolded"; fi
+      - name: Generated types are current (schema.d.ts)
+        run: |
+          if [ -f apps/mobile/package.json ]; then
+            cd apps/mobile
+            pnpm exec openapi-typescript \
+              ../../services/api/openapi.json \
+              --output /tmp/schema.d.ts
+            diff -u src/api/schema.d.ts /tmp/schema.d.ts || {
+              echo "schema.d.ts is stale — run 'just gen-types' and commit"
+              exit 1
+            }
+          fi
       - name: just check-mobile (biome, tsc, jest, expo-doctor, expo export)
         env:
           EXPO_NO_TELEMETRY: "1"
