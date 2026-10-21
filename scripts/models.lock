@@ -1,0 +1,20 @@
+{
+  "kokoro_onnx": {
+    "url": "https://github.com/remsky/kokoro-onnx/releases/download/v0.2.3/kokoro-v0.2.3.onnx",
+    "path": "data/models/kokoro/kokoro-v1.0.onnx",
+    "sha256": "PLACEHOLDER",
+    "size_bytes": 0
+  },
+  "kokoro_voices": {
+    "url": "https://github.com/remsky/kokoro-onnx/releases/download/v0.2.3/voices-v0.2.3.bin",
+    "path": "data/models/kokoro/voices-v1.0.bin",
+    "sha256": "PLACEHOLDER",
+    "size_bytes": 0
+  },
+  "whisper_small_en": {
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.en.bin",
+    "path": "data/models/whisper/ggml-small.en.bin",
+    "sha256": "PLACEHOLDER",
+    "size_bytes": 0
+  }
+}
