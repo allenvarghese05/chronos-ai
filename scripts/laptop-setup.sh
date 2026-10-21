@@ -192,7 +192,7 @@ if pmset -g sched 2>/dev/null | grep -q "05:25"; then
 else
     if is_interactive; then
         echo "  Setting wake schedule (requires sudo)..."
-        eval "${PMSET_WEEKDAY}"
+        sudo pmset repeat wakeorpoweron MTWRF 05:25:00 SU 07:25:00
         ok "Wake schedule set."
     else
         echo ""
