@@ -25,16 +25,16 @@ from chronos.errors import ProblemException
 from chronos.models.devices import Device
 from chronos.models.wake import Day, RuleVersion, TelemetryEvent, WakeEvaluation
 from chronos.time import format_utc_iso
+from chronos.wake.context import build_eval_context, make_previous_tick_from_row
 from chronos.wake.rules import ActiveRuleVersion, WakeRules
 from chronos.wake.scoring import (
-    EvalContext,
     Evaluation,
     PreviousTick,
     evaluate,
 )
 from chronos.wake.signals import Signals
 from chronos.wake.state import apply, get_or_create_day
-from chronos.wake.window import local_date_for, window_for
+from chronos.wake.window import local_date_for
 
 log = structlog.get_logger(__name__)
 
@@ -216,31 +216,16 @@ def ingest_telemetry(
     previous: PreviousTick | None = None
     if prev_row is not None:
         prev_we, prev_te = prev_row
-        try:
-            prev_device_ts = datetime.datetime.fromisoformat(prev_te.device_ts)
-            if prev_device_ts.tzinfo is None:
-                prev_device_ts = prev_device_ts.replace(tzinfo=datetime.UTC)
-        except ValueError:
-            prev_device_ts = now  # fallback; won't crash
-        prev_local_date = datetime.date.fromisoformat(prev_te.local_date)
-        previous = PreviousTick(
-            device_ts=prev_device_ts,
-            local_date=prev_local_date,
-            battery_state=prev_te.battery_state,  # type: ignore[arg-type]
-            is_unlocked=bool(prev_te.is_unlocked),
-            score=prev_we.score,
-            decision=prev_we.decision,  # type: ignore[arg-type]
-            consecutive_high=prev_we.consecutive_high,
-        )
+        previous = make_previous_tick_from_row(prev_we, prev_te)
 
     # ── 6. Build EvalContext ──────────────────────────────────────────────
-    window = window_for(local_date, tz_obj, window_cfg)
-    ctx = EvalContext(
-        window=window,
-        day_state=DayState(day.state),
-        rule_version=rule_version.version,
+    ctx = build_eval_context(
+        signals=signals,
+        rules=rules,
+        rule_version_number=rule_version.version,
         previous=previous,
         ticks_received_today=day.ticks_received,
+        day_state=DayState(day.state),
     )
 
     # ── 7. Score ──────────────────────────────────────────────────────────
