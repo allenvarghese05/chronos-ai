@@ -392,3 +392,270 @@ def test_write_day_report_idempotent(tmp_path: Path) -> None:
 
     content = (tmp_path / "2026-10-06.md").read_text(encoding="utf-8")
     assert content == "# Second"
+
+
+# ---------------------------------------------------------------------------
+# MINOR 3: anomaly flag tests (pedometer denied, > 20% deduped, push errors,
+# fallback used) — each asserts the flag appears AND is absent when the
+# condition is not met.
+# ---------------------------------------------------------------------------
+
+
+_EVAL_SEQ_COUNTER: list[int] = [1000]  # global counter for unique seq values
+
+
+def _make_minimal_eval_row(
+    db_session: Session,
+    device_id: int,
+    rv_id: int,
+    local_date: str,
+    decision: str = "low",
+    gate: str = "open",
+    pedometer_auth: str = "authorized",
+) -> None:
+    """Insert a TelemetryEvent + WakeEvaluation with controlled fields."""
+    from chronos.enums import DayState
+    from chronos.models.wake import TelemetryEvent, WakeEvaluation
+    from chronos.time import utc_now_iso
+    from chronos.wake.context import build_eval_context
+    from chronos.wake.rules import load_yaml as _load_yaml
+    from chronos.wake.scoring import evaluate as _evaluate
+    from chronos.wake.signals import Signals as _Signals
+
+    seq = _EVAL_SEQ_COUNTER[0]
+    _EVAL_SEQ_COUNTER[0] += 1
+
+    rules = _load_yaml(_RULES_PATH)
+    sig = _Signals.model_validate(
+        {
+            "device_ts": _IN_WINDOW.isoformat(),
+            "tz": "America/Los_Angeles",
+            "wake_source": "silent_push",
+            "steps_10m": 0,
+            "steps_since_window": 0,
+            "walking_sec_10m": 0,
+            "walking_conf": "low",
+            "stationary_sec_10m": 0,
+            "is_unlocked": False,
+            "battery_state": "unplugged",
+            "battery_level": None,
+            "app_state": "background",
+            "low_power_mode": False,
+            "pedometer_auth": pedometer_auth,
+            "seq": seq,
+            "app_version": "1.0.0",
+            "ios_version": "18.1",
+        }
+    )
+    ctx = build_eval_context(sig, rules, rv_id, None, 0, DayState.monitoring)
+    eval_result = _evaluate(sig, rules, _IN_WINDOW, ctx)
+
+    te = TelemetryEvent(
+        device_id=device_id,
+        received_at=utc_now_iso(),
+        device_ts=_IN_WINDOW.isoformat(),
+        tz="America/Los_Angeles",
+        local_date=local_date,
+        wake_source="silent_push",
+        seq=seq,
+        steps_10m=0,
+        steps_since_window=0,
+        walking_sec_10m=0,
+        stationary_sec_10m=0,
+        walking_conf="low",
+        is_unlocked=0,
+        battery_state="unplugged",
+        battery_level=None,
+        app_state="background",
+        low_power_mode=0,
+        pedometer_auth=pedometer_auth,
+        tick_seq=None,
+        app_version="1.0.0",
+        ios_version="18.1",
+        raw_json="{}",
+    )
+    db_session.add(te)
+    db_session.flush()
+    assert te.id is not None
+
+    we = WakeEvaluation(
+        telemetry_event_id=te.id,
+        rule_version_id=rv_id,
+        local_date=local_date,
+        gate=gate,
+        score=eval_result.score,
+        breakdown_json=eval_result.model_dump_json(),
+        decision=decision,
+        consecutive_high=0,
+        evaluated_at=utc_now_iso(),
+    )
+    db_session.add(we)
+    db_session.commit()
+
+
+def test_anomaly_pedometer_denied_flag_present(db_session: Session) -> None:
+    """'Pedometer denied' warning appears when any evaluation has pedometer_auth='denied'."""
+    from chronos.models.devices import Device as _Device
+    from chronos.wake.state import get_or_create_day
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    get_or_create_day(
+        db_session, device, datetime.date(2026, 10, 6), "America/Los_Angeles", rules, _IN_WINDOW
+    )
+    db_session.commit()
+    _make_minimal_eval_row(db_session, device.id, rv.id, "2026-10-06", pedometer_auth="denied")
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "Pedometer denied" in report
+
+
+def test_anomaly_pedometer_denied_flag_absent(db_session: Session) -> None:
+    """'Pedometer denied' warning absent when all evaluations have pedometer_auth='authorized'."""
+    from chronos.models.devices import Device as _Device
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "Pedometer denied" not in report
+
+
+def test_anomaly_deduped_flag_present(db_session: Session) -> None:
+    """'> 20% ticks deduped' warning appears when deduped fraction exceeds 20%."""
+    from chronos.models.devices import Device as _Device
+    from chronos.wake.state import get_or_create_day
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    get_or_create_day(
+        db_session, device, datetime.date(2026, 10, 6), "America/Los_Angeles", rules, _IN_WINDOW
+    )
+    db_session.commit()
+
+    # Insert 1 normal eval + 4 deduped evals → 80% deduped.
+    _make_minimal_eval_row(db_session, device.id, rv.id, "2026-10-06", decision="low")
+    for _ in range(4):
+        _make_minimal_eval_row(
+            db_session, device.id, rv.id, "2026-10-06", decision="ignored_dedupe"
+        )
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "> 20% ticks deduped" in report
+
+
+def test_anomaly_deduped_flag_absent(db_session: Session) -> None:
+    """'> 20% ticks deduped' absent when deduped fraction is within limits."""
+    from chronos.models.devices import Device as _Device
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "> 20% ticks deduped" not in report
+
+
+def test_anomaly_push_errors_flag_present(db_session: Session) -> None:
+    """'Push errors' warning appears when push notifications have error entries."""
+    from chronos.models.delivery import PushNotification
+    from chronos.models.devices import Device as _Device
+    from chronos.time import utc_now_iso
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    # Insert a push notification with an error.
+    pn = PushNotification(
+        device_id=device.id,
+        kind="tick",
+        local_date="2026-10-06",
+        reel_id=None,
+        tick_seq=0,
+        payload_json="{}",
+        ticket_id=None,
+        ticket_status="error",
+        receipt_status=None,
+        sent_at=utc_now_iso(),
+        receipt_checked_at=None,
+        error="DeviceNotRegistered",
+    )
+    db_session.add(pn)
+    db_session.commit()
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "Push errors" in report
+
+
+def test_anomaly_push_errors_flag_absent(db_session: Session) -> None:
+    """'Push errors' absent when no push notifications have errors."""
+    from chronos.models.devices import Device as _Device
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    assert "Push errors" not in report
+
+
+def test_anomaly_fallback_used_flag_present(db_session: Session) -> None:
+    """'Fallback used' warning appears when day.fallback_used is set."""
+    from chronos.models.devices import Device as _Device
+    from chronos.models.wake import Day
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    day = db_session.exec(  # type: ignore[call-overload]
+        select(Day).where(Day.local_date == "2026-10-06", Day.device_id == device.id)
+    ).first()
+    assert day is not None
+    day.fallback_used = 1
+    db_session.add(day)
+    db_session.commit()
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    # The anomaly note text (in the ## Notes section); distinct from the
+    # "**Fallback used:** yes/no" line in the state section which always appears.
+    assert "Fallback used: confirm window expired" in report
+
+
+def test_anomaly_fallback_used_flag_absent(db_session: Session) -> None:
+    """'Fallback used' anomaly note absent when day.fallback_used is 0."""
+    from chronos.models.devices import Device as _Device
+
+    rules = load_yaml(_RULES_PATH)
+    device, rv = _make_device_rv(db_session)
+    _ingest_fixture(db_session, device, rules, rv)
+
+    assert isinstance(device, _Device)
+    assert device.id is not None
+
+    report = build_day_report(db_session, device.id, datetime.date(2026, 10, 6), _IN_WINDOW)
+    # The anomaly note must be absent; "**Fallback used:** no" still appears in state section.
+    assert "Fallback used: confirm window expired" not in report
