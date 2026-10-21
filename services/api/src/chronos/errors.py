@@ -41,6 +41,8 @@ class Problem(BaseModel):
     through this model at runtime).
     """
 
+    # extra="allow" (not "forbid"): RFC 9457 §3.1 permits extension members such as
+    # server_time / errors; this is the documented exception to the AGENTS.md rule.
     model_config = ConfigDict(extra="allow")
 
     type: str = Field(examples=["urn:chronos:error:unauthorized"])
