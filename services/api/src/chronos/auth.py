@@ -18,12 +18,20 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlmodel import Session, select
 
 from chronos.db import get_session_dep
 from chronos.errors import ProblemException
 from chronos.models.devices import Device
 from chronos.time import parse_utc_iso, utc_now_iso
+
+# ── OpenAPI security scheme (T0.7) ───────────────────────────────────────────
+# Module-level singleton so FastAPI reuses the same security scheme instance and
+# emits a single ``HTTPBearer`` component in the OpenAPI securitySchemes.
+# ``auto_error=False`` means FastAPI will NOT raise 403 automatically; instead
+# ``require_device`` raises our RFC 9457 ProblemException with status 401.
+_bearer_scheme: HTTPBearer = HTTPBearer(auto_error=False)
 
 # ── pairing code alphabet (no 0, O, 1, I to avoid visual ambiguity) ──────────
 #: 32-character Crockford-like alphabet used for pairing codes.
@@ -108,6 +116,7 @@ def _should_bump_last_seen(last_seen_at: str, now: datetime) -> bool:
 def require_device(
     request: Request,
     session: Session = Depends(get_session_dep),
+    _creds: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
 ) -> Device:
     """FastAPI dependency: extract and validate the bearer token → return :class:`Device`.
 

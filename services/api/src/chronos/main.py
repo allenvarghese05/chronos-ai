@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
+from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException
 
 from chronos import __version__
@@ -33,6 +34,7 @@ from chronos.api.telemetry import router as telemetry_router
 from chronos.config import Settings, get_settings, override_settings
 from chronos.db import create_db_engine
 from chronos.errors import (
+    PROBLEM_RESPONSES,
     http_exception_handler,
     unhandled_exception_handler,
     validation_exception_handler,
@@ -41,6 +43,23 @@ from chronos.observability import configure as configure_logging
 from chronos.wake.rules import ensure_initial_version, reset_rules_cache, yaml_stale
 
 log = structlog.get_logger(__name__)
+
+
+def _operation_id(route: APIRoute) -> str:
+    """Stable operationId generator: ``<tag>_<route-name>`` (T0.7).
+
+    Produces deterministic, human-readable operationIds that survive router
+    reorganisation.  The first tag is used; routes without tags fall back to
+    ``"default"``.
+
+    Args:
+        route: The FastAPI :class:`~fastapi.routing.APIRoute` instance.
+
+    Returns:
+        A string of the form ``"device_get_device_me"``.
+    """
+    tag = route.tags[0] if route.tags else "default"
+    return f"{tag}_{route.name}"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -149,6 +168,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url="/openapi.json",
         docs_url="/docs",
         redoc_url=None,
+        # Stable <tag>_<route-name> operationIds (T0.7).
+        generate_unique_id_function=_operation_id,
     )
 
     # 3. Exception handlers (RFC 9457 problem+json).
@@ -157,11 +178,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_exception_handler)
 
     # 4. Routers.
+    # Public endpoints (no bearer auth required):
     app.include_router(health_router)
     app.include_router(pair_router, prefix="/v1")
-    app.include_router(device_router, prefix="/v1")
-    app.include_router(config_wake_router, prefix="/v1")
-    app.include_router(telemetry_router, prefix="/v1")
-    app.include_router(day_router, prefix="/v1")
+    # Authenticated endpoints: add shared 401/403/422/429 Problem responses (T0.7).
+    app.include_router(device_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(config_wake_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(telemetry_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
     return app
