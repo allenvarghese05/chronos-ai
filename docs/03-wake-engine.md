@@ -209,15 +209,21 @@ suppresses background refresh and delays silent pushes.
 ## 7. Tuning and replay
 
 - `chronos wake replay --from 2026-10-01 --to 2026-10-14 --rules config/wake_rules.yaml`
-  re-scores every stored snapshot under the given rules and prints, per day: first confirm time
-  under old vs new rules, ticks ≥ threshold, false confirms (confirmed before the owner's marked
-  true wake time, if annotated).
+  re-scores stored snapshots under baseline vs candidate rules and prints a comparison table
+  (per day: first confirm under each rule set, ticks >= confirm threshold, latency from actual
+  wake time, early-confirm flag). Use `--fixture path.json` to replay a fixture file without
+  DB access. Add `--json` for machine-readable output.
 - `chronos wake annotate 2026-10-06 --actual 07:05` records ground truth in `days.actual_wake_local`
-  (the owner can also set it from the app's debug panel the same morning).
+  (also settable via `PUT /v1/day/2026-10-06/actual-wake`).
 - `PUT /v1/config/wake` stores a new `rule_versions` row; `GET /v1/config/wake` returns the
-  effective rules and version; the nightly report shows the score timeline of the day as a sparkline.
+  effective rules and version.
+- The nightly report (`chronos report build --date 2026-10-06` or `GET /v1/report/2026-10-06`)
+  shows the score timeline as a Unicode sparkline (▁▂▃▄▅▆▇█), state transitions, push counts,
+  anomaly notes (force-quit, pedometer denied, ticks lost), and G1 pass/fail.
+  The scheduler writes the previous day's report after 03:00 local + 15 min grace.
+  Reports are Markdown files in `data/logs/reports/<date>.md`.
 - Target metrics (G1): median confirm latency ≤ 10 min after `actual_wake_local`; zero confirms
-  more than 30 min before it.
+  more than 30 min before it. Replay summary shows PASS/FAIL.
 
 ## 8. Edge cases the implementation must cover (with tests)
 
