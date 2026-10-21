@@ -83,7 +83,7 @@ project settings (previously `.npmrc`). See `docs/plans/T0.4-plan.md` §2 Design
    Prints a RUN-THIS banner for the `sudo pmset repeat` wake schedule (run it manually).
 6. `just doctor` — verify the full system health. All checks should be OK or warn; exit 1
    means a blocking issue (typically: Ollama model not pulled, cert not generated, or disk full).
-6. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator;
+7. `just mobile-sim` — prebuild and launch the dev-client on the iPhone 16 Pro simulator;
    the app displays "Hello from ChronosSensors!" (Swift native module). Requires Xcode with
    Swift ≥ 6.3.1 (Xcode 17 or newer; verified with Xcode 27.1 / Swift 6.4). Physical device
    install is deferred to T2.4. To override the simulator:
