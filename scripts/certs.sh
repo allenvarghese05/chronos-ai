@@ -60,20 +60,27 @@ fi
 CAROOT=$(mkcert -CAROOT)
 info "mkcert CAROOT: ${CAROOT}"
 
+# mkcert -install puts the root CA in the system keychain (required for iOS/macOS to trust it).
+# We still generate certs even without -install; iOS trust requires the manual step below.
 if [ ! -f "${CAROOT}/rootCA.pem" ]; then
     echo ""
-    echo "  mkcert root CA not installed. This step requires sudo."
+    echo "  mkcert root CA not yet created. Generating now (certs will be created)."
+    echo "  To make macOS/iOS trust them, run: mkcert -install (requires sudo)"
+fi
+
+# Print the sudo prompt or banner for mkcert -install (keychain trust, optional for generation)
+if ! security find-certificate -c 'mkcert' /Library/Keychains/System.keychain >/dev/null 2>&1; then
     if is_interactive; then
-        mkcert -install
+        echo ""
+        echo "  mkcert root CA not in system keychain. Running mkcert -install (may prompt for sudo)..."
+        mkcert -install || info "mkcert -install skipped (run manually: sudo mkcert -install)"
     else
         echo ""
         echo "  ╔══════════════════════════════════════════════════════════╗"
-        echo "  ║  RUN THIS (requires sudo):                               ║"
+        echo "  ║  RUN THIS (requires sudo) to trust certs on this Mac:   ║"
         echo "  ║    mkcert -install                                       ║"
         echo "  ╚══════════════════════════════════════════════════════════╝"
-        echo ""
-        echo "  After running it, re-run: just certs"
-        exit 0
+        echo "  (Continuing cert generation — iOS trust requires this step)"
     fi
 else
     info "Root CA already installed in system keychain."

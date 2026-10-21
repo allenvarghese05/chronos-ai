@@ -121,7 +121,8 @@ def serve(
 @db_app.command("migrate")
 def db_migrate() -> None:
     """Apply pending Alembic migrations (alembic upgrade head)."""
-    alembic_ini = Path(__file__).parents[3] / "alembic.ini"
+    # parents[2] of src/chronos/cli.py is services/api (where alembic.ini lives).
+    alembic_ini = Path(__file__).parents[2] / "alembic.ini"
     if not alembic_ini.exists():
         typer.echo(f"alembic.ini not found at {alembic_ini}", err=True)
         raise typer.Exit(code=1)
