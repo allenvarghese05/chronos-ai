@@ -30,6 +30,7 @@ from chronos.api.day import router as day_router
 from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
 from chronos.api.pair import router as pair_router
+from chronos.api.report import router as report_router
 from chronos.api.telemetry import router as telemetry_router
 from chronos.config import Settings, get_settings, override_settings
 from chronos.db import create_db_engine
@@ -186,5 +187,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(config_wake_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(telemetry_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(report_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
     return app
