@@ -371,3 +371,82 @@ class TestTelemetryTypicalWeekdayIntegration:
         causes = [t.cause for t in transitions]
         assert "scheduler_window_start" in causes, f"Missing idle->monitoring: {causes}"
         assert "evaluation" in causes, f"Missing monitoring->confirmed: {causes}"
+
+
+# ---------------------------------------------------------------------------
+# MINOR 1: next_tick_in_sec populated when scheduler is attached to app.state
+# ---------------------------------------------------------------------------
+
+
+class TestNextTickInSecPopulated:
+    """next_tick_in_sec returns int during monitoring, null once confirmed."""
+
+    def test_next_tick_in_sec_populated(self, test_settings: Settings) -> None:
+        """Attach Scheduler (FakePushClient) to app.state; POST telemetry while
+        monitoring → next_tick_in_sec is int; null once confirmed.
+        """
+        import asyncio
+        from pathlib import Path as _Path
+
+        import time_machine
+        from sqlmodel import Session as _Session
+
+        from chronos.db import create_db_engine
+        from chronos.delivery.push import FakePushClient
+        from chronos.main import create_app
+        from chronos.scheduler import Scheduler
+        from chronos.wake.rules import ensure_initial_version, get_rules_cache, reset_rules_cache
+
+        engine = create_db_engine(test_settings.database_url)
+        reset_rules_cache()
+        with _Session(engine) as session:
+            rules_path = _Path(__file__).parents[1] / "config" / "wake_rules.yaml"
+            ensure_initial_version(session, rules_path)
+            session.commit()
+            get_rules_cache().get_effective(session)
+
+        fake_push = FakePushClient()
+        scheduler = Scheduler(
+            session_factory=lambda: _Session(engine),
+            push_client=fake_push,
+            settings=test_settings,
+        )
+
+        # Insert device with expo token so scheduler tracks next tick.
+        plain, device = _insert_device(test_settings, tz="America/Los_Angeles")
+        with _Session(engine) as session:
+            dev = session.get(Device, device.id)
+            assert dev is not None
+            dev.expo_push_token = "ExponentPushToken[minor1_test]"
+            session.add(dev)
+            session.commit()
+
+        # window: 06:00-11:00 LA (PDT = UTC-7) = 13:00-18:00 UTC on 2026-10-06
+        # monitoring_now is between tick 0 (13:00) and tick 1 (13:05)
+        window_start = datetime.datetime(2026, 10, 6, 13, 0, 0, tzinfo=datetime.UTC)
+        monitoring_now = window_start + datetime.timedelta(minutes=2)
+
+        # Prime the scheduler: sends tick 0 and sets _next_tick_instants[device.id]
+        asyncio.run(scheduler.run_due(monitoring_now))
+
+        # next_tick should be window_start + 5 min = 13:05 UTC
+        expected_next = window_start + datetime.timedelta(minutes=5)
+        server_now = monitoring_now + datetime.timedelta(seconds=2)
+        expected_secs = max(0, int((expected_next - server_now).total_seconds()))
+
+        app = create_app(settings=test_settings)
+        with TestClient(app, raise_server_exceptions=True) as c:
+            c.app.state.scheduler = scheduler  # type: ignore[union-attr]
+
+            payload = _base_payload(device_ts=monitoring_now.isoformat(), seq=0, steps_10m=40)
+            with time_machine.travel(server_now, tick=False):
+                resp = c.post("/v1/telemetry", json=payload, headers=_auth(plain))
+
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+
+        assert isinstance(body["next_tick_in_sec"], int), (
+            f"Expected int during monitoring, got {body['next_tick_in_sec']!r}"
+        )
+        # delta from server_now(13:02:02) to next tick(13:05) ≈ 178 s
+        assert body["next_tick_in_sec"] == expected_secs
