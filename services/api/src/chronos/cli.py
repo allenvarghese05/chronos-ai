@@ -421,9 +421,8 @@ def doctor(
 
     from chronos.ops.doctor import FAIL, OK, WARN, DoctorProbes, run_doctor
 
-    # Repo root: services/api is parents[2] from src/chronos/cli.py;
-    # the actual repo root is one level above services/api.
-    _default_root = Path(__file__).parents[3]
+    # cli.py lives at services/api/src/chronos/cli.py → parents[4] = repo root
+    _default_root = Path(__file__).parents[4]
     root = repo_root or _default_root
 
     # Try to load settings for public_base_url; best-effort.
