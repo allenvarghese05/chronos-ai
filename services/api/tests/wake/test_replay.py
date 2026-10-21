@@ -304,86 +304,222 @@ def test_compare_ticks_ge_confirm() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_replay_db_range_determinism(db_session: Session) -> None:
-    """Replaying stored events under the original rules reproduces stored scores."""
+# ---------------------------------------------------------------------------
+# Parametrized determinism test: all 11 fixture mornings
+# ---------------------------------------------------------------------------
+
+_ALL_FIXTURE_PATHS = sorted(_FIXTURE_DIR.glob("*.json"))
+
+
+def _make_fresh_session(tmp_path: Path, db_name: str) -> Session:
+    """Create an isolated migrated DB and return an open session."""
+    db_url = f"sqlite:///{tmp_path / db_name}"
+    ini_path = Path(__file__).parents[2] / "alembic.ini"
+    cfg = Config(str(ini_path))
+    cfg.set_main_option("sqlalchemy.url", db_url)
+    command.upgrade(cfg, "head")
+
+    engine = create_engine(db_url, connect_args={"check_same_thread": False})
+
+    @sa_event.listens_for(engine, "connect")
+    def _pragmas(dbapi_conn: sqlite3.Connection, _record: object) -> None:
+        dbapi_conn.cursor().execute("PRAGMA foreign_keys=ON")
+
+    return Session(engine)
+
+
+@pytest.mark.parametrize(
+    "fixture_path",
+    _ALL_FIXTURE_PATHS,
+    ids=[f.stem for f in _ALL_FIXTURE_PATHS],
+)
+def test_all_fixtures_determinism(fixture_path: Path, tmp_path: Path) -> None:
+    """Ingest each fixture morning, replay from DB, assert stored == replayed.
+
+    For every stored WakeEvaluation, asserts:
+    - ``score``, ``decision``, ``consecutive_high`` match the DB columns.
+    - ``confirm_reason`` matches the value in ``breakdown_json``.
+    - Full ``Evaluation`` from replay equals ``Evaluation.model_validate``
+      of the stored ``breakdown_json`` (strongest parity check).
+
+    The replay uses ``replay_db_range`` under the evaluation's stored rule
+    version (baseline re-score), and also re-runs ``evaluate()`` directly
+    to capture the full :class:`~chronos.wake.scoring.Evaluation` for the
+    breakdown equality assertion.
+    """
+    from zoneinfo import ZoneInfo
+
+    from chronos.enums import DayState
     from chronos.time import utc_now_iso
+    from chronos.wake.context import build_eval_context
     from chronos.wake.rules import canonical_json, rules_sha256
+    from chronos.wake.scoring import Evaluation, PreviousTick, evaluate
+    from chronos.wake.window import local_date_for
 
     rules = load_yaml(_RULES_PATH)
-    device = _make_device(db_session)
 
-    # Use a rule version that stores the REAL rules JSON (not the stub from factory).
-    rules_json_str = canonical_json(rules)
-    rv_orm = RuleVersion(
-        version=1,
-        source="yaml",
-        rules_json=rules_json_str,
-        sha256=rules_sha256(rules),
-        created_at=utc_now_iso(),
-        created_by="test",
-        active=1,
-    )
-    db_session.add(rv_orm)
-    db_session.commit()
-    assert rv_orm.id is not None
-    rv = ActiveRuleVersion(
-        id=rv_orm.id,
-        version=rv_orm.version,
-        source=rv_orm.source,
-        sha256=rv_orm.sha256,
-        created_at=rv_orm.created_at,
-        created_by=rv_orm.created_by,
-    )
-
-    fd = load_fixture(_TYPICAL_WEEKDAY)
-    now = _IN_WINDOW
-
-    # Ingest each fixture event into the DB.
-    for ev_dict in fd.events:
-        sig = Signals.model_validate(ev_dict)
-        raw = sig.model_dump_json().encode()
-        ingest_telemetry(db_session, device, sig, raw, now, rules, rv)
-        # Advance "now" slightly for subsequent ticks.
-        now = now + datetime.timedelta(minutes=5)
-
-    # Query stored scores.
-    stored = list(
-        db_session.exec(  # type: ignore[call-overload]
-            select(WakeEvaluation)
-            .join(TelemetryEvent, WakeEvaluation.telemetry_event_id == TelemetryEvent.id)  # type: ignore[arg-type]
-            .where(TelemetryEvent.device_id == device.id)
-            .order_by(TelemetryEvent.device_ts.asc())  # type: ignore[attr-defined]
-        ).all()
-    )
-
-    assert stored, "No evaluations stored — ingest_telemetry failed"
-
-    # Replay from DB range.
-    from_date = datetime.date(2026, 10, 6)
-    to_date = datetime.date(2026, 10, 6)
-    assert device.id is not None
-    replay_days = replay_db_range(
-        session=db_session,
-        device_id=device.id,
-        from_date=from_date,
-        to_date=to_date,
-        candidate_rules=rules,
-        candidate_rule_version_number=rv.version,
-    )
-
-    assert len(replay_days) == 1
-    replay_day = replay_days[0]
-
-    # Baseline evals should reproduce stored scores.
-    assert len(replay_day.baseline_evals) == len(stored)
-    for i, (replayed, stored_we) in enumerate(zip(replay_day.baseline_evals, stored, strict=True)):
-        assert replayed.score == stored_we.score, (
-            f"event {i}: replayed score {replayed.score} != stored {stored_we.score}"
+    session = _make_fresh_session(tmp_path, f"{fixture_path.stem}.db")
+    with session:
+        # ── Device + rule version ─────────────────────────────────────────
+        device = _make_device(session)
+        rv_orm = RuleVersion(
+            version=1,
+            source="yaml",
+            rules_json=canonical_json(rules),
+            sha256=rules_sha256(rules),
+            created_at=utc_now_iso(),
+            created_by="test",
+            active=1,
         )
-        assert replayed.decision.value == stored_we.decision, (
-            f"event {i}: replayed decision {replayed.decision.value!r} "
-            f"!= stored {stored_we.decision!r}"
+        session.add(rv_orm)
+        session.commit()
+        assert rv_orm.id is not None
+
+        rv = ActiveRuleVersion(
+            id=rv_orm.id,
+            version=rv_orm.version,
+            source=rv_orm.source,
+            sha256=rv_orm.sha256,
+            created_at=rv_orm.created_at,
+            created_by=rv_orm.created_by,
         )
+
+        # ── Ingest: pass device_ts as `now` to satisfy clock-skew guard ──
+        fd = load_fixture(fixture_path)
+        for ev_dict in fd.events:
+            sig = Signals.model_validate(ev_dict)
+            raw = sig.model_dump_json().encode()
+            # Use the event's own device_ts as "now" so the 300 s skew
+            # check always passes regardless of the fixture's date.
+            ingest_telemetry(session, device, sig, raw, sig.device_ts, rules, rv)
+
+        # ── Load stored (TelemetryEvent, WakeEvaluation) pairs in order ──
+        assert device.id is not None
+        rows: list[tuple[TelemetryEvent, WakeEvaluation]] = list(
+            session.exec(  # type: ignore[call-overload]
+                select(TelemetryEvent, WakeEvaluation)
+                .join(  # type: ignore[call-overload]
+                    WakeEvaluation,
+                    WakeEvaluation.telemetry_event_id == TelemetryEvent.id,  # type: ignore[arg-type]
+                )
+                .where(TelemetryEvent.device_id == device.id)
+                .order_by(TelemetryEvent.device_ts.asc())  # type: ignore[attr-defined]
+            ).all()
+        )
+
+        if not rows:
+            pytest.skip(f"{fixture_path.stem}: no evaluations stored (all events deduped?)")
+
+        # ── replay_db_range baseline: score/decision/consecutive_high ─────
+        local_dates = [datetime.date.fromisoformat(te.local_date) for te, _ in rows]
+        from_date = min(local_dates)
+        to_date = max(local_dates)
+        replay_days = replay_db_range(
+            session=session,
+            device_id=device.id,
+            from_date=from_date,
+            to_date=to_date,
+            candidate_rules=rules,
+            candidate_rule_version_number=rv.version,
+        )
+        all_baseline: list[ReplayEval] = []
+        for rd in replay_days:
+            all_baseline.extend(rd.baseline_evals)
+
+        assert len(all_baseline) == len(rows), (
+            f"{fixture_path.stem}: "
+            f"baseline replay count {len(all_baseline)} != stored count {len(rows)}"
+        )
+
+        # ── Re-run evaluate() directly for full Evaluation comparison ─────
+        # State is tracked PER local_date (same as ingest_telemetry, which
+        # queries previous from the same local_date only and uses day.ticks_received).
+        window_cfg = rules.window.to_window_config()
+        # Per-day state maps keyed by local_date ISO string.
+        _prev: dict[str, PreviousTick | None] = {}
+        _ticks: dict[str, int] = {}
+        _confirmed: dict[str, bool] = {}
+        tz_obj: ZoneInfo | None = None
+
+        for i, ((te, we), baseline_eval) in enumerate(zip(rows, all_baseline, strict=True)):
+            sig = Signals.model_validate_json(te.raw_json)
+            if tz_obj is None:
+                tz_obj = ZoneInfo(sig.tz)
+
+            ld = te.local_date  # ISO string, same as ingest_telemetry uses
+            if ld not in _prev:
+                _prev[ld] = None
+                _ticks[ld] = 0
+                _confirmed[ld] = False
+
+            day_state = DayState.confirmed if _confirmed[ld] else DayState.monitoring
+            ctx = build_eval_context(
+                signals=sig,
+                rules=rules,
+                rule_version_number=rv_orm.id,
+                previous=_prev[ld],
+                ticks_received_today=_ticks[ld],
+                day_state=day_state,
+            )
+            replayed: Evaluation = evaluate(sig, rules, sig.device_ts, ctx)
+            stored_eval: Evaluation = Evaluation.model_validate(json.loads(we.breakdown_json))
+
+            tag = f"{fixture_path.stem} event={i} ({ld})"
+
+            # Score / decision / consecutive_high from DB columns.
+            assert replayed.score == we.score, f"{tag}: score {replayed.score} != {we.score}"
+            assert replayed.decision.value == we.decision, (
+                f"{tag}: decision {replayed.decision.value!r} != {we.decision!r}"
+            )
+            assert replayed.consecutive_high == we.consecutive_high, (
+                f"{tag}: consecutive_high {replayed.consecutive_high} != {we.consecutive_high}"
+            )
+
+            # confirm_reason comes from breakdown_json only.
+            assert replayed.confirm_reason == stored_eval.confirm_reason, (
+                f"{tag}: confirm_reason {replayed.confirm_reason!r} "
+                f"!= {stored_eval.confirm_reason!r}"
+            )
+
+            # Strongest parity: full Evaluation equality (includes breakdown tuple).
+            assert replayed == stored_eval, (
+                f"{tag}: full Evaluation mismatch\n"
+                f"  replayed : {replayed!r}\n"
+                f"  stored   : {stored_eval!r}"
+            )
+
+            # Also verify replay_db_range baseline agrees on the simple fields.
+            assert baseline_eval.score == we.score, (
+                f"{tag}: replay_db_range score {baseline_eval.score} != stored {we.score}"
+            )
+            assert baseline_eval.decision.value == we.decision, (
+                f"{tag}: replay_db_range decision {baseline_eval.decision.value!r} "
+                f"!= stored {we.decision!r}"
+            )
+            assert baseline_eval.consecutive_high == we.consecutive_high, (
+                f"{tag}: replay_db_range consecutive_high "
+                f"{baseline_eval.consecutive_high} != {we.consecutive_high}"
+            )
+            assert baseline_eval.confirm_reason == stored_eval.confirm_reason, (
+                f"{tag}: replay_db_range confirm_reason {baseline_eval.confirm_reason!r} "
+                f"!= stored {stored_eval.confirm_reason!r}"
+            )
+
+            # Advance per-day PreviousTick state.
+            if replayed.decision == EvaluationDecision.confirm:
+                _confirmed[ld] = True
+            assert tz_obj is not None
+            local_date_obj = local_date_for(sig.device_ts, tz_obj, window_cfg.day_boundary)
+            _prev[ld] = PreviousTick(
+                device_ts=sig.device_ts,
+                local_date=local_date_obj,
+                battery_state=sig.battery_state,
+                is_unlocked=sig.is_unlocked,
+                score=replayed.score,
+                decision=replayed.decision,
+                consecutive_high=replayed.consecutive_high,
+            )
+            _ticks[ld] += 1
 
 
 def test_replay_db_range_skips_invalid_raw_json(db_session: Session) -> None:
