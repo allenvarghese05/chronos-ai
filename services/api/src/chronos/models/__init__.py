@@ -8,6 +8,7 @@ calling ``SQLModel.metadata.create_all()``.
 
 from __future__ import annotations
 
+from chronos.models.delivery import PushNotification as PushNotification
 from chronos.models.devices import Device as Device
 from chronos.models.devices import PairingCode as PairingCode
 from chronos.models.settings import Setting as Setting
@@ -22,6 +23,7 @@ __all__ = [
     "DayTransition",
     "Device",
     "PairingCode",
+    "PushNotification",
     "RuleVersion",
     "Setting",
     "TelemetryEvent",

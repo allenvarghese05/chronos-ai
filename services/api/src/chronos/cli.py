@@ -47,10 +47,20 @@ def serve(
     reload: bool = typer.Option(False, "--reload", help="Enable auto-reload (dev only)."),
     host: str | None = typer.Option(None, "--host", help="Override CHRONOS_API_BIND_HOST."),
     port: int | None = typer.Option(None, "--port", help="Override CHRONOS_API_BIND_PORT."),
+    no_scheduler: bool = typer.Option(
+        False,
+        "--no-scheduler",
+        help="Disable the background scheduler (dev / debug).",
+    ),
 ) -> None:
     """Start the Chronos API server with uvicorn."""
+    import os
+
     from chronos.config import get_settings
     from chronos.observability import configure as configure_logging
+
+    if no_scheduler:
+        os.environ["CHRONOS_SCHEDULER_ENABLED"] = "false"
 
     settings = get_settings()
     configure_logging(env=str(settings.env))

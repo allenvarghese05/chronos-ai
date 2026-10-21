@@ -63,9 +63,12 @@ Response 200:
   ],
   "penalties": [],
   "day_state": "confirmed",
-  "next_tick_in_sec": null
+  "next_tick_in_sec": 265
 }
 ```
+`next_tick_in_sec`: seconds until the next scheduled tick (integer >= 0); `null` when
+the day is not in `monitoring` state or the scheduler is disabled.
+
 Errors: 422 `validation`, 422 `clock_skew` (|device_ts − server| > 300 s; detail includes server time), 401/403.
 
 ### `GET /v1/day/today` and `GET /v1/day/{local_date}`
@@ -142,10 +145,18 @@ Response `422 rules_invalid` (problem+json) with `"errors": [{"loc": [...], "msg
 
 ## 6. Push payloads (Expo Push API)
 
-Silent tick:
+Silent tick (sent by `chronos/scheduler.py` every `tick_interval_min` minutes while `day.state=monitoring`):
 ```json
 { "to": "ExponentPushToken[...]", "_contentAvailable": true, "priority": "high", "data": { "type": "tick", "local_date": "2026-10-06", "tick_seq": 15, "window_start": "2026-10-06T06:00:00+05:30" } }
 ```
+
+Expo ticket errors handled by the scheduler:
+- `DeviceNotRegistered` — clears `device.expo_push_token`; no further ticks until re-registered.
+- `MessageRateExceeded` — skips to the next tick instant (one-interval backoff); recorded in `push_notifications`.
+- `MessageTooBig`, `InvalidCredentials` — logged and recorded; does not stop the scheduler.
+
+The `token` field is stripped from `payload_json` before DB storage.  Receipts are checked
+~15 min after send via `POST /--/api/v2/push/getReceipts` and recorded in `push_notifications.receipt_status`.
 Reel ready:
 ```json
 { "to": "...", "title": "Good morning ☀️", "body": "Your 60-second morning reel is ready.", "sound": "default", "priority": "high",

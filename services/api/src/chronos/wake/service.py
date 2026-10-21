@@ -25,7 +25,7 @@ from chronos.errors import ProblemException
 from chronos.models.devices import Device
 from chronos.models.wake import Day, RuleVersion, TelemetryEvent, WakeEvaluation
 from chronos.time import format_utc_iso
-from chronos.wake.rules import WakeRules
+from chronos.wake.rules import ActiveRuleVersion, WakeRules
 from chronos.wake.scoring import (
     EvalContext,
     Evaluation,
@@ -78,7 +78,7 @@ def ingest_telemetry(
     raw_body: bytes,
     now: datetime.datetime,
     rules: WakeRules,
-    rule_version: RuleVersion,
+    rule_version: ActiveRuleVersion,
 ) -> TelemetryResult:
     """Validate, score and persist one telemetry snapshot.
 
@@ -107,7 +107,7 @@ def ingest_telemetry(
         raw_body:     Exact request bytes (capped at RAW_BODY_MAX_BYTES).
         now:          UTC now (injected; frozen in tests).
         rules:        Active WakeRules.
-        rule_version: Active RuleVersion (for FK and version number).
+        rule_version: Active rule-version snapshot (for FK and version number).
 
     Returns:
         :class:`TelemetryResult` with full scoring detail.

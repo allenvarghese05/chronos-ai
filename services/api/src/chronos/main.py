@@ -14,6 +14,7 @@ without a separate lifespan mock.
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -94,7 +95,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         hint="run `chronos config apply-yaml` to promote the updated YAML",
                     )
 
+        # Start scheduler if enabled.
+        _scheduler_task: asyncio.Task[None] | None = None
+        _stop_event: asyncio.Event | None = None
+        _push_client: ExpoPushClient | None = None
+        if resolved.scheduler_enabled:
+            import httpx as _httpx
+            from sqlmodel import Session as _SchedSession
+
+            from chronos.delivery.push import ExpoPushClient
+            from chronos.scheduler import Scheduler
+
+            _push_client = ExpoPushClient(
+                access_token=resolved.expo_access_token,
+                base_url=resolved.expo_push_base_url,
+                http_client=_httpx.AsyncClient(),
+            )
+            _scheduler = Scheduler(
+                session_factory=lambda: _SchedSession(engine),
+                push_client=_push_client,
+                settings=resolved,
+            )
+            _stop_event = asyncio.Event()
+            app.state.scheduler = _scheduler
+            _scheduler_task = asyncio.create_task(
+                _scheduler.run_forever(_stop_event),
+                name="chronos-scheduler",
+            )
+            log.info("scheduler_started")
+
         yield
+
+        if _stop_event is not None:
+            _stop_event.set()
+        if _scheduler_task is not None:
+            try:
+                await asyncio.wait_for(_scheduler_task, timeout=5.0)
+            except TimeoutError:
+                log.warning("scheduler_stop_timeout")
+        if _push_client is not None:
+            await _push_client.close()
+
         engine.dispose()
         reset_rules_cache()
         log.info("chronos_shutdown")

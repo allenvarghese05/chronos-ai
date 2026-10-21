@@ -30,6 +30,7 @@ from chronos.models import (
     DayTransition,
     Device,
     PairingCode,
+    PushNotification,
     RuleVersion,
     Setting,
     TelemetryEvent,
@@ -235,6 +236,37 @@ def make_day_transition(
     session.add(dt)
     session.flush()
     return dt
+
+
+def make_push_notification(
+    session: Session,
+    device: Device,
+    *,
+    tick_seq: int = 0,
+    **kwargs: object,
+) -> PushNotification:
+    """Insert and return a :class:`~chronos.models.PushNotification`."""
+    ts = utc_now_iso()
+    assert device.id is not None
+    defaults: dict[str, object] = {
+        "device_id": device.id,
+        "kind": "tick",
+        "local_date": "2026-10-06",
+        "reel_id": None,
+        "tick_seq": tick_seq,
+        "payload_json": '{"type":"tick"}',
+        "ticket_id": new_ulid(),
+        "ticket_status": "ok",
+        "receipt_status": None,
+        "sent_at": ts,
+        "receipt_checked_at": None,
+        "error": None,
+    }
+    defaults.update(kwargs)
+    pn = PushNotification.model_validate(defaults)
+    session.add(pn)
+    session.flush()
+    return pn
 
 
 def make_setting(session: Session, *, key: str = "render_mode", **kwargs: object) -> Setting:

@@ -119,6 +119,32 @@ class TransitionCause(enum.StrEnum):
     manual = "manual"
 
 
+class PushKind(enum.StrEnum):
+    """Kind of push notification sent to the device."""
+
+    tick = "tick"
+    reel_ready = "reel_ready"
+    text_fallback = "text_fallback"
+    test = "test"
+
+
+class TicketStatus(enum.StrEnum):
+    """Expo ticket status returned from push/send."""
+
+    ok = "ok"
+    error = "error"
+
+
+class ReceiptStatus(enum.StrEnum):
+    """Expo receipt status returned from push/getReceipts."""
+
+    ok = "ok"
+    device_not_registered = "DeviceNotRegistered"
+    message_rate_exceeded = "MessageRateExceeded"
+    message_too_big = "MessageTooBig"
+    invalid_credentials = "InvalidCredentials"
+
+
 def ck_values(e: type[enum.Enum]) -> str:
     """Return a SQL IN-list string for use in a ``CheckConstraint``.
 

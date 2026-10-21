@@ -179,6 +179,13 @@ Other semantics:
 Rows in `days` are keyed by `local_date`; transitions are recorded in `day_transitions` with the
 evaluation id that caused them.
 
+**Scheduler ownership (T1.7):** The `idle → monitoring` and `monitoring → fallback` transitions
+are driven by the background scheduler (`chronos/scheduler.py`), not by the telemetry endpoint.
+The scheduler's `plan()` function checks window boundaries every 60 s and issues `StartMonitoring`
+at `window_start_utc` and `Fallback` at `window_end_utc`.  The telemetry endpoint drives only
+`monitoring → confirmed` (via `wake/state.py:apply()`).  `on_fallback()` is a no-op hook; T5.2
+wires the delivery pipeline.
+
 ## 6. Sampling on the phone
 
 | Wake source | When | What the app does (≤ 25 s budget) |

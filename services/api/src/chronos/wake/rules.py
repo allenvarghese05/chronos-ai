@@ -27,6 +27,7 @@ Public API
 - :func:`load_yaml`
 - :func:`canonical_json`
 - :func:`rules_sha256`
+- :class:`ActiveRuleVersion`
 - :class:`RulesCache`
 - :data:`_cache` — module-level singleton; use via :func:`get_effective_rules`.
 - :func:`activate_new_version`
@@ -391,15 +392,39 @@ def rules_sha256(rules: WakeRules) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Frozen snapshot (replaces ORM-bound RuleVersion in the cache)
+# ---------------------------------------------------------------------------
+
+
+class ActiveRuleVersion(BaseModel, frozen=True):
+    """Immutable snapshot of the active rule version row.
+
+    Stored in :class:`RulesCache` instead of a live ORM instance so the
+    cached value is session-independent and never raises
+    ``DetachedInstanceError``.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    id: int
+    version: int
+    source: str
+    sha256: str
+    created_at: str
+    created_by: str
+
+
+# ---------------------------------------------------------------------------
 # In-memory cache
 # ---------------------------------------------------------------------------
 
 
 class RulesCache:
-    """Thread-safe cache of the currently active ``(WakeRules, RuleVersion)``.
+    """Thread-safe cache of the currently active ``(WakeRules, ActiveRuleVersion)``.
 
     ``get_effective`` returns the cached pair; on a cache miss it fetches the
-    active row from the DB and validates the stored JSON.
+    active row from the DB and builds a frozen :class:`ActiveRuleVersion`
+    snapshot (no expunge/make_transient needed).
 
     ``invalidate`` clears the cache.  Called by :func:`activate_new_version`
     and ``chronos config apply-yaml``.
@@ -408,12 +433,14 @@ class RulesCache:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._rules: WakeRules | None = None
-        self._rv: RuleVersion | None = None
+        self._rv: ActiveRuleVersion | None = None
 
-    def get_effective(self, session: Session) -> tuple[WakeRules, RuleVersion]:
-        """Return ``(WakeRules, RuleVersion)`` for the active version.
+    def get_effective(self, session: Session) -> tuple[WakeRules, ActiveRuleVersion]:
+        """Return ``(WakeRules, ActiveRuleVersion)`` for the active version.
 
-        Reloads from DB if the cache is empty.
+        Reloads from DB if the cache is empty.  The returned
+        :class:`ActiveRuleVersion` is a frozen Pydantic snapshot — it is
+        session-independent and safe to hold across request boundaries.
 
         Raises:
             RuntimeError: If no active rule version is found in the DB.
@@ -423,15 +450,27 @@ class RulesCache:
                 return self._rules, self._rv
 
             stmt = select(RuleVersion).where(RuleVersion.active == 1)
-            rv = session.exec(stmt).first()  # type: ignore[call-overload]
-            if rv is None:
+            rv_row = session.exec(stmt).first()  # type: ignore[call-overload]
+            if rv_row is None:
                 raise RuntimeError(
                     "No active rule version found in DB. Call ensure_initial_version() on startup."
                 )
-            rules = WakeRules.model_validate_json(rv.rules_json)
+            rules = WakeRules.model_validate_json(rv_row.rules_json)
+            # Build a frozen snapshot from the ORM row while the session is
+            # still open.  The snapshot holds plain Python values so it
+            # remains readable after the session closes (no DetachedInstanceError).
+            assert rv_row.id is not None
+            snapshot = ActiveRuleVersion(
+                id=rv_row.id,
+                version=rv_row.version,
+                source=rv_row.source,
+                sha256=rv_row.sha256,
+                created_at=rv_row.created_at,
+                created_by=rv_row.created_by,
+            )
             self._rules = rules
-            self._rv = rv
-            return rules, rv
+            self._rv = snapshot
+            return rules, snapshot
 
     def invalidate(self) -> None:
         """Clear the cache so the next call to :meth:`get_effective` reloads from DB."""
