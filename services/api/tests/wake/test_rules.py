@@ -14,6 +14,7 @@ from sqlmodel import Session, create_engine
 
 from chronos.models.wake import RuleVersion
 from chronos.wake.rules import (
+    ActiveRuleVersion,
     WakeRules,
     WakeRulesWindow,
     activate_new_version,
@@ -745,7 +746,9 @@ class TestRulesCache:
             reset_rules_cache()
             rules, rv = cache.get_effective(tmp_session)
         assert rules.version == 1
-        assert rv.active == 1
+        # rv is a frozen snapshot — always represents the active version
+        assert isinstance(rv, ActiveRuleVersion)
+        assert rv.version == 1
 
     def test_cache_invalidate(
         self, tmp_session: Session, yaml_path: Path, valid_rules: WakeRules
@@ -779,6 +782,36 @@ class TestRulesCache:
         reset_rules_cache()
         with tmp_session, pytest.raises(RuntimeError, match="No active rule version"):
             cache.get_effective(tmp_session)
+
+    def test_snapshot_readable_after_session_closes(self, tmp_path: Path, yaml_path: Path) -> None:
+        """Regression: ActiveRuleVersion snapshot must not raise DetachedInstanceError.
+
+        Two calls from different sessions both read ``.version`` outside their
+        session scope — previously this would raise ``DetachedInstanceError``
+        because the cached ORM object was bound to the first session.
+        """
+        from sqlmodel import SQLModel, create_engine
+
+        engine = create_engine(f"sqlite:///{tmp_path / 'test.db'}")
+        SQLModel.metadata.create_all(engine)
+
+        cache = get_rules_cache()
+        reset_rules_cache()
+
+        # Session 1 — warms the cache.
+        with Session(engine) as s1:
+            ensure_initial_version(s1, yaml_path)
+            reset_rules_cache()
+            _, rv1 = cache.get_effective(s1)
+        # Session 1 is now closed.
+        version_from_s1 = rv1.version  # must not raise DetachedInstanceError
+
+        # Session 2 — cache hit; same snapshot is returned.
+        with Session(engine) as s2:
+            _, rv2 = cache.get_effective(s2)
+        version_from_s2 = rv2.version  # must not raise DetachedInstanceError
+
+        assert version_from_s1 == version_from_s2 == 1
 
 
 # ---------------------------------------------------------------------------

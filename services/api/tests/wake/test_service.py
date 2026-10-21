@@ -23,7 +23,7 @@ from chronos.enums import DayState, EvaluationDecision, EvaluationGate
 from chronos.errors import ProblemException
 from chronos.models.devices import Device
 from chronos.models.wake import Day, RuleVersion, TelemetryEvent, WakeEvaluation
-from chronos.wake.rules import WakeRules, load_yaml
+from chronos.wake.rules import ActiveRuleVersion, WakeRules, load_yaml
 from chronos.wake.service import CLOCK_SKEW_MAX_SEC, ingest_telemetry
 from chronos.wake.signals import Signals
 
@@ -68,12 +68,20 @@ def _make_device(session: Session) -> Device:
     return d
 
 
-def _make_rv(session: Session) -> RuleVersion:
+def _make_rv(session: Session) -> ActiveRuleVersion:
     from tests.factories import make_rule_version
 
-    rv = make_rule_version(session, active=1)
+    rv_orm = make_rule_version(session, active=1)
     session.commit()
-    return rv
+    assert rv_orm.id is not None
+    return ActiveRuleVersion(
+        id=rv_orm.id,
+        version=rv_orm.version,
+        source=rv_orm.source,
+        sha256=rv_orm.sha256,
+        created_at=rv_orm.created_at,
+        created_by=rv_orm.created_by,
+    )
 
 
 def _signals(
@@ -254,8 +262,17 @@ def test_ingest_duplicate_uses_original_rule_version(db_session: Session) -> Non
     assert rv1_row is not None
     rv1_row.active = 0
     db_session.flush()
-    rv2 = make_rule_version(db_session, active=1, version=2)
+    rv2_orm = make_rule_version(db_session, active=1, version=2)
     db_session.commit()
+    assert rv2_orm.id is not None
+    rv2 = ActiveRuleVersion(
+        id=rv2_orm.id,
+        version=rv2_orm.version,
+        source=rv2_orm.source,
+        sha256=rv2_orm.sha256,
+        created_at=rv2_orm.created_at,
+        created_by=rv2_orm.created_by,
+    )
 
     # Duplicate call with rv2 as the current rule version.
     r2 = ingest_telemetry(db_session, device, sig, _raw(sig), now, rules, rv2)
