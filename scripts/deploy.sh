@@ -41,7 +41,9 @@ log_json() {
     local msg="${3:-}"
     local entry
     entry="{\"ts\":\"$(TS)\",\"sha\":\"${sha}\",\"status\":\"${status}\",\"msg\":\"${msg}\"}"
-    echo "${entry}" >> "${LOG_FILE}" 2>/dev/null || true
+    if [ "${DRY_RUN}" != "1" ]; then
+        echo "${entry}" >> "${LOG_FILE}" 2>/dev/null || true
+    fi
     echo "[deploy] ${status}: ${msg}" >&2
 }
 
