@@ -92,31 +92,44 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
 
 ## 4. CD: pull-based deploy on the laptop (D19)
 
+Implemented in `scripts/deploy.sh`, run by `com.chronos.deploy` every 600 s:
+
 ```
 launchd com.chronos.deploy  (StartInterval 600 s)
-  └─ scripts/deploy.sh
-       ├─ cd ~/chronos-ai && git fetch origin main --quiet
-       ├─ [ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] && exit 0
-       ├─ git verify-commit origin/main            # signed commits only (ruleset guarantees)
-       ├─ git merge --ff-only origin/main
-       ├─ (cd services/api && uv sync --locked) ; (cd packages/renderer && pnpm install --frozen-lockfile)
-       ├─ (cd services/api && uv run --locked chronos db migrate && uv run --locked chronos config validate)
+  └─ scripts/deploy.sh [--dry-run]
+       ├─ flock data/deploy.lock   (prevents overlap)
+       ├─ git fetch origin main --quiet
+       ├─ up-to-date check → log status=up-to-date, exit 0
+       ├─ chronos ops in-deploy-window  (exit 0 = inside exclusion, skip) → log status=skipped
+       ├─ git verify-commit origin/main  (warning if signing not configured)
+       ├─ git merge --ff-only origin/main  (fail → log status=failed, exit 1)
+       ├─ uv sync --locked (services/api) + pnpm install --frozen-lockfile (packages/renderer)
+       ├─ chronos db migrate + chronos config validate
        ├─ launchctl kickstart -k gui/$UID/com.chronos.api
-       ├─ curl -fsS --cacert data/certs/rootCA.pem https://chronos.local:8443/readyz || rollback (git reset --hard <prev> && kickstart)
-       └─ log to data/logs/deploy.jsonl
+       ├─ curl -fsS --cacert data/certs/rootCA.pem https://<host>:<port>/readyz (retries ×3)
+       │   └─ on failure: git reset --hard <prev_sha> + kickstart + log status=rolled-back
+       └─ log status=ok to data/logs/deploy.jsonl
 ```
-Deploys never happen between window start − 45 min and window end (guard in the script) so a
-morning is never interrupted; a pending deploy runs after.
+
+Deploys never happen between `window_start − 45 min` and `window_end` (the
+`chronos ops in-deploy-window` guard reads `config/wake_rules.yaml`) so a morning is
+never interrupted; the pending deploy runs after.
+
+`--dry-run` flag: prints each action without executing; useful for testing the script path.
 
 ## 5. Laptop runtime (launchd + pmset)
 
+Plists are rendered from `scripts/launchd/*.plist.template` by `scripts/laptop-setup.sh`
+(substituting `__REPO_ROOT__`, `__HOME__`, `__UV__`). Both are validated with `plutil -lint`
+before `launchctl bootstrap`.
+
 | Item | Detail |
 |---|---|
-| `~/Library/LaunchAgents/com.chronos.api.plist` | `ProgramArguments: [uv, run, --locked, chronos, serve]`, `WorkingDirectory: services/api`, `KeepAlive: true`, `RunAtLoad: true`, `StandardOutPath/ErrorPath: data/logs/`, `EnvironmentVariables: CHRONOS_ENV=prod`, `ProcessType: Interactive` (prevents App Nap throttling), `LowPriorityIO: false` |
-| `com.chronos.deploy.plist` | `StartInterval: 600`, runs `scripts/deploy.sh` |
-| Ollama | `brew services start ollama` (user agent) |
-| `pmset repeat wakeorpoweron MTWRF 05:25:00` and `pmset repeat ... SU 07:25:00` | one `pmset repeat` supports one weekday set + one weekend set exactly as needed; `just laptop-setup` applies and prints `pmset -g sched` |
-| Lid closed on power with external display or `pmset -c disablesleep 1`? | Not required: scheduled wake works with the lid closed only when connected to power **and** an external display/keyboard; otherwise leave the lid open at night. `chronos doctor` checks `pmset -g` for `sleep` policy and warns. See open questions |
+| `~/Library/LaunchAgents/com.chronos.api.plist` | `ProgramArguments: [<uv>, run, --locked, chronos, serve]`, `WorkingDirectory: <repo>/services/api`, `KeepAlive: true`, `RunAtLoad: true`, `StandardOutPath/ErrorPath: <repo>/data/logs/api.{out,err}.log`, `EnvironmentVariables: CHRONOS_ENV=prod`, `ProcessType: Interactive` (prevents App Nap throttling) |
+| `com.chronos.deploy.plist` | `StartInterval: 600`, `ProgramArguments: [/bin/bash, <repo>/scripts/deploy.sh]` |
+| Ollama | `brew services start ollama` (user LaunchAgent, idempotent) |
+| `pmset repeat wakeorpoweron MTWRF 05:25:00 SU 07:25:00` | requires `sudo`; `laptop-setup.sh` prints a RUN-THIS banner in non-interactive shells |
+| Lid closed | scheduled wake works with lid closed **only** when on power + external display/keyboard; otherwise leave lid open at night |
 | App Nap / idle sleep during render | worker wraps jobs in `caffeinate -i -w <pid>` |
 | Time sync | `sntp` check in doctor (clock skew rejects phone events) |
 | Logs | structlog JSONL, `logrotate`-style rotation in-process (size 50 MB / 14 days) |
@@ -131,9 +144,24 @@ morning is never interrupted; a pending deploy runs after.
 - Nightly report `data/logs/reports/<date>.md`: timeline of ticks/scores, confirm time vs actual,
   pipeline stage durations, failures, source health, disk usage. Also posted as a visible push if
   there was a failure (`kind=report`, opt-in).
-- `chronos doctor`: Python/Node versions and pins, model digests, cert expiry, firewall state,
-  pmset schedule, Ollama reachable, disk, DB integrity (`PRAGMA integrity_check`), pending jobs,
-  last successful morning.
+- `chronos doctor` (`just doctor`) — implemented in `services/api/src/chronos/ops/doctor.py`
+  with fully injectable probes (no subprocess calls in tests). Checks:
+
+| Check | Blocking? |
+|---|---|
+| TLS cert files present, mode 600, expiry > 7 days | yes if missing / bad mode |
+| `.env` mode 600 | warn |
+| Model files SHA256 vs `scripts/models.lock` | yes if file missing or hash mismatch |
+| Ollama reachable + model loaded + digest matches justfile `ollama_digest` | yes if unreachable or model absent |
+| `com.chronos.api` + `com.chronos.deploy` in `launchctl list` | yes if API not loaded |
+| `pmset -g sched` entries at 05:25 + 07:25 | warn |
+| Firewall state | warn |
+| FileVault | warn |
+| Disk free ≥ 2 GB (< 1 GB = blocking) | yes if < 1 GB |
+| SQLite `PRAGMA integrity_check` | yes if fails |
+| `public_base_url` hostname resolves | warn |
+
+Prints a PASS/WARN/FAIL table; exits 1 on any blocking failure.
 
 ## 7. Release and versioning
 
