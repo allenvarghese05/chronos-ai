@@ -63,8 +63,8 @@ class DoctorProbes:
 
     run_cmd: _RunCmd = field(default_factory=lambda: _default_run_cmd)
     stat_path: _StatPath = field(default_factory=lambda: _default_stat_path)
-    disk_usage: _DiskUsage = field(default_factory=lambda: shutil.disk_usage)  # type: ignore[arg-type]
-    getaddrinfo: _GetAddrInfo = field(default_factory=lambda: socket.getaddrinfo)  # type: ignore[arg-type]
+    disk_usage: _DiskUsage = field(default_factory=lambda: shutil.disk_usage)  # type: ignore[arg-type]  # shutil.disk_usage accepts str|bytes|PathLike; _DiskUsage(str) is a runtime subset
+    getaddrinfo: _GetAddrInfo = field(default_factory=lambda: socket.getaddrinfo)  # type: ignore[arg-type]  # socket.getaddrinfo has overloaded C-level signature; compatible with _GetAddrInfo at runtime
     http_get: _HttpGet = field(default_factory=lambda: _default_http_get)
     cert_expiry: _CertExpiry = field(default_factory=lambda: _default_cert_expiry)
     read_models_lock: _ReadModelsLock = field(default_factory=lambda: _default_read_models_lock)
