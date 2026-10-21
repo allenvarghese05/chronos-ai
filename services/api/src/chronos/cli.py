@@ -38,6 +38,14 @@ app.add_typer(db_app, name="db")
 config_app = typer.Typer(name="config", help="Config validation commands.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 
+# ── openapi subgroup ─────────────────────────────────────────────────────────
+openapi_app = typer.Typer(
+    name="openapi",
+    help="OpenAPI schema commands.",
+    no_args_is_help=True,
+)
+app.add_typer(openapi_app, name="openapi")
+
 
 # ── serve ─────────────────────────────────────────────────────────────────────
 
@@ -340,3 +348,56 @@ def device_revoke(
 def doctor() -> None:
     """Check this Mac: pins, models, certs, DB. (Stub — implemented in T0.6.)"""
     typer.echo("doctor: not yet implemented (T0.6)")
+
+
+# ── openapi export ────────────────────────────────────────────────────────────
+
+# Default output path: services/api/openapi.json relative to this source file.
+# cli.py lives at src/chronos/cli.py → parents[0]=chronos, [1]=src, [2]=services/api.
+_DEFAULT_OPENAPI_OUT: Path = Path(__file__).parents[2] / "openapi.json"
+
+
+@openapi_app.command("export")
+def openapi_export(
+    out: Path = typer.Option(
+        _DEFAULT_OPENAPI_OUT,
+        "--out",
+        help="Output path for the JSON file (default: services/api/openapi.json).",
+    ),
+) -> None:
+    """Export the OpenAPI 3.1 schema to a deterministic JSON file.
+
+    Serialises the FastAPI schema with sorted keys, indent=2 and a trailing
+    newline.  The ``info.version`` field comes from the repo-root VERSION file
+    (via ``chronos.__version__``).  No network calls are made; the export is
+    pure and deterministic.
+
+    Example::
+
+        chronos openapi export
+        chronos openapi export --out /tmp/openapi.json
+    """
+    import json
+
+    from pydantic import SecretStr
+
+    from chronos.config import Settings
+    from chronos.main import create_app
+
+    # Minimal settings: no real DB path needed; skip wake-rules init and
+    # scheduler so the export function has no side effects.
+    # A dummy secret_key is sufficient; the key is never used during schema
+    # generation (no auth middleware runs until the lifespan context starts).
+    settings = Settings(
+        secret_key=SecretStr("dummy-key-for-schema-export"),
+        database_url="sqlite:///",
+        skip_rules_init=True,
+        scheduler_enabled=False,
+    )
+    fastapi_app = create_app(settings)
+    schema: dict[str, object] = fastapi_app.openapi()  # type: ignore[assignment]
+
+    out.parent.mkdir(parents=True, exist_ok=True)
+    content = json.dumps(schema, sort_keys=True, indent=2) + "\n"
+    out.write_text(content, encoding="utf-8")
+    typer.echo(f"✓ OpenAPI schema written to {out} ({len(content)} bytes)")
