@@ -47,6 +47,17 @@ def make_settings(**overrides: object) -> Settings:
 
 
 @pytest.fixture(autouse=True)
+def _no_dotenv(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Prevent the on-disk .env file from leaking prod values into tests.
+
+    ``services/api/.env`` is created by T0.6 laptop-setup for production use.
+    pydantic-settings reads it automatically unless we override ``env_file``
+    to ``None`` here. This fixture must run before any Settings instantiation.
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
+
+
+@pytest.fixture(autouse=True)
 def _reset_globals() -> None:
     """Reset module-level singletons between tests."""
     reset_settings()
