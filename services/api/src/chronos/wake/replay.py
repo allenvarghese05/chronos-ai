@@ -77,6 +77,11 @@ class ReplayEval:
     wake_source: str
 
 
+def _empty_replay_eval_list() -> list[ReplayEval]:
+    """Typed factory for ReplayEval lists (used in dataclass fields)."""
+    return []
+
+
 @dataclass
 class ReplayDay:
     """Aggregated per-day result: baseline and candidate evaluation lists."""
@@ -85,8 +90,8 @@ class ReplayDay:
     kind: str
     actual_wake_local: str | None  # HH:MM or None
     tz: str
-    baseline_evals: list[ReplayEval] = field(default_factory=list)  # type: ignore[assignment]
-    candidate_evals: list[ReplayEval] = field(default_factory=list)  # type: ignore[assignment]
+    baseline_evals: list[ReplayEval] = field(default_factory=_empty_replay_eval_list)
+    candidate_evals: list[ReplayEval] = field(default_factory=_empty_replay_eval_list)
 
 
 @dataclass
@@ -102,10 +107,6 @@ class DayComparison:
     ticks_ge_confirm: int  # candidate ticks with score >= confirm threshold
     is_early: bool  # any confirm > early_min before actual_wake_local
     skipped_count: int = 0  # invalid raw_json rows skipped
-
-    def __post_init__(self) -> None:
-        # Ensure baseline_evals and candidate_evals are always lists.
-        pass
 
 
 # ---------------------------------------------------------------------------

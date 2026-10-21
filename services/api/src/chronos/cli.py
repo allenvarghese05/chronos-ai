@@ -672,17 +672,16 @@ def wake_replay(
         table.add_column("ticks>=confirm")
         table.add_column("early?")
 
+        def _fmt_confirm(t: object) -> str:
+            if t is None:
+                return "(no confirm)"
+            import datetime as _dt2
+
+            if isinstance(t, _dt2.time):
+                return t.strftime("%H:%M")
+            return str(t)
+
         for c in comparisons:
-
-            def _fmt_confirm(t: object) -> str:
-                if t is None:
-                    return "(no confirm)"
-                import datetime as _dt2
-
-                if isinstance(t, _dt2.time):
-                    return t.strftime("%H:%M")
-                return str(t)
-
             table.add_row(
                 c.local_date.isoformat(),
                 c.kind or "?",

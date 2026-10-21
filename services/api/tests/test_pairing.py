@@ -324,9 +324,13 @@ class TestPairErrors:
 
 
 class TestPairingRateLimit:
-    def test_sixth_request_429(self, test_settings: Settings) -> None:
-        """6th pairing attempt in a minute → 429 with Retry-After."""
-        reset_all()
+    def test_sixth_request_429(
+        self, test_settings: Settings, frozen_rate_limit_clocks: None
+    ) -> None:
+        """6th pairing attempt in a minute → 429 with Retry-After.
+
+        Uses a frozen clock so no bucket refill occurs between requests.
+        """
         app = create_app(settings=test_settings)
         with TestClient(app) as c:
             # insert a fresh code each iteration (we only care about the 429, not the pair result)
@@ -352,8 +356,9 @@ class TestPairingRateLimit:
         assert not allowed
         assert retry_after > 0
 
-    def test_retry_after_header_present(self, test_settings: Settings) -> None:
-        reset_all()
+    def test_retry_after_header_present(
+        self, test_settings: Settings, frozen_rate_limit_clocks: None
+    ) -> None:
         app = create_app(settings=test_settings)
         with TestClient(app) as c:
             r = c.post("/v1/pair", json=_pair_body(generate_pairing_code()))

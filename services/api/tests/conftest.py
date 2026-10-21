@@ -21,6 +21,7 @@ from chronos.config import Settings, reset_settings
 from chronos.main import create_app
 from chronos.observability import reset_for_testing
 from chronos.ratelimit import reset_all as reset_rate_limiters
+from chronos.ratelimit import set_clock_for
 from chronos.wake.rules import reset_rules_cache
 
 
@@ -64,6 +65,26 @@ def _reset_globals() -> None:
     reset_for_testing()
     reset_rate_limiters()
     reset_rules_cache()
+
+
+@pytest.fixture()
+def frozen_rate_limit_clocks() -> None:
+    """Install a frozen clock (always returns 0.0) into all rate-limit buckets.
+
+    Use this fixture in tests that make exactly N HTTP requests to a
+    rate-limited endpoint and assert that the (N+1)-th request is rejected.
+    Without a frozen clock the real ``time.monotonic`` advances between
+    requests, refilling the bucket and making the test flaky on slow machines.
+
+    The ``_reset_globals`` autouse fixture runs first (clearing bucket tokens);
+    this fixture then replaces the clock so no further refill can occur.
+    """
+    _frozen: float = 0.0
+    frozen = lambda: _frozen  # noqa: E731
+    # Install into every bucket that is already registered (created at module
+    # import time by `rate_limit("default", ...)` etc.).
+    for name, per_minute in (("default", 120), ("pairing", 5), ("telemetry", 30)):
+        set_clock_for(name, per_minute, frozen)
 
 
 @pytest.fixture()
