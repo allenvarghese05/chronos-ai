@@ -326,7 +326,7 @@ class TestExpoPushClientClose:
 
     @pytest.mark.anyio
     async def test_close_is_idempotent(self) -> None:
-        """close() can be called multiple times without error."""
+        """close() can be called multiple times; aclose() runs exactly once."""
         from unittest.mock import AsyncMock, MagicMock
 
         mock_http = MagicMock(spec=httpx.AsyncClient)
@@ -339,4 +339,5 @@ class TestExpoPushClientClose:
         await client.close()
         await client.close()
 
-        assert mock_http.aclose.await_count == 2
+        # _closed flag ensures aclose() is called exactly once, not twice.
+        assert mock_http.aclose.await_count == 1

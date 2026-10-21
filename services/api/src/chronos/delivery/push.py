@@ -161,15 +161,19 @@ class ExpoPushClient:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout
         self._http_client = http_client
+        self._closed: bool = False
 
     async def close(self) -> None:
         """Close the underlying :class:`httpx.AsyncClient` if one was injected.
 
         Called during lifespan shutdown so connections are released cleanly.
         If no client was injected (per-request ``async with`` mode), this is a no-op.
+        Subsequent calls after the first are silently ignored (idempotent).
         """
-        if self._http_client is not None:
-            await self._http_client.aclose()
+        if self._closed or self._http_client is None:
+            return
+        self._closed = True
+        await self._http_client.aclose()
 
     def _build_headers(self) -> dict[str, str]:
         headers: dict[str, str] = {
