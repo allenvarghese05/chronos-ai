@@ -166,7 +166,26 @@ Text fallback (render failed): `title: "Morning brief (text)"`, `body` = first t
 
 ## 7. Shared JSON schemas
 
-- `ReelScript` (LLM output) and `ReelProps` (renderer input) are defined in Python
-  (`chronos/content/script/schema.py`, `chronos/media/reel_json.py`); `just gen-types` exports
-  them to `packages/renderer/src/schema.json` + zod and to `apps/mobile/src/api/schema.d.ts`.
-  CI fails if the generated files are stale.
+`just gen-types` → `scripts/gen-types.sh` is the single entry point for schema distribution:
+
+1. **`chronos openapi export`** — serialises the FastAPI OpenAPI 3.1 schema to
+   `services/api/openapi.json` (sorted keys, indent=2, trailing newline, `info.version` from
+   `VERSION`).  Stable `<tag>_<route-name>` operationIds via `generate_unique_id_function`.
+   Native `HTTPBearer` security scheme via `HTTPBearer(auto_error=False)` in `require_device`.
+   Shared `Problem` response component (RFC 9457) declared on authenticated routers via
+   `responses=` for 401/403/422/429.
+
+2. **`openapi-typescript 7.13.0`** — generates `apps/mobile/src/api/schema.d.ts` from the
+   committed `openapi.json`; compatible with the `openapi-fetch` client (T2.2).
+
+3. **Renderer zod (T3.4)** — when `ReelScript`/`ReelProps` Pydantic models exist the hook in
+   `scripts/gen-types.sh` will export `packages/renderer/src/schema.json`; until then the
+   hand-written `packages/renderer/src/schema.ts` is not touched.
+
+Both `services/api/openapi.json` and `apps/mobile/src/api/schema.d.ts` are committed to git.
+
+**CI staleness checks:**
+- `api` job: `chronos openapi export --out /tmp/openapi.json && diff -u services/api/openapi.json /tmp/openapi.json`
+- `mobile` job: `openapi-typescript … --output /tmp/schema.d.ts && diff -u src/api/schema.d.ts /tmp/schema.d.ts`
+
+A PR that modifies a router without running `just gen-types` will fail CI.

@@ -85,6 +85,10 @@ project settings (previously `.npmrc`). See `docs/plans/T0.4-plan.md` §2 Design
 Run `just` to list recipes. `just check` before every push (CI runs the same commands);
 `just security` before every PR.
 
+**After changing any Pydantic model or API router**, run `just gen-types` and commit the
+resulting changes to `services/api/openapi.json` and `apps/mobile/src/api/schema.d.ts`.
+CI will reject stale files.
+
 ## Working with the agents
 
 Every task in the plan runs through four pi subagents defined in `.pi/agents/`:

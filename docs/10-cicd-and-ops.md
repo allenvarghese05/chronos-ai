@@ -15,7 +15,7 @@ scanning, workflow linting, dependency review, pull-based CD and a manual iOS bu
 | `just check` | lint + format-check + types + test + build — **CI parity** |
 | `just check-api` / `check-mobile` / `check-renderer` | exactly what the CI job of that name runs |
 | `just security` | semgrep, bandit, pip-audit, pnpm audit (both), gitleaks; skip-with-message when a tool/registry is missing; fail at end if any part failed |
-| `just gen-types` | export JSON schemas from the API → renderer zod + mobile `schema.d.ts`; CI checks `git diff --exit-code` |
+| `just gen-types` | `scripts/gen-types.sh`: `chronos openapi export` → `services/api/openapi.json`; `openapi-typescript` → `apps/mobile/src/api/schema.d.ts`; renderer zod hook guarded (T3.4); idempotent |
 | `just dev` | API (reload) + Remotion studio + Expo dev server |
 | `just serve` | production API as launchd would run it |
 | `just run <date>` | `chronos run --date <date>` full pipeline now |
@@ -52,8 +52,8 @@ All workflows: `permissions: contents: read` at top level (jobs raise only what 
 
 | Job | Runner | Steps |
 |---|---|---|
-| `api` | ubuntu | setup-uv (pinned), `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest -m "not ollama and not kokoro and not whisper and not remotion"` with coverage ≥ 85 % on `chronos/wake` and `chronos/content/script`, `bandit -r src -ll`, `chronos config validate`, `just gen-types && git diff --exit-code`, semgrep (`p/security-audit p/python`, pinned, `--error`) |
-| `mobile` | ubuntu | setup-node from `.nvmrc`, corepack pnpm pin check, `pnpm install --frozen-lockfile`, `biome ci`, `tsc --noEmit`, `jest --ci`, `expo-doctor` (live-manifest version sub-check disabled via `EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1` in the `check-mobile` recipe — see ADR D32; all other 20 checks run), `expo export --platform ios` (bundle compiles), semgrep `p/typescript` |
+| `api` | ubuntu | setup-uv (pinned), `uv sync --locked`, `ruff check`, `ruff format --check`, `pyright`, `pytest -m "not ollama and not kokoro and not whisper and not remotion"` with coverage ≥ 85 % on `chronos/wake` and `chronos/content/script`, `bandit -r src -ll`, `chronos config validate`, **staleness check**: `chronos openapi export --out /tmp/openapi.json && diff -u services/api/openapi.json /tmp/openapi.json` (no pnpm needed), semgrep (`p/security-audit p/python`, pinned, `--error`) |
+| `mobile` | ubuntu | setup-node from `.nvmrc`, corepack pnpm pin check, `pnpm install --frozen-lockfile`, **schema.d.ts staleness check**: `openapi-typescript … --output /tmp/schema.d.ts && diff -u src/api/schema.d.ts /tmp/schema.d.ts`, `biome ci`, `tsc --noEmit`, `jest --ci`, `expo-doctor` (live-manifest version sub-check disabled via `EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1` in the `check-mobile` recipe — see ADR D32; all other 20 checks run), `expo export --platform ios` (bundle compiles), semgrep `p/typescript` |
 | `renderer` | ubuntu | same JS setup, `biome ci`, `tsc --noEmit`, `vitest run`, Remotion **still smoke render** of `sample-reel.json` (headless shell cached by `actions/cache`), upload `smoke.png` artefact (7 days) |
 | `secrets` | ubuntu | gitleaks (pinned action) over the full history of the PR branch; fails on any finding |
 
