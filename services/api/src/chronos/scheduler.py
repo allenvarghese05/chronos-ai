@@ -252,7 +252,13 @@ class Scheduler:
                 ).all()
             )
             for device in devices:
-                await self._process_device(session, device, now)
+                try:
+                    await self._process_device(session, device, now)
+                except Exception:
+                    log.exception(
+                        "scheduler_device_error",
+                        device_id=device.id,
+                    )
             session.commit()
 
     async def _process_device(

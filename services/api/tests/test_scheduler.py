@@ -794,6 +794,89 @@ class TestSchedulerSimulation:
 
 
 # ---------------------------------------------------------------------------
+# MINOR 2: run_due per-device try/except — one device error does not stop others
+# ---------------------------------------------------------------------------
+
+
+class TestRunDuePerDeviceErrorIsolation:
+    """A device that raises in _process_device must not prevent other devices from being ticked."""
+
+    @pytest.mark.anyio
+    async def test_device_a_error_device_b_still_ticked(self, tmp_path: Path) -> None:
+        """Device A raises in _process_device; Device B still gets a tick."""
+        from unittest.mock import patch
+
+        settings = _make_test_settings(tmp_path)
+        session_factory = _make_session_factory(settings)
+
+        from chronos.wake.rules import ensure_initial_version, get_rules_cache, reset_rules_cache
+
+        reset_rules_cache()
+        with session_factory() as session:
+            rules_path = Path(__file__).parents[1] / "config" / "wake_rules.yaml"
+            ensure_initial_version(session, rules_path)
+            session.commit()
+            get_rules_cache().get_effective(session)
+
+        # Create two devices
+        with session_factory() as session:
+            from tests.factories import make_device
+
+            device_a = make_device(
+                session,
+                tz="America/Los_Angeles",
+                expo_push_token="ExponentPushToken[device_a]",
+                status="active",
+            )
+            device_b = make_device(
+                session,
+                tz="America/Los_Angeles",
+                expo_push_token="ExponentPushToken[device_b]",
+                status="active",
+            )
+            session.commit()
+            device_a_id: int = device_a.id  # type: ignore[assignment]
+            device_b_id: int = device_b.id  # type: ignore[assignment]
+
+        fake_push = FakePushClient()
+        scheduler = Scheduler(
+            session_factory=session_factory,
+            push_client=fake_push,
+            settings=settings,
+        )
+
+        window = _make_window()
+
+        original_process = scheduler._process_device
+
+        async def patched_process(session: object, device: object, now: object) -> None:
+            from chronos.models.devices import Device as _Dev
+
+            assert isinstance(device, _Dev)
+            if device.id == device_a_id:
+                raise RuntimeError("simulated device A failure")
+            return await original_process(session, device, now)  # type: ignore[arg-type]
+
+        with patch.object(scheduler, "_process_device", patched_process):
+            await scheduler.run_due(window.start_utc)
+            await scheduler.run_due(window.start_utc + datetime.timedelta(minutes=1))
+
+        # Device B should have received at least a StartMonitoring+tick sequence
+        with session_factory() as session:
+            pns_b = list(
+                session.exec(  # type: ignore[call-overload]
+                    select(PushNotification).where(
+                        PushNotification.device_id == device_b_id,
+                    )
+                ).all()
+            )
+
+        assert len(pns_b) >= 1, (
+            f"Expected device B to receive ticks even though device A raised; got {pns_b}"
+        )
+
+
+# ---------------------------------------------------------------------------
 # BLOCKING 1: run_due uses get_effective(session) — cache-invalidation test
 # ---------------------------------------------------------------------------
 
