@@ -151,12 +151,12 @@ Silent tick (sent by `chronos/scheduler.py` every `tick_interval_min` minutes wh
 ```
 
 Expo ticket errors handled by the scheduler:
-- `DeviceNotRegistered` ffffd clears `device.expo_push_token`; no further ticks until re-registered.
-- `MessageRateExceeded` ffffd skips to the next tick instant (one-interval backoff); recorded in `push_notifications`.
-- `MessageTooBig`, `InvalidCredentials` ffffd logged and recorded; does not stop the scheduler.
+- `DeviceNotRegistered` — clears `device.expo_push_token`; no further ticks until re-registered.
+- `MessageRateExceeded` — skips to the next tick instant (one-interval backoff); recorded in `push_notifications`.
+- `MessageTooBig`, `InvalidCredentials` — logged and recorded; does not stop the scheduler.
 
 The `token` field is stripped from `payload_json` before DB storage.  Receipts are checked
-ffffd 15 min after send via `POST /--/api/v2/push/getReceipts` and recorded in `push_notifications.receipt_status`.
+~15 min after send via `POST /--/api/v2/push/getReceipts` and recorded in `push_notifications.receipt_status`.
 Reel ready:
 ```json
 { "to": "...", "title": "Good morning ☀️", "body": "Your 60-second morning reel is ready.", "sound": "default", "priority": "high",
