@@ -11,16 +11,20 @@ Pod::Spec.new do |s|
   s.author         = package['author'] || 'Chronos'
   s.homepage       = package['homepage'] || 'https://github.com/allenvarghese/chronos-ai'
   s.platforms      = { :ios => '17.0' }
-  s.swift_version  = '6.0'
+  s.swift_version  = '5.9'
   s.source         = { git: '' }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
 
-  # Include the Expo module wrapper AND the pure ChronosSensorsCore sources.
-  # Tests/ are excluded (no XCTest framework available in Pod builds).
+  # Include the Expo module wrapper files and the pure ChronosSensorsCore sources.
+  # Paths are relative to this podspec (i.e. relative to ios/).
+  # Tests/ are excluded — no XCTest framework available in Pod builds.
   s.source_files = [
-    'ios/*.swift',
-    'ios/ChronosSensorsCore/Sources/**/*.swift',
+    '*.swift',
+    'ChronosSensorsCore/Sources/**/*.swift',
   ]
+
+  # Required system frameworks for CoreMotion, UIKit and BGTaskScheduler.
+  s.frameworks = ['CoreMotion', 'UIKit', 'BackgroundTasks']
 end
