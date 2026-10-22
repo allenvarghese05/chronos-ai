@@ -9,5 +9,9 @@ PKG="$REPO_ROOT/apps/mobile/modules/chronos-sensors/ios/ChronosSensorsCore"
 
 echo "=== ChronosSensorsCore swift test ==="
 echo "Package: $PKG"
+
+# Clean stale build state that can cause "unable to load build file" errors.
+swift package --package-path "$PKG" reset 2>/dev/null || true
+
 swift test --package-path "$PKG"
 echo "=== swift test: all tests passed ==="
