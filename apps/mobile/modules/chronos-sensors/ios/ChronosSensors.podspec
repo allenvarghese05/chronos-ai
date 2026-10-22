@@ -11,11 +11,16 @@ Pod::Spec.new do |s|
   s.author         = package['author'] || 'Chronos'
   s.homepage       = package['homepage'] || 'https://github.com/allenvarghese/chronos-ai'
   s.platforms      = { :ios => '17.0' }
-  s.swift_version  = '5.9'
+  s.swift_version  = '6.0'
   s.source         = { git: '' }
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
 
-  s.source_files = '**/*.{h,m,mm,swift,hpp,cpp}'
+  # Include the Expo module wrapper AND the pure ChronosSensorsCore sources.
+  # Tests/ are excluded (no XCTest framework available in Pod builds).
+  s.source_files = [
+    'ios/*.swift',
+    'ios/ChronosSensorsCore/Sources/**/*.swift',
+  ]
 end
