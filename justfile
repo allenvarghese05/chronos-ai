@@ -197,7 +197,7 @@ check-mobile:
     cd apps/mobile
     pnpm exec biome ci .
     pnpm exec biome format .
-    pnpm exec tsc --noEmit
+    pnpm run typecheck
     pnpm exec jest --ci
     # expo-doctor: skip live-manifest version check (deterministic CI; drift visible in audit.yml weekly advisory — ADR D32)
     EXPO_DOCTOR_SKIP_DEPENDENCY_VERSION_CHECK=1 pnpm exec expo-doctor

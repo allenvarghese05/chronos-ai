@@ -66,15 +66,17 @@ final class ActivityAdapter: ActivityQuerying, @unchecked Sendable {
 
 // MARK: - Module
 
-public class ChronosSensorsModule: Module {
+// Expo owns the module context; our adapters are immutable and Sendable, and all
+// mutable background-task state is isolated to MainActor.
+public class ChronosSensorsModule: Module, @unchecked Sendable {
     // Adapters are created once; CoreMotion objects are thread-safe.
     private let pedometer = PedometerAdapter()
     private let activityAdapter = ActivityAdapter()
     // Reference to the pending BGAppRefreshTask so JS can call completeBackgroundRefresh.
-    // @unchecked because we guard mutation with the main-actor isolation of BGTaskScheduler.
-    nonisolated(unsafe) private var pendingTask: BGAppRefreshTask?
+    // Expo calls arrive on different queues; all mutable lifecycle state is main-isolated.
+    @MainActor private var pendingTask: BGAppRefreshTask?
     // Auto-complete timer: fires after 25 s if JS never completes the task.
-    nonisolated(unsafe) private var completionTimer: Timer?
+    @MainActor private var completionTimer: Timer?
 
     public func definition() -> ModuleDefinition {
         Name("ChronosSensors")
@@ -160,16 +162,16 @@ public class ChronosSensorsModule: Module {
 
         // ── Device state (synchronous, main thread) ───────────────────────────
         Function("deviceState") { () -> [String: Any] in
-            var result: [String: Any] = [:]
+            let inputs: DeviceStateInputs
             // UIKit reads require the main thread.
             if Thread.isMainThread {
-                result = Self.readDeviceState()
+                inputs = MainActor.assumeIsolated { Self.readDeviceStateInputs() }
             } else {
-                DispatchQueue.main.sync {
-                    result = Self.readDeviceState()
+                inputs = DispatchQueue.main.sync {
+                    MainActor.assumeIsolated { Self.readDeviceStateInputs() }
                 }
             }
-            return result
+            return mapDeviceState(inputs)
         }
 
         // ── Background refresh ────────────────────────────────────────────────
@@ -194,10 +196,9 @@ public class ChronosSensorsModule: Module {
         }
 
         Function("completeBackgroundRefresh") { (success: Bool) in
-            self.completionTimer?.invalidate()
-            self.completionTimer = nil
-            self.pendingTask?.setTaskCompleted(success: success)
-            self.pendingTask = nil
+            DispatchQueue.main.async {
+                self.finishBackgroundRefresh(success: success)
+            }
         }
 
         Events("backgroundRefresh")
@@ -206,9 +207,9 @@ public class ChronosSensorsModule: Module {
     // MARK: - Private helpers
 
     /// Read device state from UIKit. Must be called on the main thread.
-    private static func readDeviceState() -> [String: Any] {
+    @MainActor private static func readDeviceStateInputs() -> DeviceStateInputs {
         UIDevice.current.isBatteryMonitoringEnabled = true
-        let inputs = DeviceStateInputs(
+        return DeviceStateInputs(
             isProtectedDataAvailable: UIApplication.shared.isProtectedDataAvailable,
             batteryStateRaw:          UIDevice.current.batteryState.rawValue,
             batteryLevel:             UIDevice.current.batteryLevel,
@@ -216,7 +217,6 @@ public class ChronosSensorsModule: Module {
             isLowPowerModeEnabled:    ProcessInfo.processInfo.isLowPowerModeEnabled,
             iosVersion:               UIDevice.current.systemVersion
         )
-        return mapDeviceState(inputs)
     }
 
     // MARK: - Lifecycle
@@ -234,23 +234,37 @@ public class ChronosSensorsModule: Module {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        completionTimer?.invalidate()
     }
 
     @objc private func handleBGRefreshNotification(_ notification: Notification) {
         guard let task = notification.userInfo?[kChronosBGTaskKey] as? BGAppRefreshTask else { return }
-        pendingTask = task
-        sendEvent("backgroundRefresh", ["id": task.identifier])
-        // Auto-complete with success=false after 25 s if JS never calls completeBackgroundRefresh.
-        let timer = Timer(timeInterval: 25, repeats: false) { [weak self] _ in
-            guard let self else { return }
-            if self.pendingTask != nil {
-                print("[ChronosSensors] Auto-completing background task after 25 s timeout")
-                self.pendingTask?.setTaskCompleted(success: false)
-                self.pendingTask = nil
+        DispatchQueue.main.async {
+            self.finishBackgroundRefresh(success: false)
+            self.pendingTask = task
+            // Install the timeout before JS can respond to the event.
+            // Retain the module until the safety completion even if Expo releases it.
+            let timer = Timer(timeInterval: 25, repeats: false) { [self] _ in
+                DispatchQueue.main.async {
+                    self.finishBackgroundRefresh(success: false)
+                }
             }
+            RunLoop.main.add(timer, forMode: .default)
+            self.completionTimer = timer
+            task.expirationHandler = { [weak self] in
+                DispatchQueue.main.async {
+                    self?.finishBackgroundRefresh(success: false)
+                }
+            }
+            self.sendEvent("backgroundRefresh", ["id": task.identifier])
         }
-        RunLoop.main.add(timer, forMode: .default)
-        completionTimer = timer
+    }
+
+    /// One main-isolated completion path for JS, expiration, and the safety timeout.
+    @MainActor private func finishBackgroundRefresh(success: Bool) {
+        completionTimer?.invalidate()
+        completionTimer = nil
+        pendingTask?.expirationHandler = nil
+        pendingTask?.setTaskCompleted(success: success)
+        pendingTask = nil
     }
 }

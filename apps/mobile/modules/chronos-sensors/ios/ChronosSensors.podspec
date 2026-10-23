@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
   s.author         = package['author'] || 'Chronos'
   s.homepage       = package['homepage'] || 'https://github.com/allenvarghese/chronos-ai'
   s.platforms      = { :ios => '17.0' }
-  s.swift_version  = '5.9'
+  s.swift_version  = '6.0'
   s.source         = { git: '' }
   s.static_framework = true
 
