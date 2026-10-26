@@ -37,6 +37,10 @@ out/
 .expo-shared/
 *.tsbuildinfo
 
+# SwiftPM build artifacts
+apps/mobile/modules/*/ios/**/.build/
+apps/mobile/modules/*/ios/**/*.resolved
+
 # Expo prebuild output (regenerated from app.config.ts; the Swift module lives in modules/)
 apps/mobile/ios/
 apps/mobile/android/

@@ -5,3 +5,7 @@ nodeLinker: hoisted
 
 allowBuilds:
   esbuild: true
+
+# Keep Remotion's Zod4 graph on the patched collection-validation release.
+overrides:
+  "zod@>=4 <4.6.6": 4.6.6

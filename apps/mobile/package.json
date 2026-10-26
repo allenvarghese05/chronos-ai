@@ -8,7 +8,7 @@
 		"ios": "expo run:ios",
 		"build": "expo export --platform ios",
 		"test": "jest --watchAll",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tooling.json",
 		"lint": "biome ci ."
 	},
 	"dependencies": {

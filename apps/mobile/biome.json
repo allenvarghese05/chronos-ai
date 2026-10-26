@@ -24,7 +24,8 @@
 			"!ios",
 			"!android",
 			"!dist",
-			"!src/api/schema.d.ts"
+			"!src/api/schema.d.ts",
+			"!modules/*/ios/**/.build"
 		]
 	}
 }
