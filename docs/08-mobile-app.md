@@ -56,6 +56,32 @@
 
 ## 2. Swift Expo Module `chronos-sensors`
 
+**File layout (T2.1):**
+
+```
+modules/chronos-sensors/
+  ios/
+    ChronosSensors.podspec          # includes ChronosSensorsCore/Sources/**
+    ChronosSensorsModule.swift      # Expo wrapper: all functions + Events
+    ChronosSensorsAppDelegateSubscriber.swift  # BGTaskScheduler registration at launch
+    ChronosSensorsCore/             # SwiftPM package (pure Swift, no Expo import)
+      Package.swift
+      Sources/ChronosSensorsCore/
+        Constants.swift             # BG_REFRESH_IDENTIFIER
+        Protocols.swift             # StepQuerying, ActivityQuerying, Sendable result types
+        ActivitySample.swift        # Value type mirroring CMMotionActivity
+        ActivitySummariser.swift    # Pure duration summation + confidence extraction
+        DeviceStateMapper.swift     # UIKit enum->string mapping (pure)
+      Tests/ChronosSensorsCoreTests/
+        ActivitySummariserTests.swift
+        DeviceStateMapperTests.swift
+  src/index.ts                      # Full typed TS API + addBackgroundRefreshListener
+  expo-module.config.json           # modules + appDelegateSubscribers
+```
+
+> **T2.1 acceptance note:** The manual "50 real steps" check is deferred to T2.4 (physical device).
+> The Simulator acceptance criterion shows `deviceState()` JSON and the `pedometer_unavailable` path.
+
 `modules/chronos-sensors/ios/ChronosSensorsModule.swift` (Expo Modules API):
 
 ```swift

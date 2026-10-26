@@ -1,6 +1,7 @@
 {
 	"platforms": ["apple"],
 	"apple": {
-		"modules": ["ChronosSensorsModule"]
+		"modules": ["ChronosSensorsModule"],
+		"appDelegateSubscribers": ["ChronosSensorsAppDelegateSubscriber"]
 	}
 }

@@ -81,3 +81,7 @@ include = ["src"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 reportMissingTypeStubs = false
+
+# Keep pip-audit's transitive cache lock on the patched release.
+[tool.uv]
+constraint-dependencies = ["filelock==4.2.1"]
