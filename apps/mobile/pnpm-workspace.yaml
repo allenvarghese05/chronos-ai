@@ -20,3 +20,7 @@ auditConfig:
     - GHSA-86w9-cpqp-85rv
     - GHSA-vfj7-8cjw-p6xm
     - GHSA-hp3w-g68c-fv3c
+
+# SDK57 CLI devtools schemas use APIs retained by patched Zod4.
+overrides:
+  "@expo/cli>zod": 4.6.6

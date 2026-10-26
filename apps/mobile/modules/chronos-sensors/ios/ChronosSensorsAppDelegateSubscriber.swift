@@ -9,8 +9,8 @@ import BackgroundTasks
 ///
 /// When the task fires it posts a `chronosBGRefreshFired` notification; the live
 /// `ChronosSensorsModule` instance observes it and emits the JS `backgroundRefresh` event.
-/// The subscriber also sets a 25-second expiration handler so iOS does not kill the app if
-/// neither the module nor JS ever completes the task.
+/// The subscriber installs the iOS expiration fallback; the module adds a 25-second
+/// safety timer before emitting to JS.
 public class ChronosSensorsAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     public func application(
         _ application: UIApplication,
@@ -18,7 +18,7 @@ public class ChronosSensorsAppDelegateSubscriber: ExpoAppDelegateSubscriber {
     ) -> Bool {
         BGTaskScheduler.shared.register(
             forTaskWithIdentifier: BG_REFRESH_IDENTIFIER,
-            using: nil
+            using: DispatchQueue.main
         ) { task in
             guard let refreshTask = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)

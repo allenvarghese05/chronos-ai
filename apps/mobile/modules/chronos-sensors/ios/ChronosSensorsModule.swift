@@ -66,17 +66,48 @@ final class ActivityAdapter: ActivityQuerying, @unchecked Sendable {
 
 // MARK: - Module
 
-// Expo owns the module context; our adapters are immutable and Sendable, and all
-// mutable background-task state is isolated to MainActor.
-public class ChronosSensorsModule: Module, @unchecked Sendable {
+/// Keeps the BG task, timeout, and expiration completion on one actor.
+@MainActor private final class BackgroundRefreshState {
+    private var pendingTask: BGAppRefreshTask?
+    private var completionTimer: Timer?
+
+    nonisolated init() {}
+
+    func begin(_ task: BGAppRefreshTask) {
+        finish(success: false)
+        pendingTask = task
+        let taskID = ObjectIdentifier(task)
+        // Retain the state until safety completion even if Expo releases the module.
+        let timer = Timer(timeInterval: 25, repeats: false) { [self] _ in
+            DispatchQueue.main.async {
+                self.finish(success: false, expectedTask: taskID)
+            }
+        }
+        RunLoop.main.add(timer, forMode: .default)
+        completionTimer = timer
+        task.expirationHandler = { [weak self] in
+            DispatchQueue.main.async {
+                self?.finish(success: false, expectedTask: taskID)
+            }
+        }
+    }
+
+    func finish(success: Bool, expectedTask: ObjectIdentifier? = nil) {
+        // An already queued timeout/expiration must not finish a newer task.
+        if let expectedTask, pendingTask.map(ObjectIdentifier.init) != expectedTask { return }
+        completionTimer?.invalidate()
+        completionTimer = nil
+        pendingTask?.expirationHandler = nil
+        pendingTask?.setTaskCompleted(success: success)
+        pendingTask = nil
+    }
+}
+
+public class ChronosSensorsModule: Module {
     // Adapters are created once; CoreMotion objects are thread-safe.
     private let pedometer = PedometerAdapter()
     private let activityAdapter = ActivityAdapter()
-    // Reference to the pending BGAppRefreshTask so JS can call completeBackgroundRefresh.
-    // Expo calls arrive on different queues; all mutable lifecycle state is main-isolated.
-    @MainActor private var pendingTask: BGAppRefreshTask?
-    // Auto-complete timer: fires after 25 s if JS never completes the task.
-    @MainActor private var completionTimer: Timer?
+    private let backgroundRefresh = BackgroundRefreshState()
 
     public func definition() -> ModuleDefinition {
         Name("ChronosSensors")
@@ -122,9 +153,9 @@ public class ChronosSensorsModule: Module, @unchecked Sendable {
             }
             let from = Date(timeIntervalSince1970: fromMs / 1000)
             let to   = Date(timeIntervalSince1970: toMs   / 1000)
-            Task {
+            Task { [pedometer] in
                 do {
-                    let result = try await self.pedometer.querySteps(from: from, to: to)
+                    let result = try await pedometer.querySteps(from: from, to: to)
                     promise.resolve(["steps": result.steps, "distanceM": result.distanceM])
                 } catch {
                     promise.reject("pedometer_error", error.localizedDescription)
@@ -136,9 +167,9 @@ public class ChronosSensorsModule: Module, @unchecked Sendable {
         AsyncFunction("queryActivity") { (fromMs: Double, toMs: Double, promise: Promise) in
             let from = Date(timeIntervalSince1970: fromMs / 1000)
             let to   = Date(timeIntervalSince1970: toMs   / 1000)
-            Task {
+            Task { [activityAdapter] in
                 do {
-                    let samples  = try await self.activityAdapter.queryActivity(from: from, to: to)
+                    let samples  = try await activityAdapter.queryActivity(from: from, to: to)
                     let summary  = try summarise(samples: samples, from: from, to: to)
                     promise.resolve([
                         "walkingSec":    summary.walkingSec,
@@ -196,8 +227,9 @@ public class ChronosSensorsModule: Module, @unchecked Sendable {
         }
 
         Function("completeBackgroundRefresh") { (success: Bool) in
+            let state = self.backgroundRefresh
             DispatchQueue.main.async {
-                self.finishBackgroundRefresh(success: success)
+                state.finish(success: success)
             }
         }
 
@@ -236,35 +268,12 @@ public class ChronosSensorsModule: Module, @unchecked Sendable {
         NotificationCenter.default.removeObserver(self)
     }
 
-    @objc private func handleBGRefreshNotification(_ notification: Notification) {
+    @MainActor @objc private func handleBGRefreshNotification(_ notification: Notification) {
+        // The subscriber registers its launch handler on DispatchQueue.main, and
+        // NotificationCenter delivers this selector synchronously on that queue.
         guard let task = notification.userInfo?[kChronosBGTaskKey] as? BGAppRefreshTask else { return }
-        DispatchQueue.main.async {
-            self.finishBackgroundRefresh(success: false)
-            self.pendingTask = task
-            // Install the timeout before JS can respond to the event.
-            // Retain the module until the safety completion even if Expo releases it.
-            let timer = Timer(timeInterval: 25, repeats: false) { [self] _ in
-                DispatchQueue.main.async {
-                    self.finishBackgroundRefresh(success: false)
-                }
-            }
-            RunLoop.main.add(timer, forMode: .default)
-            self.completionTimer = timer
-            task.expirationHandler = { [weak self] in
-                DispatchQueue.main.async {
-                    self?.finishBackgroundRefresh(success: false)
-                }
-            }
-            self.sendEvent("backgroundRefresh", ["id": task.identifier])
-        }
+        backgroundRefresh.begin(task)
+        self.sendEvent("backgroundRefresh", ["id": task.identifier])
     }
 
-    /// One main-isolated completion path for JS, expiration, and the safety timeout.
-    @MainActor private func finishBackgroundRefresh(success: Bool) {
-        completionTimer?.invalidate()
-        completionTimer = nil
-        pendingTask?.expirationHandler = nil
-        pendingTask?.setTaskCompleted(success: success)
-        pendingTask = nil
-    }
 }
