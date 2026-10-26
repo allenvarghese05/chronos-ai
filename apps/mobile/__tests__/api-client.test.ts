@@ -105,3 +105,31 @@ test('aborts stalled transport within10seconds without leaking error', async () 
 	await expect(result).rejects.toThrow('Cannot reach');
 	jest.useRealTimers();
 });
+
+test('chunked response is cancelled at the size bound without parsing', async () => {
+	const reader = {
+		read: jest.fn(async () => ({ done: false, value: new Uint8Array(32769) })),
+		cancel: jest.fn(async () => {}),
+		releaseLock: jest.fn(),
+	};
+	const reply = {
+		status: 200,
+		ok: true,
+		headers: new Headers(),
+		body: { getReader: () => reader },
+	} as unknown as Response;
+	await expect(createApi(base, async () => reply, token).getDevice()).rejects.toThrow('too large');
+	expect(reader.cancel).toHaveBeenCalledTimes(1);
+	expect(reader.releaseLock).toHaveBeenCalledTimes(1);
+});
+
+test('authenticated malformed JSON errors never expose remote body', async () => {
+	const api = createApi(
+		base,
+		async () =>
+			new Response('SECRET', { status: 200, headers: { 'content-type': 'application/json' } }),
+		token,
+	);
+	await expect(api.getDevice()).rejects.toThrow('invalid device response');
+	await expect(api.revoke()).rejects.toThrow('valid revocation response');
+});

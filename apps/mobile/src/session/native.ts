@@ -36,7 +36,10 @@ export async function requestPushToken(): Promise<PushResult> {
 				'Push registration needs a signed physical iPhone build (T2.4). Pairing works in Simulator.',
 		};
 	const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
-	if (typeof projectId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(projectId))
+	if (
+		typeof projectId !== 'string' ||
+		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)
+	)
 		return {
 			unavailable:
 				'Set EXPO_PROJECT_ID for your existing Expo project and rebuild to enable notifications.',

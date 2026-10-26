@@ -24,6 +24,9 @@ export function canonicalApiBase(raw: string): string {
 	}
 	if (
 		url.protocol !== 'https:' ||
+		raw.includes('@') ||
+		raw.includes('?') ||
+		raw.includes('#') ||
 		url.username ||
 		url.password ||
 		url.search ||
@@ -73,7 +76,7 @@ export function parseSession(value: unknown): Session {
 		value.version !== 1 ||
 		typeof value.apiBase !== 'string' ||
 		typeof value.deviceId !== 'string' ||
-		!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(value.deviceId) ||
+		!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/.test(value.deviceId) ||
 		typeof value.token !== 'string' ||
 		!/^[A-Za-z0-9_-]{43}$/.test(value.token) ||
 		Object.keys(value).sort().join(',') !== 'apiBase,deviceId,token,version'

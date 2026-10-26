@@ -118,10 +118,15 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		},
 	});
 	async function deviceResult(call: () => Promise<{ data?: unknown }>) {
-		const { data } = await call();
-		if (!record(data) || typeof data.device_id !== 'string' || data.status !== 'active')
-			throw new ApiError(0, 'The laptop returned an invalid device record.');
-		return data.device_id;
+		try {
+			const { data } = await call();
+			if (!record(data) || typeof data.device_id !== 'string' || data.status !== 'active')
+				throw new ApiError(0, 'The laptop returned an invalid device record.');
+			return data.device_id;
+		} catch (error) {
+			if (error instanceof ApiError) throw error;
+			throw new ApiError(0, 'The laptop returned an invalid device response.');
+		}
 	}
 	return {
 		async pair(code: string, device: DeviceInfo): Promise<Session> {
@@ -139,7 +144,12 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		getDevice: () => deviceResult(() => client.GET('/v1/device/me')),
 		patchDevice: (body: DevicePatch) => deviceResult(() => client.PATCH('/v1/device/me', { body })),
 		async revoke() {
-			await client.DELETE('/v1/device/me');
+			try {
+				await client.DELETE('/v1/device/me');
+			} catch (error) {
+				if (error instanceof ApiError) throw error;
+				throw new ApiError(0, 'The laptop did not return a valid revocation response.');
+			}
 		},
 	};
 }

@@ -204,3 +204,21 @@ test('unconfirmed server revoke keeps session; successful revoke clears it', asy
 	await f.controller.revoke();
 	expect(f.controller.store.getState().phase).toBe('unpaired');
 });
+
+test('concurrent GET and PATCH auth failures clear the same generation once', async () => {
+	const f = fixture(JSON.stringify(session));
+	await f.controller.hydrate();
+	const get = deferred<string>();
+	const patch = deferred<string>();
+	f.api.getDevice = () => get.promise;
+	f.api.patchDevice = () => patch.promise;
+	const validation = f.controller.validate();
+	const pushing = f.controller.registerPush();
+	await Promise.resolve();
+	await Promise.resolve();
+	get.reject(new ApiError(401, 'Pair again'));
+	patch.reject(new ApiError(403, 'Revoked'));
+	await Promise.all([validation, pushing]);
+	expect(f.storage.remove).toHaveBeenCalledTimes(1);
+	expect(f.controller.store.getState().phase).toBe('unpaired');
+});
