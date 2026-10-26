@@ -26,3 +26,17 @@ describe('app.config.ts iOS keys', () => {
 		);
 	});
 });
+
+test('QR-only camera plugin disables microphone and leaves push project optional', () => {
+	const config = (
+		require('../app.config') as { default: (ctx: object) => { plugins: unknown[]; extra: object } }
+	).default({ config: {} });
+	expect(config.plugins).toContainEqual([
+		'expo-camera',
+		{
+			cameraPermission: 'Scan the pairing QR shown on your laptop.',
+			microphonePermission: false,
+			recordAudioAndroid: false,
+		},
+	]);
+});
