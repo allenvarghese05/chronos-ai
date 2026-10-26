@@ -35,3 +35,5 @@ tasks go in `docs/decisions/Dnn-slug.md` using the same table shape and the next
 | D28 | Observability | `structlog` JSON logs to `data/logs/`, rotated; `/metrics` (Prometheus text) for job durations and tick counts; nightly Markdown report of the day's evaluations; `chronos doctor` CLI. | Enough to debug a flaky morning without external services. | — |
 | D29 | Config | Pydantic Settings with `CHRONOS_` prefix; YAML for rules/sources; schema-validated on startup; `chronos config validate` in CI. | — | — |
 | D30 | Model weights | Ollama models, Kokoro ONNX and whisper ggml files live under `data/models/` (gitignored) and are fetched by `just models` with pinned URLs and SHA-256 checks. | Reproducible, nothing in git. | — |
+
+D34: [Device-session Keychain accessibility](decisions/D34-device-session-keychain.md) supersedes the session accessibility requirement in the security document.
