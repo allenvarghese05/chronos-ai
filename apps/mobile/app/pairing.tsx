@@ -1,7 +1,7 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Device from 'expo-device';
-import { Link, Redirect } from 'expo-router';
-import { useRef, useState } from 'react';
+import { Link, Redirect, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { Button, ScrollView, Text, TextInput, View } from 'react-native';
 import { canonicalApiBase, normaliseCode, parsePairingQr } from '../src/pairing/validation';
 import { useSession } from '../src/session/provider';
@@ -12,11 +12,34 @@ export default function Pairing() {
 	const [apiBase, setApiBase] = useState('');
 	const [code, setCode] = useState('');
 	const [confirmation, setConfirmation] = useState<{ apiBase: string; code: string } | null>(null);
-	const [scanner, setScanner] = useState(false);
+	const [scanner, setScanner] = useState<number | null>(null);
 	const [message, setMessage] = useState('');
 	const [permission, requestPermission] = useCameraPermissions();
 	const scanConsumed = useRef(false);
 	const submitLock = useRef(false);
+	const focused = useRef(false);
+	const scanGeneration = useRef(0);
+	const permissionFlight = useRef<number | null>(null);
+	useFocusEffect(
+		useCallback(() => {
+			focused.current = true;
+			++scanGeneration.current;
+			return () => {
+				// Stack navigation keeps this route mounted; release the camera on blur.
+				focused.current = false;
+				++scanGeneration.current;
+				permissionFlight.current = null;
+				scanConsumed.current = true;
+				setScanner(null);
+			};
+		}, []),
+	);
+	function closeScanner() {
+		++scanGeneration.current;
+		scanConsumed.current = true;
+		setScanner(null);
+	}
+
 	if (state.phase === 'authenticated') return <Redirect href="/" />;
 	if (state.phase === 'hydrating')
 		return (
@@ -37,29 +60,41 @@ export default function Pairing() {
 			</ScrollView>
 		);
 	async function openScanner() {
+		if (!focused.current || permissionFlight.current !== null || state.busy) return;
+		const generation = ++scanGeneration.current;
+		permissionFlight.current = generation;
 		setMessage('');
-		if (!Device.isDevice) {
-			setMessage('Camera scanning needs a physical iPhone. Enter the laptop URL and code below.');
-			return;
-		}
 		try {
+			if (!Device.isDevice) {
+				setMessage('Camera scanning needs a physical iPhone. Enter the laptop URL and code below.');
+				return;
+			}
 			const granted = permission?.granted || (await requestPermission()).granted;
+			if (!focused.current || generation !== scanGeneration.current) return;
 			if (!granted) {
 				setMessage('Camera access is not allowed. You can still enter the code manually.');
 				return;
 			}
 			scanConsumed.current = false;
-			setScanner(true);
+			setScanner(generation);
 		} catch {
-			setMessage('Camera unavailable. Enter the code manually.');
+			if (focused.current && generation === scanGeneration.current)
+				setMessage('Camera unavailable. Enter the code manually.');
+		} finally {
+			if (permissionFlight.current === generation) permissionFlight.current = null;
 		}
 	}
-	function scanned(raw: string) {
-		if (scanConsumed.current || state.busy) return;
+	function scanned(raw: string, generation: number) {
+		if (
+			!focused.current ||
+			generation !== scanGeneration.current ||
+			scanConsumed.current ||
+			state.busy
+		)
+			return;
 		try {
 			const parsed = parsePairingQr(raw);
-			scanConsumed.current = true;
-			setScanner(false);
+			closeScanner();
 			setApiBase(parsed.apiBase);
 			setCode(parsed.code);
 			setConfirmation(parsed);
@@ -128,15 +163,15 @@ export default function Pairing() {
 				editable={!state.busy}
 			/>
 			<Button title="Scan laptop QR" onPress={() => void openScanner()} disabled={state.busy} />
-			{scanner && (
+			{scanner !== null && (
 				<View>
 					<CameraView
 						style={ui.camera}
 						facing="back"
 						barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-						onBarcodeScanned={({ data }) => scanned(data)}
+						onBarcodeScanned={({ data }) => scanned(data, scanner)}
 					/>
-					<Button title="Cancel scan" onPress={() => setScanner(false)} />
+					<Button title="Cancel scan" onPress={closeScanner} />
 				</View>
 			)}
 			{confirmation ? (
