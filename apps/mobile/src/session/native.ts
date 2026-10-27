@@ -1,7 +1,6 @@
 import { fetch as expoFetch } from 'expo/fetch';
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { createApi, type DeviceInfo } from '../api/client';
@@ -44,6 +43,9 @@ export async function requestPushToken(): Promise<PushResult> {
 			unavailable:
 				'Set EXPO_PROJECT_ID for your existing Expo project and rebuild to enable notifications.',
 		};
+	// Importing notifications starts its native Keychain auto-registration side effect.
+	// Load it only after explicit registration passes device/config prerequisites.
+	const Notifications: typeof import('expo-notifications') = require('expo-notifications');
 	let permission = await Notifications.getPermissionsAsync();
 	if (permission.status !== 'granted') permission = await Notifications.requestPermissionsAsync();
 	if (permission.status !== 'granted')

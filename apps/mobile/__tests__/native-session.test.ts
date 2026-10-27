@@ -8,11 +8,16 @@ jest.mock('expo-constants', () => ({
 	__esModule: true,
 	default: { expoConfig: { version: '0.0.1' } },
 }));
-jest.mock('expo-notifications', () => ({
+const mockNotificationsLoaded = jest.fn();
+const mockNotifications = {
 	getPermissionsAsync: jest.fn(),
 	requestPermissionsAsync: jest.fn(),
 	getExpoPushTokenAsync: jest.fn(),
-}));
+};
+jest.mock('expo-notifications', () => {
+	mockNotificationsLoaded();
+	return mockNotifications;
+});
 jest.mock('expo-secure-store', () => ({
 	AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY: 'approved-accessibility',
 	getItemAsync: jest.fn(),
@@ -23,7 +28,7 @@ jest.mock('expo/fetch', () => ({ fetch: jest.fn() }));
 
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
+import type * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import { deviceMetadata, requestPushToken, secureStorage } from '../src/session/native';
 
@@ -50,28 +55,31 @@ test('Simulator metadata is bounded without owner name/location', () => {
 });
 test('Simulator never requests or fabricates push registration', async () => {
 	expect(await requestPushToken()).toHaveProperty('unavailable');
-	expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
+	expect(mockNotificationsLoaded).not.toHaveBeenCalled();
+	expect(mockNotifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
 });
 test('missing projectId remains nonblocking before permission request', async () => {
 	Object.assign(Device, { isDevice: true });
 	expect(await requestPushToken()).toHaveProperty('unavailable');
-	expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+	expect(mockNotificationsLoaded).not.toHaveBeenCalled();
+	expect(mockNotifications.requestPermissionsAsync).not.toHaveBeenCalled();
 });
 test('denial and valid physical registration are explicit outcomes', async () => {
 	Object.assign(Device, { isDevice: true });
 	Object.assign(Constants, { easConfig: { projectId: '11111111-1111-4111-8111-111111111111' } });
 	jest
-		.mocked(Notifications.getPermissionsAsync)
+		.mocked(mockNotifications.getPermissionsAsync)
 		.mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
 	jest
-		.mocked(Notifications.requestPermissionsAsync)
+		.mocked(mockNotifications.requestPermissionsAsync)
 		.mockResolvedValue({ status: 'denied' } as Notifications.NotificationPermissionsStatus);
 	expect(await requestPushToken()).toHaveProperty('unavailable');
+	expect(mockNotificationsLoaded).toHaveBeenCalledTimes(1);
 	jest
-		.mocked(Notifications.getPermissionsAsync)
+		.mocked(mockNotifications.getPermissionsAsync)
 		.mockResolvedValue({ status: 'granted' } as Notifications.NotificationPermissionsStatus);
 	jest
-		.mocked(Notifications.getExpoPushTokenAsync)
+		.mocked(mockNotifications.getExpoPushTokenAsync)
 		.mockResolvedValue({ type: 'expo', data: 'ExpoPushToken[fake]' });
 	expect(await requestPushToken()).toEqual({ token: 'ExpoPushToken[fake]' });
 });
