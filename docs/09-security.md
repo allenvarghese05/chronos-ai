@@ -22,7 +22,7 @@
   refuses to start with HTTP outside `CHRONOS_ENV=test`.
 - API binds to the LAN interface IP (configured), never `0.0.0.0`; `/metrics` to loopback.
 - Bearer tokens: 256-bit random; stored as SHA-256; constant-time compare; sent only over TLS;
-  stored on the phone in `expo-secure-store` (Keychain, `WHEN_UNLOCKED_THIS_DEVICE_ONLY`).
+  stored on the phone in `expo-secure-store` (Keychain, `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY`, per D34; unavailable until the first unlock after reboot).
 - Pairing: 8-char code (40 bits), 10-minute expiry, one-time, 5 attempts then burned, 5/min per IP;
   code only ever displayed on the laptop terminal/QR. Only one active device; re-pairing revokes.
 - Signed media URLs: HMAC-SHA256 over path+expiry with a server secret from `.env`; 1 h expiry;

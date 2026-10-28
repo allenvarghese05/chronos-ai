@@ -13,16 +13,20 @@
 	},
 	"dependencies": {
 		"expo": "57.0.28",
+		"expo-camera": "57.0.6",
 		"expo-constants": "57.0.21",
 		"expo-dev-client": "57.0.20",
+		"expo-device": "57.0.2",
 		"expo-linking": "57.0.12",
 		"expo-notifications": "57.0.22",
 		"expo-router": "57.0.26",
 		"expo-secure-store": "57.0.4",
 		"expo-video": "57.0.5",
+		"openapi-fetch": "0.17.0",
 		"react": "19.2.3",
 		"react-native": "0.86.3",
-		"react-native-safe-area-context": "5.7.0"
+		"react-native-safe-area-context": "5.7.0",
+		"zustand": "5.0.16"
 	},
 	"devDependencies": {
 		"@babel/core": "7.29.6",

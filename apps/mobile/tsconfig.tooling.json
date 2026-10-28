@@ -3,5 +3,5 @@
 	"compilerOptions": {
 		"types": ["jest", "node"]
 	},
-	"include": ["__tests__/**/*.ts", "app.config.ts"]
+	"include": ["__tests__/**/*.ts", "__tests__/**/*.tsx", "app.config.ts"]
 }

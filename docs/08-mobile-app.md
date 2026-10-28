@@ -180,14 +180,20 @@ retries safe.
 
 | Route | Purpose |
 |---|---|
-| `/pairing` | Enter 8-char code or scan QR from the laptop; stores token in `expo-secure-store`; shows the API host and cert fingerprint; explains the force-quit caveat |
+| `/pairing` | Enter 8-char code or scan QR from the laptop; stores token in `expo-secure-store`; confirms the API host and links to out-of-band certificate trust instructions (no pinning claim); explains the force-quit caveat |
 | `/` (feed) | Vertical pager (`react-native-pager-view`, vertical) of today's reel + saved reels; each page = `expo-video` player with autoplay/mute toggle, caption overlay toggle (uses `captions.json`), source list sheet, save/delete; empty state shows the day's state ("Monitoring · 13 ticks · last score 42") |
 | `/reel/[id]` | Deep-link target from the push (`chronos://reel/<id>`) → same player |
 | `/settings` | Window/thresholds (reads/writes `/v1/config/wake` with a form generated from the schema), theme, render mode, Pexels toggle, "send test push", re-pair, revoke |
 | `/debug` | Live signals (calls `sampleAndSend("manual")` and shows the server's breakdown), last 24 h score timeline, missed ticks, permissions status, outbox size, app/server versions, "mark actual wake time" |
 
-State: `zustand` with `persist` (secure storage for the token only). API client generated with
-`openapi-typescript` + `openapi-fetch`, base URL from the pairing response.
+State: a small Zustand store with one versioned SecureStore session envelope (token, device ID,
+canonical HTTPS API root). No general-purpose persist middleware stores credentials.
+Keychain uses `AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY` per D34. The generated `openapi-typescript`
+paths and `openapi-fetch` client join the origin to full `/v1/...` paths. SDK57 `expo/fetch`
+receives explicit `redirect: 'error'` options; RN's Request polyfill is not relied upon for that
+security setting. All remote errors are sanitized, body size is bounded, and requests time out.
+Startup/foreground GET verifies saved sessions; only confirmed 401/403 clears them, and generation
+checks reject stale requests after logout/re-pair. Temporary connectivity errors preserve pairing.
 
 ## 5. Permissions flow
 
@@ -203,3 +209,33 @@ State: `zustand` with `persist` (secure storage for the token only). API client 
 - Swift XCTest for the module's duration summation and state mapping (macOS-only job).
 - Manual device checklist in `12-testing-and-quality.md` §5 (background behaviour cannot be
   automated).
+
+
+## T2.2 pairing setup and limits
+
+1. Run `just certs` and transfer only public `data/certs/rootCA.pem` via a trusted channel.
+   Verify it separately with `openssl x509 -in data/certs/rootCA.pem -noout -subject
+   -fingerprint -sha256`. The cert script prints the leaf fingerprint; the QR contains neither
+   fingerprint nor CA. Never transfer private keys or serve the entire cert directory.
+2. On iPhone install the public-root profile in Settings → General → VPN & Device Management;
+   enable full trust in General → About → Certificate Trust Settings. Native iOS TLS validates
+   the server; the JS app cannot inspect the peer certificate and does not implement pinning.
+3. Run `chronos pair-code` on the laptop. Enter its exact HTTPS `/v1` URL and code, or explicitly
+   request the camera and scan that JSON QR. A scan only fills the host-confirmation form.
+   Simulator or camera denial leaves manual entry usable; microphone is never requested.
+4. After explicit host confirmation, pairing is stored in Keychain before navigating home.
+   If storage fails after server acceptance, revoke on the laptop before retrying. A lost
+   response can similarly leave an active server device; the app never auto-revokes another one.
+5. Notifications are a separate optional action. Set `EXPO_PROJECT_ID` to an existing Expo/EAS
+   project UUID before native prebuild/build. This supplies `extra.eas.projectId`; no Expo
+   resources or APNs credentials are created by the app. Missing ID, denied permission, Simulator
+   or network failure does not discard pairing. Real token issuance/delivery is unverified until
+   the T2.4 signed physical-device run (owner's wired port is broken).
+6. “Revoke on laptop and forget” requires backend confirmation; “Forget only this phone” removes
+   local credentials only and explains that the laptop still needs revocation before re-pairing.
+   Force-quitting iOS can prevent later silent wakes; T2.2 does not claim wake handling.
+
+Native dependency additions require a rebuilt dev-client, not Expo Go or JS export alone.
+Physical camera scanning, APNs credentials/push delivery and locked-phone Keychain cold start
+remain on the T2.4 checklist. The home screen preserves T2.1’s device-state and step-query
+display inside an authenticated boundary; sensor reads mount only after secure session hydration.

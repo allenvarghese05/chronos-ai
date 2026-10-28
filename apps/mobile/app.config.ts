@@ -20,11 +20,20 @@ export default (_ctx: ConfigContext): ExpoConfig => ({
 		},
 		entitlements: { 'aps-environment': 'development' },
 	},
+	extra: process.env.EXPO_PROJECT_ID ? { eas: { projectId: process.env.EXPO_PROJECT_ID } } : {},
 	plugins: [
 		'expo-router',
 		'expo-dev-client',
 		'expo-notifications',
 		'expo-secure-store',
+		[
+			'expo-camera',
+			{
+				cameraPermission: 'Scan the pairing QR shown on your laptop.',
+				microphonePermission: false,
+				recordAudioAndroid: false,
+			},
+		],
 		'expo-video',
 		'./modules/chronos-sensors/app.plugin.js',
 	],
