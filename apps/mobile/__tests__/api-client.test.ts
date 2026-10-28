@@ -138,6 +138,14 @@ test('telemetry uses approved authenticated endpoint and preserves serialized se
 	const result = {
 		evaluation_id: 7,
 		local_date: '2026-10-28',
+		gate: 'closed',
+		decision: 'wait',
+		confirm_reason: null,
+		threshold: {},
+		consecutive_high: 0,
+		rule_version: 1,
+		day_state: 'pending',
+		next_tick_in_sec: null,
 		score: 0,
 		breakdown: [],
 		penalties: [],
@@ -153,6 +161,15 @@ test('telemetry uses approved authenticated endpoint and preserves serialized se
 	expect(request.headers.get('authorization')).toBe(`Bearer ${token}`);
 	expect(await request.json()).toEqual(body);
 	expect(options.redirect).toBe('error');
+});
+test('incomplete telemetry response is not acknowledged as a validated evaluation', async () => {
+	const api = createApi(base, async () => response({ evaluation_id: 7, score: 0 }), token);
+	await expect(
+		api.telemetry({} as Parameters<typeof api.telemetry>[0], {
+			signal: new AbortController().signal,
+			timeoutMs: 1000,
+		}),
+	).rejects.toThrow('invalid telemetry response');
 });
 test('telemetry deadline aborts an ignoring transport with no late success', async () => {
 	jest.useFakeTimers();

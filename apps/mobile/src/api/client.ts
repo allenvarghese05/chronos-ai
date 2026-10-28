@@ -7,6 +7,47 @@ export type DevicePatch = components['schemas']['DevicePatch'];
 export type Telemetry = components['schemas']['Signals'];
 export type TelemetryResult = components['schemas']['TelemetryResponse'];
 export type RequestBudget = { signal: AbortSignal; timeoutMs: number };
+
+function telemetryResponse(value: unknown): value is TelemetryResult {
+	if (!record(value)) return false;
+	const fields = [
+		'evaluation_id',
+		'local_date',
+		'gate',
+		'score',
+		'decision',
+		'confirm_reason',
+		'threshold',
+		'consecutive_high',
+		'rule_version',
+		'breakdown',
+		'penalties',
+		'day_state',
+		'next_tick_in_sec',
+	];
+	if (Object.keys(value).length !== fields.length || fields.some((key) => !(key in value)))
+		return false;
+	const integer = (n: unknown) => typeof n === 'number' && Number.isSafeInteger(n);
+	const text = (s: unknown) => typeof s === 'string' && s.length > 0 && s.length <= 64;
+	return (
+		integer(value.evaluation_id) &&
+		integer(value.score) &&
+		integer(value.consecutive_high) &&
+		integer(value.rule_version) &&
+		text(value.local_date) &&
+		text(value.gate) &&
+		text(value.decision) &&
+		text(value.day_state) &&
+		(value.confirm_reason === null || text(value.confirm_reason)) &&
+		(value.next_tick_in_sec === null || integer(value.next_tick_in_sec)) &&
+		record(value.threshold) &&
+		Object.values(value.threshold).every(integer) &&
+		Array.isArray(value.breakdown) &&
+		value.breakdown.every(record) &&
+		Array.isArray(value.penalties) &&
+		value.penalties.every(record)
+	);
+}
 export type Transport = (
 	request: Request,
 	options: { redirect: 'error'; credentials: 'omit'; signal: AbortSignal },
@@ -52,6 +93,7 @@ async function responseError(response: Response, signal: AbortSignal): Promise<A
 			if (
 				typeof problem.server_time === 'string' &&
 				problem.server_time.length <= 40 &&
+				/T.*(?:Z|[+-]\d{2}:\d{2})$/.test(problem.server_time) &&
 				Number.isFinite(Date.parse(problem.server_time))
 			)
 				serverTime = problem.server_time;
@@ -201,16 +243,9 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		async telemetry(body: Telemetry, budget: RequestBudget): Promise<TelemetryResult> {
 			try {
 				const { data } = await scopedClient(budget).POST('/v1/telemetry', { body });
-				if (
-					!record(data) ||
-					!Number.isSafeInteger(data.evaluation_id) ||
-					!Number.isFinite(data.score) ||
-					typeof data.local_date !== 'string' ||
-					!Array.isArray(data.breakdown) ||
-					!Array.isArray(data.penalties)
-				)
+				if (!telemetryResponse(data))
 					throw new ApiError(0, 'The laptop returned an invalid telemetry response.');
-				return data as TelemetryResult;
+				return data;
 			} catch (error) {
 				if (error instanceof ApiError) throw error;
 				throw new ApiError(0, 'The laptop returned an invalid telemetry response.');
