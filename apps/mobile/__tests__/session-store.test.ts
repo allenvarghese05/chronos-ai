@@ -36,6 +36,7 @@ function fixture(initial: string | null = null) {
 		}),
 	};
 	const api: Api = {
+		telemetry: jest.fn(),
 		pair: jest.fn(async () => session),
 		getDevice: jest.fn(async () => session.deviceId),
 		patchDevice: jest.fn(async () => session.deviceId),
@@ -222,3 +223,38 @@ test('concurrent GET and PATCH auth failures clear the same generation once', as
 	expect(f.storage.remove).toHaveBeenCalledTimes(1);
 	expect(f.controller.store.getState().phase).toBe('unpaired');
 });
+
+test('telemetry lease expires across forget and repair even for the same device identity', async () => {
+	const f = fixture();
+	await f.controller.hydrate();
+	expect(f.controller.lease()).toBeNull();
+	await f.controller.pair(session.apiBase, '7K2M9QXD');
+	const old = f.controller.lease();
+	expect(old?.identity).toBe(`${session.apiBase}|${session.deviceId}`);
+	const pending = deferred<string>();
+	f.api.getDevice = jest.fn(() => pending.promise);
+	const flight = old?.run((api) => api.getDevice());
+	await f.controller.forget();
+	await f.controller.pair(session.apiBase, '7K2M9QXD');
+	pending.reject(new ApiError(403, 'revoked'));
+	await expect(flight).rejects.toBeInstanceOf(ApiError);
+	expect(old?.current()).toBe(false);
+	expect(f.controller.store.getState().phase).toBe('authenticated');
+	expect(f.saved()).toBe(JSON.stringify(session));
+});
+test.each([401, 403])(
+	'matching lease status%s uses central Keychain invalidation',
+	async (status) => {
+		const f = fixture();
+		await f.controller.hydrate();
+		await f.controller.pair(session.apiBase, '7K2M9QXD');
+		const lease = f.controller.lease();
+		f.api.getDevice = jest.fn(async () => {
+			throw new ApiError(status, 'Pair again.');
+		});
+		await expect(lease?.run((api) => api.getDevice())).rejects.toBeInstanceOf(ApiError);
+		expect(lease?.current()).toBe(false);
+		expect(f.controller.store.getState().phase).toBe('unpaired');
+		expect(f.storage.remove).toHaveBeenCalledTimes(1);
+	},
+);

@@ -4,6 +4,9 @@ import type { components, paths } from './schema';
 
 export type DeviceInfo = components['schemas']['DeviceInfo'];
 export type DevicePatch = components['schemas']['DevicePatch'];
+export type Telemetry = components['schemas']['Signals'];
+export type TelemetryResult = components['schemas']['TelemetryResponse'];
+export type RequestBudget = { signal: AbortSignal; timeoutMs: number };
 export type Transport = (
 	request: Request,
 	options: { redirect: 'error'; credentials: 'omit'; signal: AbortSignal },
@@ -15,13 +18,15 @@ export class ApiError extends Error {
 		public readonly status: number,
 		message: string,
 		public readonly retryAfterSec = 0,
+		public readonly code = '',
+		public readonly serverTime?: string,
 	) {
 		super(message);
 		this.name = 'ApiError';
 	}
 }
 
-function responseError(response: Response): ApiError {
+async function responseError(response: Response, signal: AbortSignal): Promise<ApiError> {
 	const messages: Record<number, string> = {
 		400: 'The code is invalid or already used. Generate a new code on the laptop.',
 		401: 'Pairing is no longer authorized. Pair again.',
@@ -31,6 +36,29 @@ function responseError(response: Response): ApiError {
 		429: 'Too many attempts. Wait before trying again.',
 	};
 	const retry = Number(response.headers.get('retry-after'));
+	let code = '';
+	let serverTime: string | undefined;
+	try {
+		const bounded = await boundedResponse(response, signal);
+		const problem: unknown = await bounded.json();
+		if (record(problem)) {
+			if (
+				typeof problem.code === 'string' &&
+				['clock_skew', 'validation', 'rate_limited', 'revoked', 'unauthorized'].includes(
+					problem.code,
+				)
+			)
+				code = problem.code;
+			if (
+				typeof problem.server_time === 'string' &&
+				problem.server_time.length <= 40 &&
+				Number.isFinite(Date.parse(problem.server_time))
+			)
+				serverTime = problem.server_time;
+		}
+	} catch {
+		if (signal.aborted) throw new ApiError(0, 'The request deadline expired.');
+	}
 	return new ApiError(
 		response.status,
 		messages[response.status] ?? 'The laptop could not complete this request. Try again later.',
@@ -39,11 +67,35 @@ function responseError(response: Response): ApiError {
 				? Math.min(3600, Math.ceil(retry))
 				: 60
 			: 0,
+		code,
+		serverTime,
 	);
 }
 
+/** Abort the native operation and settle locally even if a faulty transport ignores its signal. */
+async function abortable<T>(
+	operation: Promise<T>,
+	signal: AbortSignal,
+	cancel?: () => void,
+): Promise<T> {
+	let aborted!: () => void;
+	const failure = new Promise<never>((_, reject) => {
+		aborted = () => {
+			cancel?.();
+			reject(new ApiError(0, 'The request deadline expired.'));
+		};
+		signal.addEventListener('abort', aborted, { once: true });
+		if (signal.aborted) aborted();
+	});
+	try {
+		return await Promise.race([operation, failure]);
+	} finally {
+		signal.removeEventListener('abort', aborted);
+	}
+}
+
 /** Bound the body before generated-client parsing, including chunked responses. */
-async function boundedResponse(response: Response): Promise<Response> {
+async function boundedResponse(response: Response, signal: AbortSignal): Promise<Response> {
 	const limit = 32 * 1024;
 	if (Number(response.headers.get('content-length')) > limit)
 		throw new ApiError(0, 'The laptop response was too large.');
@@ -53,11 +105,13 @@ async function boundedResponse(response: Response): Promise<Response> {
 	let size = 0;
 	try {
 		while (true) {
-			const { done, value } = await reader.read();
+			const { done, value } = await abortable(reader.read(), signal, () => {
+				void reader.cancel().catch(() => {});
+			});
 			if (done) break;
 			size += value.byteLength;
 			if (size > limit) {
-				await reader.cancel();
+				void reader.cancel().catch(() => {});
 				throw new ApiError(0, 'The laptop response was too large.');
 			}
 			chunks.push(value);
@@ -81,42 +135,57 @@ async function boundedResponse(response: Response): Promise<Response> {
 /** Generated full paths are joined to origin exactly once. Transport must refuse redirects. */
 export function createApi(apiBase: string, transport: Transport, token?: string) {
 	const origin = new URL(canonicalApiBase(apiBase)).origin;
-	const client = createClient<paths>({
-		baseUrl: origin,
-		fetch: async (request: Request) => {
-			if (
-				new URL(request.url).origin !== origin ||
-				!['/v1/pair', '/v1/device/me'].includes(new URL(request.url).pathname)
-			)
-				throw new ApiError(0, 'The API destination is not approved.');
-			const controller = new AbortController();
-			const timeout = setTimeout(() => controller.abort(), 10_000);
-			try {
-				const headers = new Headers(request.headers);
-				headers.delete('authorization');
-				if (request.url.endsWith('/v1/device/me')) {
-					if (!token) throw new ApiError(401, 'Pair this phone before continuing.');
-					headers.set('authorization', `Bearer ${token}`);
+	function scopedClient(budget?: RequestBudget) {
+		return createClient<paths>({
+			baseUrl: origin,
+			fetch: async (request: Request) => {
+				if (
+					new URL(request.url).origin !== origin ||
+					!['/v1/pair', '/v1/device/me', '/v1/telemetry'].includes(new URL(request.url).pathname)
+				)
+					throw new ApiError(0, 'The API destination is not approved.');
+				const controller = new AbortController();
+				const abort = () => controller.abort();
+				budget?.signal.addEventListener('abort', abort, { once: true });
+				if (budget?.signal.aborted) controller.abort();
+				const duration = budget ? Math.min(10_000, Math.max(0, budget.timeoutMs)) : 10_000;
+				const timeout = setTimeout(abort, Number.isFinite(duration) ? duration : 0);
+				try {
+					if (controller.signal.aborted || duration <= 0)
+						throw new ApiError(0, 'The request deadline expired.');
+					const headers = new Headers(request.headers);
+					headers.delete('authorization');
+					if (request.url.endsWith('/v1/device/me') || request.url.endsWith('/v1/telemetry')) {
+						if (!token) throw new ApiError(401, 'Pair this phone before continuing.');
+						headers.set('authorization', `Bearer ${token}`);
+					}
+					const response = await abortable(
+						transport(new Request(request, { headers, signal: controller.signal }), {
+							redirect: 'error',
+							credentials: 'omit',
+							signal: controller.signal,
+						}),
+						controller.signal,
+					);
+					if (response.redirected || (response.status >= 300 && response.status < 400))
+						throw new ApiError(0, 'The laptop redirected the request. Check its HTTPS API URL.');
+					if (!response.ok) throw await responseError(response, controller.signal);
+					return await boundedResponse(response, controller.signal);
+				} catch (error) {
+					if (error instanceof ApiError) throw error;
+					throw new ApiError(
+						0,
+						'Cannot reach the laptop securely. Check Wi-Fi, server availability, and certificate trust.',
+					);
+				} finally {
+					clearTimeout(timeout);
+					controller.abort();
+					budget?.signal.removeEventListener('abort', abort);
 				}
-				const response = await transport(
-					new Request(request, { headers, signal: controller.signal }),
-					{ redirect: 'error', credentials: 'omit', signal: controller.signal },
-				);
-				if (response.redirected || (response.status >= 300 && response.status < 400))
-					throw new ApiError(0, 'The laptop redirected the request. Check its HTTPS API URL.');
-				if (!response.ok) throw responseError(response);
-				return await boundedResponse(response);
-			} catch (error) {
-				if (error instanceof ApiError) throw error;
-				throw new ApiError(
-					0,
-					'Cannot reach the laptop securely. Check Wi-Fi, server availability, and certificate trust.',
-				);
-			} finally {
-				clearTimeout(timeout);
-			}
-		},
-	});
+			},
+		});
+	}
+	const client = scopedClient();
 	async function deviceResult(call: () => Promise<{ data?: unknown }>) {
 		try {
 			const { data } = await call();
@@ -129,6 +198,24 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		}
 	}
 	return {
+		async telemetry(body: Telemetry, budget: RequestBudget): Promise<TelemetryResult> {
+			try {
+				const { data } = await scopedClient(budget).POST('/v1/telemetry', { body });
+				if (
+					!record(data) ||
+					!Number.isSafeInteger(data.evaluation_id) ||
+					!Number.isFinite(data.score) ||
+					typeof data.local_date !== 'string' ||
+					!Array.isArray(data.breakdown) ||
+					!Array.isArray(data.penalties)
+				)
+					throw new ApiError(0, 'The laptop returned an invalid telemetry response.');
+				return data as TelemetryResult;
+			} catch (error) {
+				if (error instanceof ApiError) throw error;
+				throw new ApiError(0, 'The laptop returned an invalid telemetry response.');
+			}
+		},
 		async pair(code: string, device: DeviceInfo): Promise<Session> {
 			try {
 				const { data } = await client.POST('/v1/pair', { body: { code, device } });
