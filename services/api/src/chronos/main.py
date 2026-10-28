@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
 
 import structlog
 from fastapi import FastAPI
@@ -189,4 +190,23 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(report_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
+    # Publish the manually size-bounded raw-body contract without installing an automatic
+    # Body parser, which would parse before the endpoint's 64 KiB validation gate.
+    original_openapi = app.openapi
+
+    def telemetry_openapi() -> dict[str, Any]:
+        from chronos.wake.signals import Signals
+
+        schema = original_openapi()
+        signals = Signals.model_json_schema(ref_template="#/components/schemas/{model}")
+        components = schema.setdefault("components", {}).setdefault("schemas", {})
+        components.update(signals.pop("$defs", {}))
+        components["Signals"] = signals
+        schema["paths"]["/v1/telemetry"]["post"]["requestBody"] = {
+            "required": True,
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Signals"}}},
+        }
+        return schema
+
+    app.openapi = telemetry_openapi
     return app

@@ -450,3 +450,24 @@ class TestNextTickInSecPopulated:
         )
         # delta from server_now(13:02:02) to next tick(13:05) ≈ 178 s
         assert body["next_tick_in_sec"] == expected_secs
+
+
+def test_optional_tick_sequence_validated_and_stored(
+    client: TestClient, test_settings: Settings
+) -> None:
+    import time_machine
+
+    from chronos.models.wake import TelemetryEvent
+
+    plain, _ = _insert_device(test_settings)
+    instant = datetime.datetime.fromisoformat(_IN_WINDOW_UTC)
+    with time_machine.travel(instant, tick=False):
+        for seq, tick in enumerate([None, 0, 17]):
+            payload = {**_base_payload(seq=seq), "tick_seq": tick}
+            response = client.post("/v1/telemetry", json=payload, headers=_auth(plain))
+            assert response.status_code == 200, response.text
+        invalid = {**_base_payload(seq=3), "tick_seq": -1}
+        assert client.post("/v1/telemetry", json=invalid, headers=_auth(plain)).status_code == 422
+    with Session(create_db_engine(test_settings.database_url)) as session:
+        rows = sorted(session.exec(select(TelemetryEvent)).all(), key=lambda row: row.seq)
+        assert [row.tick_seq for row in rows] == [None, 0, 17]

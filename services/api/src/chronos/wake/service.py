@@ -253,7 +253,7 @@ def ingest_telemetry(
         app_state=signals.app_state.value,
         low_power_mode=int(signals.low_power_mode),
         pedometer_auth=signals.pedometer_auth.value,
-        tick_seq=None,  # scheduler-assigned in T1.7
+        tick_seq=signals.tick_seq,
         app_version=signals.app_version,
         ios_version=signals.ios_version,
         raw_json=raw_str,

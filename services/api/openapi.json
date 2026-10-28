@@ -15,6 +15,27 @@
         "title": "ActualWakeBody",
         "type": "object"
       },
+      "AppState": {
+        "description": "UIApplication application state.",
+        "enum": [
+          "active",
+          "background",
+          "inactive"
+        ],
+        "title": "AppState",
+        "type": "string"
+      },
+      "BatteryState": {
+        "description": "iOS battery / charger state.",
+        "enum": [
+          "unplugged",
+          "charging",
+          "full",
+          "unknown"
+        ],
+        "title": "BatteryState",
+        "type": "string"
+      },
       "BonusConsecutive": {
         "additionalProperties": false,
         "description": "Consecutive-tick bonus configuration.",
@@ -463,6 +484,17 @@
         "title": "PairResponse",
         "type": "object"
       },
+      "PedometerAuth": {
+        "description": "CMPedometer authorisation status.",
+        "enum": [
+          "authorized",
+          "denied",
+          "restricted",
+          "not_determined"
+        ],
+        "title": "PedometerAuth",
+        "type": "string"
+      },
       "Penalty": {
         "additionalProperties": false,
         "description": "One scoring penalty.",
@@ -660,6 +692,128 @@
           "score"
         ],
         "title": "ScoreTimelinePoint",
+        "type": "object"
+      },
+      "Signals": {
+        "additionalProperties": false,
+        "description": "Validated telemetry snapshot from the iOS app.\n\nAll 17 phone fields are required; extra fields are forbidden.\n``device_ts`` must carry timezone information (naive datetimes are rejected\nby the ``_reject_naive_device_ts`` validator so that the scoring engine\nnever silently misclassifies a tick).\n\nReused by the T1.6 telemetry endpoint as the request body type.\n\nBounds (enforced by Pydantic):\n- ``steps_10m``, ``steps_since_window`` \u2208 [0, 5000]\n- ``walking_sec_10m``, ``stationary_sec_10m`` \u2208 [0, 600]\n- ``battery_level`` \u2208 [0.0, 1.0] or ``None``\n- ``seq`` \u2265 0",
+        "properties": {
+          "app_state": {
+            "$ref": "#/components/schemas/AppState"
+          },
+          "app_version": {
+            "title": "App Version",
+            "type": "string"
+          },
+          "battery_level": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Battery Level"
+          },
+          "battery_state": {
+            "$ref": "#/components/schemas/BatteryState"
+          },
+          "device_ts": {
+            "format": "date-time",
+            "title": "Device Ts",
+            "type": "string"
+          },
+          "ios_version": {
+            "title": "Ios Version",
+            "type": "string"
+          },
+          "is_unlocked": {
+            "title": "Is Unlocked",
+            "type": "boolean"
+          },
+          "low_power_mode": {
+            "title": "Low Power Mode",
+            "type": "boolean"
+          },
+          "pedometer_auth": {
+            "$ref": "#/components/schemas/PedometerAuth"
+          },
+          "seq": {
+            "minimum": 0,
+            "title": "Seq",
+            "type": "integer"
+          },
+          "stationary_sec_10m": {
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Stationary Sec 10M",
+            "type": "integer"
+          },
+          "steps_10m": {
+            "maximum": 5000,
+            "minimum": 0,
+            "title": "Steps 10M",
+            "type": "integer"
+          },
+          "steps_since_window": {
+            "maximum": 5000,
+            "minimum": 0,
+            "title": "Steps Since Window",
+            "type": "integer"
+          },
+          "tick_seq": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Tick Seq"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          },
+          "wake_source": {
+            "$ref": "#/components/schemas/WakeSource"
+          },
+          "walking_conf": {
+            "$ref": "#/components/schemas/WalkingConf"
+          },
+          "walking_sec_10m": {
+            "maximum": 600,
+            "minimum": 0,
+            "title": "Walking Sec 10M",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "device_ts",
+          "tz",
+          "wake_source",
+          "steps_10m",
+          "steps_since_window",
+          "walking_sec_10m",
+          "walking_conf",
+          "stationary_sec_10m",
+          "is_unlocked",
+          "battery_state",
+          "app_state",
+          "low_power_mode",
+          "pedometer_auth",
+          "seq",
+          "app_version",
+          "ios_version"
+        ],
+        "title": "Signals",
         "type": "object"
       },
       "TelemetryResponse": {
@@ -932,6 +1086,27 @@
         ],
         "title": "WakeRulesWindow",
         "type": "object"
+      },
+      "WakeSource": {
+        "description": "How the iOS app was woken to sample signals.",
+        "enum": [
+          "silent_push",
+          "bg_refresh",
+          "foreground",
+          "manual"
+        ],
+        "title": "WakeSource",
+        "type": "string"
+      },
+      "WalkingConf": {
+        "description": "CoreMotion walking-activity confidence level.",
+        "enum": [
+          "low",
+          "medium",
+          "high"
+        ],
+        "title": "WalkingConf",
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -1687,6 +1862,16 @@
       "post": {
         "description": "Receive, validate, score and store one telemetry snapshot.\n\nReturns:\n    200 with full scoring breakdown and updated day state.\n\nRaises:\n    422 clock_skew: |device_ts - server_now| > 300 s.\n    422 validation: Body exceeds 64 KiB or fails Signals schema.\n    429 rate_limited: > 30 req/min per IP.\n    401 unauthorized: Missing/invalid bearer token.\n    403 revoked: Device revoked.",
         "operationId": "telemetry_post_telemetry",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Signals"
+              }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "content": {

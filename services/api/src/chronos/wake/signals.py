@@ -238,6 +238,8 @@ class Signals(BaseModel):
     low_power_mode: bool
     pedometer_auth: PedometerAuth
     seq: int = Field(ge=0)
+    tick_seq: int | None = Field(default=None, ge=0)
+    """Optional server tick number; stored only, never used as a scoring signal."""
     app_version: str
     ios_version: str
 
