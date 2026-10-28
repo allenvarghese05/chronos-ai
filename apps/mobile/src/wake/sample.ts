@@ -100,6 +100,18 @@ export async function sample(
 		steps = values[0].steps;
 		windowSteps = values[1].steps;
 		activity = values[2];
+		if (
+			[steps, windowSteps].some(
+				(n) => !Number.isFinite(n) || !Number.isInteger(n) || n < 0 || n > 5000,
+			)
+		)
+			diagnostics.push('Invalid or out-of-range step readings were normalized.');
+		if (
+			[activity.walkingSec, activity.runningSec, activity.stationarySec].some(
+				(n) => !Number.isFinite(n) || n < 0 || n > 600,
+			)
+		)
+			diagnostics.push('Invalid or out-of-range activity readings were normalized.');
 	} else diagnostics.push('Motion queries skipped without authorization.');
 	return {
 		input: { instant, tz, source, state, auth, steps, windowSteps, activity, appVersion, tickSeq },

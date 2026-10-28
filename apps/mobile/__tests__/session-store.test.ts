@@ -254,7 +254,43 @@ test.each([401, 403])(
 		});
 		await expect(lease?.run((api) => api.getDevice())).rejects.toBeInstanceOf(ApiError);
 		expect(lease?.current()).toBe(false);
+		expect(f.controller.store.getState().session).toBeNull();
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(f.controller.store.getState().phase).toBe('unpaired');
 		expect(f.storage.remove).toHaveBeenCalledTimes(1);
 	},
 );
+
+test('telemetry auth invalidates immediately without waiting on native Keychain cleanup', async () => {
+	const f = fixture();
+	await f.controller.hydrate();
+	await f.controller.pair(session.apiBase, '7K2M9QXD');
+	const lease = f.controller.lease();
+	f.storage.remove = jest.fn(() => new Promise(() => {}));
+	f.api.getDevice = jest.fn(async () => {
+		throw new ApiError(403, 'revoked');
+	});
+	await expect(lease?.run((api) => api.getDevice())).rejects.toBeInstanceOf(ApiError);
+	expect(f.controller.store.getState().session).toBeNull();
+	expect(lease?.current()).toBe(false);
+	expect(f.controller.store.getState().phase).toBe('hydrating');
+});
+
+test('telemetry invalidation still exposes a later native Keychain clear failure', async () => {
+	const f = fixture();
+	await f.controller.hydrate();
+	await f.controller.pair(session.apiBase, '7K2M9QXD');
+	f.storage.remove = jest.fn(async () => {
+		throw new Error('PRIVATE native data');
+	});
+	f.api.getDevice = jest.fn(async () => {
+		throw new ApiError(401, 'unauthorized');
+	});
+	await expect(f.controller.lease()?.run((api) => api.getDevice())).rejects.toBeInstanceOf(
+		ApiError,
+	);
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(f.controller.store.getState().phase).toBe('storage-error');
+	expect(f.controller.store.getState().message).toContain('Could not clear');
+	expect(f.controller.store.getState().message).not.toContain('PRIVATE');
+});

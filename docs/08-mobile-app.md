@@ -239,3 +239,29 @@ Native dependency additions require a rebuilt dev-client, not Expo Go or JS expo
 Physical camera scanning, APNs credentials/push delivery and locked-phone Keychain cold start
 remain on the T2.4 checklist. The home screen preserves T2.1’s device-state and step-query
 display inside an authenticated boundary; sensor reads mount only after secure session hydration.
+
+### T2.3 sampler and durable outbox
+
+Authenticated Home provides manual Sample and send / Retry queued telemetry controls.
+They do not register automatic wake handlers (T2.4) or replace the debug screen (T2.5).
+Sampling captures one phone timestamp/timezone, reads actual authorization without prompting,
+and spends at most five seconds on native history. Unavailable motion gives zero/low values
+with local diagnostics; an absent native bridge is an explicit unavailable result. Walking
+includes running. Supplied authoritative window context must match the captured timezone/date;
+without it window steps are conservatively zero, never based on guessed wake rules.
+
+A private expo-sqlite database persists immutable body/seq/time before sending. Sequence and
+row insertion share one short transaction; counters and rows are partitioned by canonical API
+origin plus device ID, with no bearer token in SQLite. FIFO flushes use an eight-second
+monotonic budget and abort fetch/stream reads. Retry metadata is written before I/O; network
+failure/lost responses retain the original row. Bounded Retry-After/backoff never sleeps during
+a wake. Confirmed401/403 use central pairing invalidation. Terminal invalid/skew events are
+explicitly dropped; the original timestamp is never refreshed. Local retention drops strictly
+older than two hours and future-created rows after a backward clock change. Server freshness
+is separately300seconds and checked before deduplication, including previously accepted rows.
+
+Current manual acceptance uses an isolated HTTPS API outage instead of physical airplane mode:
+pair, stop only test API, sample twice, inspect the native SQLite queue, restart the app process,
+reopen the project, restore test API and retry within300seconds. Compare original sequence,
+timestamp and body hashes with server records and confirm FIFO/empty queue. Physical sensor,
+airplane-mode and background-push validation remains on the T2.4 device checklist.

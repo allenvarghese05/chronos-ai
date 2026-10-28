@@ -47,6 +47,8 @@ export function windowStart(
 /** Pure whitelist mapping. Sequence is allocated by the same transaction that persists this body. */
 export function buildTelemetry(input: SampleInput, seq: number): Telemetry {
 	if (!Number.isSafeInteger(seq) || seq < 0) throw new Error('Telemetry sequence unavailable');
+	if (input.tickSeq != null && (!Number.isSafeInteger(input.tickSeq) || input.tickSeq < 0))
+		throw new Error('Server tick sequence is invalid');
 	if (!input.state.iosVersion || input.state.iosVersion === '0.0')
 		throw new Error('Native sensors unavailable');
 	new Intl.DateTimeFormat('en', { timeZone: input.tz }).format(input.instant);
@@ -56,7 +58,7 @@ export function buildTelemetry(input: SampleInput, seq: number): Telemetry {
 		tz: input.tz,
 		wake_source: input.source,
 		seq,
-		tick_seq: input.tickSeq == null ? null : integer(input.tickSeq, Number.MAX_SAFE_INTEGER),
+		tick_seq: input.tickSeq ?? null,
 		steps_10m: integer(input.steps, 5000),
 		steps_since_window: integer(input.windowSteps, 5000),
 		walking_sec_10m: integer(input.activity.walkingSec + input.activity.runningSec, 600),

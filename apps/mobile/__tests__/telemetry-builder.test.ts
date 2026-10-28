@@ -51,6 +51,7 @@ test('invalid numbers are normalized, battery unknown remains null and native st
 	expect(buildTelemetry(value, 1)).toMatchObject({ steps_10m: 0, battery_level: null });
 	expect(() => buildTelemetry({ ...value, state: { ...state, iosVersion: '0.0' } }, 1)).toThrow();
 	expect(() => buildTelemetry(value, Number.MAX_SAFE_INTEGER + 1)).toThrow();
+	expect(() => buildTelemetry({ ...value, tickSeq: -1 }, 1)).toThrow('tick');
 });
 test('window context never guesses rules across DST, travel or stale dates', () => {
 	const context = {

@@ -5,6 +5,7 @@ import ChronosSensors, {
 	type StepQueryResult,
 } from '../modules/chronos-sensors/src';
 import { ProtectedScene, useSession } from '../src/session/provider';
+import { TelemetryControls } from '../src/telemetry/controls';
 import { ui } from '../src/ui';
 
 export default function Index() {
@@ -40,6 +41,7 @@ function PairedHome() {
 		<ScrollView contentContainerStyle={ui.page}>
 			<Text style={ui.title}>Connected to your laptop.</Text>
 			<Text style={ui.host}>{state.session?.apiBase}</Text>
+			<TelemetryControls />
 			<Text style={ui.subtitle}>Chronos Sensors</Text>
 			<Text style={ui.label}>deviceState()</Text>
 			<Text style={ui.text}>{deviceState ? JSON.stringify(deviceState, null, 2) : 'loading…'}</Text>
