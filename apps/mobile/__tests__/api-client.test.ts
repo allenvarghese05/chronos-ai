@@ -241,3 +241,24 @@ test('bounded problem metadata is allowlisted and remote detail never surfaces',
 		expect(String(error)).not.toContain('PRIVATE');
 	}
 });
+
+test.each([401, 403])(
+	'confirmed auth status%s cancels a hanging body without waiting for metadata',
+	async (status) => {
+		const cancel = jest.fn(() => new Promise<void>(() => {}));
+		const read = jest.fn(() => new Promise(() => {}));
+		const reply = {
+			status,
+			ok: false,
+			headers: new Headers(),
+			body: { cancel, getReader: () => ({ read }) },
+		} as unknown as Response;
+		const api = createApi(base, async () => reply, token);
+		await expect(api.getDevice()).rejects.toMatchObject({
+			status,
+			code: status === 401 ? 'unauthorized' : 'revoked',
+		});
+		expect(cancel).toHaveBeenCalledTimes(1);
+		expect(read).not.toHaveBeenCalled();
+	},
+);

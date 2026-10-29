@@ -263,3 +263,35 @@ test('concurrent sample requests coalesce and enqueue before first network attem
 	expect(f.sample).toHaveBeenCalledTimes(1);
 	expect(f.rows()).toHaveLength(0);
 });
+
+test.each([401, 403])(
+	'hanging auth%s body invalidates central lease and retires partition before deadline',
+	async (status) => {
+		jest.useFakeTimers();
+		try {
+			const f = fixture();
+			queue(f);
+			const cancel = jest.fn(() => new Promise<void>(() => {}));
+			const read = jest.fn(() => new Promise(() => {}));
+			f.transport.mockResolvedValueOnce({
+				status,
+				ok: false,
+				headers: new Headers(),
+				body: { cancel, getReader: () => ({ read }) },
+			} as unknown as Response);
+			const started = performance.now();
+			await f.telemetry.flush();
+			expect(performance.now()).toBe(started);
+			expect(jest.getTimerCount()).toBe(0);
+			expect(cancel).toHaveBeenCalledTimes(1);
+			expect(read).not.toHaveBeenCalled();
+			expect(f.session.store.getState().session).toBeNull();
+			expect(f.session.lease()).toBeNull();
+			expect(f.rows()).toHaveLength(0);
+			expect(f.remove).toHaveBeenCalledTimes(1);
+			expect(f.transport).toHaveBeenCalledTimes(1);
+		} finally {
+			jest.useRealTimers();
+		}
+	},
+);

@@ -76,6 +76,21 @@ async function responseError(response: Response, signal: AbortSignal): Promise<A
 		410: 'The code expired. Generate a new code on the laptop.',
 		429: 'Too many attempts. Wait before trying again.',
 	};
+	// Authentication is established by the headers, never by optional problem metadata.
+	// Do not let a stalled body downgrade a confirmed revocation into a network timeout.
+	if (response.status === 401 || response.status === 403) {
+		try {
+			void response.body?.cancel().catch(() => {});
+		} catch {
+			// A locked or faulty body cannot change the confirmed HTTP status.
+		}
+		return new ApiError(
+			response.status,
+			messages[response.status],
+			0,
+			response.status === 401 ? 'unauthorized' : 'revoked',
+		);
+	}
 	const retry = Number(response.headers.get('retry-after'));
 	let code = '';
 	let serverTime: string | undefined;
