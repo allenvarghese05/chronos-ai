@@ -294,3 +294,13 @@ test('telemetry invalidation still exposes a later native Keychain clear failure
 	expect(f.controller.store.getState().message).toContain('Could not clear');
 	expect(f.controller.store.getState().message).not.toContain('PRIVATE');
 });
+
+test('headless local restore shares Keychain read and never validates over network', async () => {
+	const f = fixture(JSON.stringify(session));
+	await Promise.all([f.controller.restore(), f.controller.restore()]);
+	expect(f.storage.get).toHaveBeenCalledTimes(1);
+	expect(f.api.getDevice).not.toHaveBeenCalled();
+	expect(f.controller.lease()?.identity).toContain(session.deviceId);
+	await f.controller.hydrate();
+	expect(f.api.getDevice).toHaveBeenCalledTimes(1);
+});

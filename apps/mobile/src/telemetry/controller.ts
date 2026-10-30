@@ -19,10 +19,12 @@ export type TelemetryStatus = {
 	diagnostics: string[];
 	retryAt: number;
 };
+export type TelemetryOutcome = 'sent' | 'queued' | 'skipped' | 'failed';
+export type WakeAttempt = { signal?: AbortSignal; deadline?: number; tickSeq?: number };
 export type TelemetryDeps = {
 	session: Pick<SessionController, 'lease'>;
 	outbox: Outbox;
-	sample(source: WakeSource, context?: WindowContext): Promise<Sample>;
+	sample(source: WakeSource, context?: WindowContext, tickSeq?: number): Promise<Sample>;
 	now(): number;
 	elapsed?: () => number;
 };
@@ -40,23 +42,28 @@ export function createTelemetryController(deps: TelemetryDeps) {
 		retryAt: 0,
 	};
 	const listeners = new Set<() => void>();
-	let sampling: Promise<void> | undefined;
-	let flushing: Promise<void> | undefined;
+	let sampling: Promise<TelemetryOutcome> | undefined;
+	let flushing: Promise<TelemetryOutcome> | undefined;
+	let lastAck: { identity: string; seq: number } | undefined;
 	const publish = (update: Partial<TelemetryStatus>) => {
 		status = { ...status, ...update };
 		for (const listener of listeners) listener();
 	};
 	const note = (message: string) =>
 		publish({ message, diagnostics: [...status.diagnostics.slice(-7), message] });
-	function flush(): Promise<void> {
-		if (flushing) return flushing;
+	function flush(attempt: WakeAttempt = {}): Promise<TelemetryOutcome> {
+		if (flushing) return attempt.signal ? Promise.resolve('queued') : flushing;
 		const lease = deps.session.lease();
-		if (!lease) return Promise.resolve();
+		if (!lease) return Promise.resolve('skipped');
 		const controller = new AbortController();
-		const deadline = elapsed() + 8000;
-		const timer = setTimeout(() => controller.abort(), 8000);
+		const deadline = Math.min(elapsed() + 8000, attempt.deadline ?? Infinity);
+		if (attempt.signal?.aborted || deadline <= elapsed()) return Promise.resolve('failed');
+		const abort = () => controller.abort();
+		attempt.signal?.addEventListener('abort', abort, { once: true });
+		const timer = setTimeout(abort, Math.max(0, deadline - elapsed()));
+		let outcome: TelemetryOutcome = 'skipped';
 		publish({ busy: true });
-		const flight = (async () => {
+		const flight = (async (): Promise<TelemetryOutcome> => {
 			try {
 				const pruned = deps.outbox.prune(deps.now());
 				if (pruned) note('Expired or future-dated local snapshots dropped; check the phone clock.');
@@ -66,6 +73,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 						publish({ count: 0, retryAt: 0 });
 						break;
 					}
+					outcome = 'queued';
 					publish({ count: deps.outbox.count(lease.identity), retryAt: row.retry_ms });
 					if (row.retry_ms > deps.now()) {
 						publish({ message: 'Retry is scheduled; queued snapshots are preserved.' });
@@ -101,8 +109,11 @@ export function createTelemetryController(deps: TelemetryDeps) {
 								timeoutMs: Math.max(0, deadline - elapsed()),
 							}),
 						);
-						if (!lease.current() || controller.signal.aborted || elapsed() >= deadline) return;
+						if (!lease.current() || controller.signal.aborted || elapsed() >= deadline)
+							return 'failed';
 						deps.outbox.ack(lease.identity, row.seq);
+						lastAck = { identity: lease.identity, seq: row.seq };
+						outcome = 'sent';
 						publish({
 							lastSeq: row.seq,
 							lastResult: result,
@@ -113,9 +124,10 @@ export function createTelemetryController(deps: TelemetryDeps) {
 					} catch (error) {
 						if (error instanceof ApiError && [401, 403].includes(error.status)) {
 							deps.outbox.retire(lease.identity);
-							return;
+							return 'failed';
 						}
-						if (!lease.current() || controller.signal.aborted || elapsed() >= deadline) return;
+						if (!lease.current() || controller.signal.aborted || elapsed() >= deadline)
+							return 'failed';
 						if (
 							error instanceof ApiError &&
 							error.status >= 400 &&
@@ -141,12 +153,14 @@ export function createTelemetryController(deps: TelemetryDeps) {
 					}
 				}
 			} catch {
+				outcome = 'failed';
 				if (lease.current())
 					publish({
 						message: 'Telemetry storage unavailable. Unlock the phone or free space, then retry.',
 					});
 			} finally {
 				clearTimeout(timer);
+				attempt.signal?.removeEventListener('abort', abort);
 				controller.abort();
 				if (lease.current()) {
 					try {
@@ -159,21 +173,40 @@ export function createTelemetryController(deps: TelemetryDeps) {
 					}
 				}
 			}
+			return outcome;
 		})();
 		flushing = flight.finally(() => {
 			flushing = undefined;
 		});
 		return flushing;
 	}
-	function sampleAndSend(source: WakeSource, context?: WindowContext): Promise<void> {
-		if (sampling) return sampling;
+	function sampleAndSend(
+		source: WakeSource,
+		context?: WindowContext,
+		attempt: WakeAttempt = {},
+	): Promise<TelemetryOutcome> {
+		if (sampling) return Promise.resolve('skipped');
 		const lease = deps.session.lease();
-		if (!lease) return Promise.resolve();
+		if (!lease) return Promise.resolve('skipped');
+		const valid = () =>
+			lease.current() && !attempt.signal?.aborted && elapsed() < (attempt.deadline ?? Infinity);
+		if (!valid()) return Promise.resolve('failed');
 		publish({ busy: true });
-		const flight = (async () => {
+		const flight = (async (): Promise<TelemetryOutcome> => {
+			let abort: (() => void) | undefined;
 			try {
-				const sampled = await deps.sample(source, context);
-				if (!lease.current()) return;
+				const native = deps.sample(source, context, attempt.tickSeq);
+				const sampled = attempt.signal
+					? await Promise.race([
+							native,
+							new Promise<never>((_, reject) => {
+								abort = () => reject(new Error('Wake expired'));
+								attempt.signal?.addEventListener('abort', abort, { once: true });
+								if (attempt.signal?.aborted) abort();
+							}),
+						])
+					: await native;
+				if (!valid()) return 'failed';
 				const row = deps.outbox.enqueue(lease.identity, deps.now(), (seq) =>
 					buildTelemetry(sampled.input, seq),
 				);
@@ -183,14 +216,18 @@ export function createTelemetryController(deps: TelemetryDeps) {
 					diagnostics: sampled.diagnostics.slice(0, 8),
 					message: 'Snapshot saved locally.',
 				});
-				await flush();
+				const result = await flush(attempt);
+				if (!valid() || result === 'failed') return 'failed';
+				return lastAck?.identity === lease.identity && lastAck.seq === row.seq ? 'sent' : 'queued';
 			} catch {
 				if (lease.current())
 					publish({
 						message:
 							'Telemetry could not be sampled or saved. Check native availability and free space.',
 					});
+				return 'failed';
 			} finally {
+				if (abort) attempt.signal?.removeEventListener('abort', abort);
 				if (lease.current()) publish({ busy: false });
 			}
 		})();

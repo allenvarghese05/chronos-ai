@@ -250,16 +250,16 @@ test('real client aborts ignoring fetch at8s; late resolution leaves immutable r
 		jest.useRealTimers();
 	}
 });
-test('concurrent sample requests coalesce and enqueue before first network attempt', async () => {
+test('overlapping source skips without borrowing another sample outcome', async () => {
 	const f = fixture();
 	f.transport.mockImplementationOnce(async () => {
 		expect(f.rows()).toHaveLength(1);
 		return response();
 	});
 	const one = f.telemetry.sampleAndSend('manual');
-	const two = f.telemetry.sampleAndSend('manual');
-	expect(one).toBe(two);
-	await one;
+	const two = f.telemetry.sampleAndSend('silent_push');
+	await expect(two).resolves.toBe('skipped');
+	await expect(one).resolves.toBe('sent');
 	expect(f.sample).toHaveBeenCalledTimes(1);
 	expect(f.rows()).toHaveLength(0);
 });
@@ -295,3 +295,40 @@ test.each([401, 403])(
 		}
 	},
 );
+
+test('current attempt remains queued despite a previous successful ACK', async () => {
+	const f = fixture();
+	await expect(f.telemetry.sampleAndSend('manual')).resolves.toBe('sent');
+	f.transport.mockRejectedValueOnce(new Error('offline'));
+	await expect(f.telemetry.sampleAndSend('bg_refresh')).resolves.toBe('queued');
+	expect(f.rows()).toHaveLength(1);
+});
+test('outer abort releases hanging sample; late native result cannot enqueue', async () => {
+	const f = fixture();
+	let resolve!: (value: Sample) => void;
+	f.sample.mockImplementationOnce(
+		() =>
+			new Promise((yes) => {
+				resolve = yes;
+			}),
+	);
+	const controller = new AbortController();
+	const pending = f.telemetry.sampleAndSend('silent_push', undefined, {
+		signal: controller.signal,
+		tickSeq: 9,
+	});
+	controller.abort();
+	await expect(pending).resolves.toBe('failed');
+	resolve(sampled());
+	await Promise.resolve();
+	expect(f.rows()).toHaveLength(0);
+	expect(f.transport).not.toHaveBeenCalled();
+	expect(f.sample).toHaveBeenCalledWith('silent_push', undefined, 9);
+});
+test('expired outer deadline never calls native sensors', async () => {
+	const f = fixture();
+	await expect(
+		f.telemetry.sampleAndSend('bg_refresh', undefined, { deadline: performance.now() - 1 }),
+	).resolves.toBe('failed');
+	expect(f.sample).not.toHaveBeenCalled();
+});
