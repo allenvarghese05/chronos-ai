@@ -133,3 +133,132 @@ test('authenticated malformed JSON errors never expose remote body', async () =>
 	await expect(api.getDevice()).rejects.toThrow('invalid device response');
 	await expect(api.revoke()).rejects.toThrow('valid revocation response');
 });
+
+test('telemetry uses approved authenticated endpoint and preserves serialized sequence', async () => {
+	const result = {
+		evaluation_id: 7,
+		local_date: '2026-10-28',
+		gate: 'closed',
+		decision: 'wait',
+		confirm_reason: null,
+		threshold: {},
+		consecutive_high: 0,
+		rule_version: 1,
+		day_state: 'pending',
+		next_tick_in_sec: null,
+		score: 0,
+		breakdown: [],
+		penalties: [],
+	};
+	const transport = jest.fn<ReturnType<Transport>, Parameters<Transport>>(async () =>
+		response(result),
+	);
+	const api = createApi(base, transport, token);
+	const body = { seq: 7, device_ts: '2026-10-28T12:00:00Z' } as Parameters<typeof api.telemetry>[0];
+	await api.telemetry(body, { signal: new AbortController().signal, timeoutMs: 1000 });
+	const [request, options] = transport.mock.calls[0];
+	expect(request.url).toBe(`${base}/telemetry`);
+	expect(request.headers.get('authorization')).toBe(`Bearer ${token}`);
+	expect(await request.json()).toEqual(body);
+	expect(options.redirect).toBe('error');
+});
+test('incomplete telemetry response is not acknowledged as a validated evaluation', async () => {
+	const api = createApi(base, async () => response({ evaluation_id: 7, score: 0 }), token);
+	await expect(
+		api.telemetry({} as Parameters<typeof api.telemetry>[0], {
+			signal: new AbortController().signal,
+			timeoutMs: 1000,
+		}),
+	).rejects.toThrow('invalid telemetry response');
+});
+test('telemetry deadline aborts an ignoring transport with no late success', async () => {
+	jest.useFakeTimers();
+	try {
+		let signal!: AbortSignal;
+		const transport: Transport = async (_, options) => {
+			signal = options.signal;
+			return new Promise(() => {});
+		};
+		const api = createApi(base, transport, token);
+		const pending = api.telemetry({} as Parameters<typeof api.telemetry>[0], {
+			signal: new AbortController().signal,
+			timeoutMs: 50,
+		});
+		const rejected = expect(pending).rejects.toMatchObject({ status: 0 });
+		await jest.advanceTimersByTimeAsync(50);
+		await rejected;
+		expect(signal.aborted).toBe(true);
+	} finally {
+		jest.useRealTimers();
+	}
+});
+test('external cancellation interrupts hanging response reads', async () => {
+	const reader = {
+		read: jest.fn(() => new Promise(() => {})),
+		cancel: jest.fn(async () => {}),
+		releaseLock: jest.fn(),
+	};
+	const reply = {
+		status: 200,
+		ok: true,
+		headers: new Headers(),
+		body: { getReader: () => reader },
+	} as unknown as Response;
+	const api = createApi(base, async () => reply, token);
+	const controller = new AbortController();
+	const pending = api.telemetry({} as Parameters<typeof api.telemetry>[0], {
+		signal: controller.signal,
+		timeoutMs: 1000,
+	});
+	await new Promise((resolve) => setTimeout(resolve, 5));
+	controller.abort();
+	await expect(pending).rejects.toMatchObject({ status: 0 });
+	expect(reader.read).toHaveBeenCalled();
+	expect(reader.cancel).toHaveBeenCalledTimes(1);
+});
+test('bounded problem metadata is allowlisted and remote detail never surfaces', async () => {
+	const api = createApi(
+		base,
+		async () =>
+			response(
+				{ code: 'clock_skew', server_time: '2026-10-28T12:00:00Z', detail: 'PRIVATE remote data' },
+				422,
+			),
+		token,
+	);
+	try {
+		await api.telemetry({} as Parameters<typeof api.telemetry>[0], {
+			signal: new AbortController().signal,
+			timeoutMs: 1000,
+		});
+		throw new Error('expected failure');
+	} catch (error) {
+		expect(error).toMatchObject({
+			status: 422,
+			code: 'clock_skew',
+			serverTime: '2026-10-28T12:00:00Z',
+		});
+		expect(String(error)).not.toContain('PRIVATE');
+	}
+});
+
+test.each([401, 403])(
+	'confirmed auth status%s cancels a hanging body without waiting for metadata',
+	async (status) => {
+		const cancel = jest.fn(() => new Promise<void>(() => {}));
+		const read = jest.fn(() => new Promise(() => {}));
+		const reply = {
+			status,
+			ok: false,
+			headers: new Headers(),
+			body: { cancel, getReader: () => ({ read }) },
+		} as unknown as Response;
+		const api = createApi(base, async () => reply, token);
+		await expect(api.getDevice()).rejects.toMatchObject({
+			status,
+			code: status === 401 ? 'unauthorized' : 'revoked',
+		});
+		expect(cancel).toHaveBeenCalledTimes(1);
+		expect(read).not.toHaveBeenCalled();
+	},
+);

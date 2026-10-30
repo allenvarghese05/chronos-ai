@@ -8,6 +8,11 @@ export type SecureStorage = {
 	remove(): Promise<void>;
 };
 export type PushResult = { token: string } | { unavailable: string };
+export type SessionLease = {
+	identity: string;
+	current(): boolean;
+	run<T>(operation: (api: Api) => Promise<T>): Promise<T>;
+};
 export type SessionDeps = {
 	storage: SecureStorage;
 	api(session: Pick<Session, 'apiBase'> & Partial<Pick<Session, 'token'>>): Api;
@@ -75,12 +80,15 @@ export function createSessionStore(deps: SessionDeps) {
 		operation: (api: Api) => Promise<T>,
 		ticket: number,
 		session: Session,
+		waitForStorage = true,
 	): Promise<T> {
 		try {
 			return await operation(deps.api(session));
 		} catch (error) {
-			if (error instanceof ApiError && [401, 403].includes(error.status))
-				await clear(error.message, ticket);
+			if (error instanceof ApiError && [401, 403].includes(error.status)) {
+				const clearing = clear(error.message, ticket);
+				if (waitForStorage) await clearing;
+			}
 			throw error;
 		}
 	}
@@ -234,7 +242,26 @@ export function createSessionStore(deps: SessionDeps) {
 		hydration = undefined;
 		return hydrate();
 	}
+	function lease(): SessionLease | null {
+		const state = store.getState();
+		const session = state.session;
+		if (state.phase !== 'authenticated' || !session) return null;
+		const ticket = generation;
+		const matches = () => current(ticket) && store.getState().phase === 'authenticated';
+		return {
+			identity: `${session.apiBase}|${session.deviceId}`,
+			current: matches,
+			async run(operation) {
+				if (!matches()) throw new Error('Pairing changed during telemetry.');
+				// Invalidation is synchronous; its serialized native Keychain cleanup may not be cancellable.
+				const result = await authenticated(operation, ticket, session, false);
+				if (!matches()) throw new Error('Pairing changed during telemetry.');
+				return result;
+			},
+		};
+	}
 	return {
+		lease,
 		store,
 		hydrate,
 		retryHydration,

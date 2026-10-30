@@ -1,0 +1,20 @@
+diff --git a/index.js b/index.js
+index 4dfca40..5fa07e1 100644
+--- a/index.js
++++ b/index.js
+@@ -0,0 +1,2 @@
++'use strict';
++
+@@ -139 +141 @@ function customDecodeURIComponent(input) {
+-export default function decodeUriComponent(encodedURI) {
++module.exports = function decodeUriComponent(encodedURI) {
+@@ -151 +153 @@ export default function decodeUriComponent(encodedURI) {
+-}
++};
+diff --git a/package.json b/package.json
+index 5991062..c8f1380 100644
+--- a/package.json
++++ b/package.json
+@@ -13 +13 @@
+-	"type": "module",
++	"type": "commonjs",

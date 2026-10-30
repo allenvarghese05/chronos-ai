@@ -310,6 +310,18 @@ export interface components {
             actual_wake_local: string;
         };
         /**
+         * AppState
+         * @description UIApplication application state.
+         * @enum {string}
+         */
+        AppState: "active" | "background" | "inactive";
+        /**
+         * BatteryState
+         * @description iOS battery / charger state.
+         * @enum {string}
+         */
+        BatteryState: "unplugged" | "charging" | "full" | "unknown";
+        /**
          * BonusConsecutive
          * @description Consecutive-tick bonus configuration.
          */
@@ -466,6 +478,12 @@ export interface components {
             token: string;
         };
         /**
+         * PedometerAuth
+         * @description CMPedometer authorisation status.
+         * @enum {string}
+         */
+        PedometerAuth: "authorized" | "denied" | "restricted" | "not_determined";
+        /**
          * Penalty
          * @description One scoring penalty.
          */
@@ -550,6 +568,65 @@ export interface components {
             at: string;
             /** Score */
             score: number;
+        };
+        /**
+         * Signals
+         * @description Validated telemetry snapshot from the iOS app.
+         *
+         *     All 17 phone fields are required; extra fields are forbidden.
+         *     ``device_ts`` must carry timezone information (naive datetimes are rejected
+         *     by the ``_reject_naive_device_ts`` validator so that the scoring engine
+         *     never silently misclassifies a tick).
+         *
+         *     Reused by the T1.6 telemetry endpoint as the request body type.
+         *
+         *     Bounds (enforced by Pydantic):
+         *     - ``steps_10m``, ``steps_since_window`` ∈ [0, 5000]
+         *     - ``walking_sec_10m``, ``stationary_sec_10m`` ∈ [0, 600]
+         *     - ``battery_level`` ∈ [0.0, 1.0] or ``None``
+         *     - ``seq`` ≥ 0
+         */
+        Signals: {
+            app_state: components["schemas"]["AppState"];
+            /** App Version */
+            app_version: string;
+            /**
+             * Battery Level
+             * @default null
+             */
+            battery_level: number | null;
+            battery_state: components["schemas"]["BatteryState"];
+            /**
+             * Device Ts
+             * Format: date-time
+             */
+            device_ts: string;
+            /** Ios Version */
+            ios_version: string;
+            /** Is Unlocked */
+            is_unlocked: boolean;
+            /** Low Power Mode */
+            low_power_mode: boolean;
+            pedometer_auth: components["schemas"]["PedometerAuth"];
+            /** Seq */
+            seq: number;
+            /** Stationary Sec 10M */
+            stationary_sec_10m: number;
+            /** Steps 10M */
+            steps_10m: number;
+            /** Steps Since Window */
+            steps_since_window: number;
+            /**
+             * Tick Seq
+             * @default null
+             */
+            tick_seq: number | null;
+            /** Tz */
+            tz: string;
+            wake_source: components["schemas"]["WakeSource"];
+            walking_conf: components["schemas"]["WalkingConf"];
+            /** Walking Sec 10M */
+            walking_sec_10m: number;
         };
         /**
          * TelemetryResponse
@@ -683,6 +760,18 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /**
+         * WakeSource
+         * @description How the iOS app was woken to sample signals.
+         * @enum {string}
+         */
+        WakeSource: "silent_push" | "bg_refresh" | "foreground" | "manual";
+        /**
+         * WalkingConf
+         * @description CoreMotion walking-activity confidence level.
+         * @enum {string}
+         */
+        WalkingConf: "low" | "medium" | "high";
     };
     responses: never;
     parameters: never;
@@ -1294,7 +1383,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Signals"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

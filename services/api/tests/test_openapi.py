@@ -204,3 +204,15 @@ def test_info_version_from_version_file() -> None:
     assert actual == expected, (
         f"info.version mismatch: schema has {actual!r}, VERSION file has {expected!r}"
     )
+
+
+def test_telemetry_publishes_exact_signals_body() -> None:
+    schema = _build_schema_parsed()
+    body = schema["paths"]["/v1/telemetry"]["post"]["requestBody"]
+    assert body["required"] is True
+    assert body["content"]["application/json"]["schema"] == {"$ref": "#/components/schemas/Signals"}
+    signals = schema["components"]["schemas"]["Signals"]
+    assert signals["additionalProperties"] is False
+    assert "seq" in signals["required"]
+    assert "tick_seq" not in signals["required"]
+    assert signals["properties"]["tick_seq"]["anyOf"][0]["minimum"] == 0
