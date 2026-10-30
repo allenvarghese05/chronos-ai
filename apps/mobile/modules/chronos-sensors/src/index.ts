@@ -30,7 +30,7 @@ export type DeviceState = {
 	iosVersion: string;
 };
 
-export type BGRefreshEvent = { id: string };
+export type BGRefreshEvent = { id: string; endedExecutionId?: string };
 export type BGRefreshExecution = { id: string; executionId: string };
 export type RefreshStatus = 'available' | 'denied' | 'restricted' | 'unknown';
 

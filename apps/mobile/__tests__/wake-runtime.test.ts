@@ -116,3 +116,30 @@ test('cached window cannot cross a pairing identity', async () => {
 	await f.runtime.run('foreground');
 	expect(f.sampleAndSend).toHaveBeenLastCalledWith('foreground', undefined, expect.any(Object));
 });
+
+test('native expiration aborts the bounded attempt before its total deadline', async () => {
+	const f = fixture();
+	let signal!: AbortSignal;
+	f.sampleAndSend.mockImplementationOnce(
+		(_source?: unknown, _context?: unknown, attempt?: { signal: AbortSignal }) => {
+			signal = attempt?.signal as AbortSignal;
+			return new Promise(() => {});
+		},
+	);
+	const native = new AbortController();
+	const pending = f.runtime.run('bg_refresh', undefined, native.signal);
+	await Promise.resolve();
+	await Promise.resolve();
+	native.abort();
+	await expect(pending).resolves.toBe('failed');
+	expect(signal.aborted).toBe(true);
+	await expect(f.runtime.run('bg_refresh', undefined, native.signal)).resolves.toBe('failed');
+});
+
+test('tick window written in a different device timezone after travel is rejected', async () => {
+	const f = fixture();
+	await expect(
+		f.runtime.run('silent_push', { ...tick, windowStart: '2026-10-30T06:00:00+00:00' }),
+	).resolves.toBe('skipped');
+	expect(f.sampleAndSend).not.toHaveBeenCalled();
+});

@@ -332,3 +332,29 @@ test('expired outer deadline never calls native sensors', async () => {
 	).resolves.toBe('failed');
 	expect(f.sample).not.toHaveBeenCalled();
 });
+
+test('native expiration aborts in-flight transport and cannot ACK after a late response', async () => {
+	const f = fixture();
+	queue(f, 1);
+	let resolve!: (value: Response) => void;
+	let signal!: AbortSignal;
+	f.transport.mockImplementationOnce((_, options) => {
+		signal = options.signal;
+		return new Promise((yes) => {
+			resolve = yes;
+		});
+	});
+	const native = new AbortController();
+	const pending = f.telemetry.flush({ signal: native.signal });
+	await Promise.resolve();
+	await Promise.resolve();
+	native.abort();
+	await pending;
+	expect(signal.aborted).toBe(true);
+	expect(f.rows()).toHaveLength(1);
+	const saved = JSON.stringify(f.rows());
+	resolve(response());
+	await Promise.resolve();
+	expect(JSON.stringify(f.rows())).toBe(saved);
+	expect(f.telemetry.status().lastResult).toBeNull();
+});

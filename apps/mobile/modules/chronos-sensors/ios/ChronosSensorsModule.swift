@@ -239,7 +239,11 @@ public class ChronosSensorsModule: Module {
 
     @MainActor @objc private func handleBGRefreshNotification(_ notification: Notification) {
         // Availability only: JS claims after it has installed its listener, also replaying cold starts.
-        self.sendEvent("backgroundRefresh", ["id": BG_REFRESH_IDENTIFIER])
+        var payload = ["id": BG_REFRESH_IDENTIFIER]
+        if let ended = notification.userInfo?["endedExecutionId"] as? String {
+            payload["endedExecutionId"] = ended
+        }
+        self.sendEvent("backgroundRefresh", payload)
     }
 
     private static func onMain<T: Sendable>(_ operation: @MainActor () -> T) -> T {

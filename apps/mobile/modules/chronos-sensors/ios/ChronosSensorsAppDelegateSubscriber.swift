@@ -19,6 +19,8 @@ extension Notification.Name {
             self?.timer = nil
             task.expirationHandler = nil
             task.setTaskCompleted(success: success)
+            NotificationCenter.default.post(name: .chronosBGRefreshFired, object: nil,
+                userInfo: ["endedExecutionId": id])
         }
         task.expirationHandler = { [weak self] in
             DispatchQueue.main.async { self?.coordinator.finish(id: id, success: false) }
