@@ -379,6 +379,36 @@ class TestSchedulerSimulation:
         )
 
     @pytest.mark.anyio
+    async def test_silent_tick_uses_normal_priority_and_exact_context(
+        self, setup: _SimSetup
+    ) -> None:
+        """Only silent ticks override the generic message priority; cadence remains five minutes."""
+        from chronos.delivery.push import PushMessage
+
+        window = _make_window()
+        await setup.scheduler.run_due(window.start_utc)  # creates monitoring day
+        await setup.scheduler.run_due(window.start_utc)  # dispatches first planned tick
+        assert len(setup.fake_push.sent) == 1
+        message = setup.fake_push.sent[0]
+        expected = {
+            "_contentAvailable": True,
+            "priority": "normal",
+            "data": {
+                "type": "tick",
+                "local_date": WEEKDAY_DATE.isoformat(),
+                "tick_seq": 0,
+                "window_start": window.start_utc.astimezone(TZ).isoformat(),
+            },
+        }
+        assert message.to_payload_dict_without_token() == expected
+        assert message.to_expo_dict() == {"to": message.to, **expected}
+        assert PushMessage(to="ExponentPushToken[test]", _contentAvailable=False).priority == "high"
+        await setup.scheduler.run_due(window.start_utc + datetime.timedelta(minutes=4))
+        assert len(setup.fake_push.sent) == 1
+        await setup.scheduler.run_due(window.start_utc + datetime.timedelta(minutes=5))
+        assert len(setup.fake_push.sent) == 2
+
+    @pytest.mark.anyio
     async def test_full_weekday_60_ticks(self, setup: _SimSetup) -> None:
         """Simulate 05:50-11:05 in 1-min steps.
 

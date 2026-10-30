@@ -137,3 +137,29 @@ when asked so `.pi/prompts` become slash commands.
 
 Library versions are pinned by `services/api/uv.lock`, `apps/mobile/pnpm-lock.yaml` and
 `packages/renderer/pnpm-lock.yaml`.
+
+### T2.4 background wake handling (staged)
+
+The custom mobile entry defines headless notification work before Router. Silent ticks, native
+refresh and foreground transitions share the secure persistent telemetry runtime, bounded to 18 seconds.
+Home has explicit Motion/notification permission actions and actual background-status/caveat text.
+Native refresh pending execution survives listener startup, completes by UUID and has a 25-second safety.
+Server silent ticks use normal APNs priority; five-minute scheduling remains best effort.
+
+After pulling/installing this task, rebuild the native dev-client because TaskManager is new:
+
+```sh
+cd apps/mobile
+pnpm install --frozen-lockfile
+pnpm exec expo prebuild --platform ios
+pnpm exec expo run:ios --device "Chronos T2.2 Acceptance"
+```
+
+Use an existing Simulator name shown by `xcrun simctl list devices available` if different. Metro's
+URL loads JavaScript into the installed dev-client; the HTTPS `/v1` URL separately pairs it with
+the laptop API. Expo Go cannot load the custom sensor module.
+
+No Apple/Expo credentials or EAS setup are created. No paid Apple Developer membership is needed
+for Simulator development. The chosen iPhone APNs route requires paid membership independently of
+App Store publishing; the owner has none currently. Real Motion, physical installation and at least three
+locked-phone silent tick observations remain pending. Full T2.4 acceptance is not complete.

@@ -46,9 +46,10 @@
   with Xcode 27.1 (Swift 6.4) / iPhone 16 Pro iOS 18.6 simulator. The app displays
   "Hello from ChronosSensors!" proving the Swift native module is autolinked and working.
   Physical device install is deferred to T2.4 (owner's iPhone port is broken).
-- **Device (deferred to T2.4):** `just mobile-build` → `expo run:ios --device` (Xcode 17+, free
-  personal team is enough for a 7-day cert; a paid developer account gives a 1-year profile and
-  is recommended — see `13-open-questions.md`). EAS Build (`eas build --profile development
+- **Device (deferred to T2.4):** `just mobile-build` → `expo run:ios --device` (Xcode 17+, a free
+  Personal Team supports limited local testing with seven-day provisioning, but does not supply
+  the APNs credentials required by the full Chronos push route. Paid membership is required for
+  that capability even without App Store publication; the owner currently has none). EAS Build (`eas build --profile development
   --platform ios`) is a manual GitHub workflow with `EXPO_TOKEN`.
 - Push: `expo-notifications` with `getExpoPushTokenAsync({ projectId })` → `PATCH /v1/device/me`.
   APNs key is uploaded to Expo once (`eas credentials`) — required even for local builds because
@@ -138,43 +139,33 @@ Notes for the implementer:
   protocols (`StepQuerying`, `ActivityQuerying`) so the duration summation is tested without
   hardware. Run via `just mobile-ios-test` on macOS only (not in required CI).
 
-## 3. Wake handling in JS (`src/wake/`)
+## 3. Wake handling in JS (`src/wake/`, T2.4 staged)
 
-```ts
-// registerWake.ts — called once from the root layout
-export async function registerWake() {
-  await Notifications.registerTaskAsync(SILENT_PUSH_TASK);        // expo-task-manager task
-  ChronosSensors.registerBackgroundRefresh(BG_REFRESH_ID);
-  ChronosSensors.addListener("backgroundRefresh", () => void sampleAndSend("bg_refresh").finally(() => ChronosSensors.completeBackgroundRefresh(true)));
-  AppState.addEventListener("change", (s) => { if (s === "active") void sampleAndSend("foreground"); });
-}
+`index.ts` loads `src/wake/bootstrap.ts` before Expo Router. TaskManager defines the silent
+notification task at module scope. Native notification registration/import is gated to physical
+iOS and an existing `EXPO_PROJECT_ID`; registration itself never requests permission. SDK57's
+native-normalized envelope is validated with bounded JSON parsing, visible/action notifications
+are rejected, and only tick context/sequence is accepted. Payload URLs and credentials are ignored.
 
-TaskManager.defineTask(SILENT_PUSH_TASK, async ({ data }) => {
-  const payload = (data as any)?.notification?.request?.content?.data;
-  if (payload?.type !== "tick") return;
-  await sampleAndSend("silent_push", { tickSeq: payload.tick_seq, windowStart: payload.window_start });
-  ChronosSensors.scheduleBackgroundRefresh(BG_REFRESH_ID, 15 * 60);
-});
+A shared runtime restores the existing Keychain record locally without waiting for a validation
+GET, then uses the same singleton telemetry controller/outbox as manual controls. The total
+monotonic deadline is 18 seconds, including restore; sensors retain 5 seconds and flush retains 8 seconds.
+Each attempt returns sent/queued/skipped/failed independently. Acknowledged work maps to the SDK's
+NewData; skipped maps to NoData; queued/failed maps to Failed without losing the durable snapshot.
+Foreground validation remains separate. Initial paired active launch and real return-to-active
+transitions sample once; React remounts do not register more listeners/controllers.
 
-// sampleAndSend.ts — must finish in < 20 s; everything is time-boxed
-export async function sampleAndSend(source: WakeSource, ctx: TickCtx = {}) {
-  const now = Date.now();
-  const [steps10, stepsWin, act, state] = await Promise.all([
-    withTimeout(ChronosSensors.querySteps(now - 10 * 60_000, now), 5_000, { steps: 0 }),
-    withTimeout(ChronosSensors.querySteps(windowStartMs(ctx), now), 5_000, { steps: 0 }),
-    withTimeout(ChronosSensors.queryActivity(now - 10 * 60_000, now), 5_000, EMPTY_ACTIVITY),
-    Promise.resolve(ChronosSensors.deviceState()),
-  ]);
-  const event = buildTelemetry({ source, ctx, steps10, stepsWin, act, state, seq: await nextSeq() });
-  await telemetryQueue.enqueue(event);
-  await telemetryQueue.flush({ budgetMs: 8_000 });    // POST with bearer; leaves the rest queued
-}
-```
+Native refresh registration still happens at launch. A launch-owned main-actor coordinator retains
+pending execution until JS installs its listener and explicitly claims it. UUID-scoped completion,
+iOS expiration and a 25-second safety timer complete only the corresponding task, at most once.
+Expiration also aborts the matching JS attempt; late native results cannot enqueue/ACK. The
+prebuilt Expo AppDelegate starts React Native in didFinishLaunching, including background launch;
+actual cold-start BG execution remains a physical-device acceptance item. Refresh requests are
+opportunistic, no earlier than 15 minutes, and submission status never promises execution.
 
-Telemetry queue: `expo-sqlite` table `outbox(seq PK, json, created_at, attempts)`; flush sends
-oldest first, stops on 401 (go to pairing) or when the budget is spent; events older than 2 h are
-dropped (they would be outside the window anyway). The server's `(device, seq)` uniqueness makes
-retries safe.
+Silent server ticks explicitly use Expo `normal` priority (APNs 5); future visible messages retain
+the generic high default. Five-minute server cadence is unchanged. iOS can throttle/suppress these
+updates; membership does not guarantee the cadence.
 
 ## 4. Screens (expo-router)
 
@@ -243,7 +234,7 @@ display inside an authenticated boundary; sensor reads mount only after secure s
 ### T2.3 sampler and durable outbox
 
 Authenticated Home provides manual Sample and send / Retry queued telemetry controls.
-They do not register automatic wake handlers (T2.4) or replace the debug screen (T2.5).
+T2.4 now connects automatic wake handlers to the same controller; T2.5 still owns the full debug screen.
 Sampling captures one phone timestamp/timezone, reads actual authorization without prompting,
 and spends at most five seconds on native history. Unavailable motion gives zero/low values
 with local diagnostics; an absent native bridge is an explicit unavailable result. Walking
@@ -265,3 +256,25 @@ pair, stop only test API, sample twice, inspect the native SQLite queue, restart
 reopen the project, restore test API and retry within300seconds. Compare original sequence,
 timestamp and body hashes with server records and confirm FIFO/empty queue. Physical sensor,
 airplane-mode and background-push validation remains on the T2.4 device checklist.
+
+### T2.4 permission flow and staged acceptance
+
+Authenticated Home shows Motion authorization, Background App Refresh setting, Low Power Mode,
+notification alert authorization, push-registration status and refresh-submission status separately.
+Only explicit foreground actions request Motion or notification access. Rendering legacy sensor
+history first checks authorization, so Home never implicitly triggers a Motion prompt. Returning
+from Settings reads actual statuses again. Denied/restricted/not-determined authorization is still
+posted by the existing sampler, never replaced with a fabricated grant. Alert permission is distinct
+from silent-background execution; the screen does not claim denial prevents every background wake.
+
+The persistent caveat explains force-quit, first unlock after reboot, Low Power Mode, disabled
+refresh and best-effort scheduling. Notification native modules are not loaded in this Simulator
+setup, avoiding unentitled Keychain auto-registration side effects without suppressing errors.
+
+No paid Apple Developer membership/physical installation route is currently available. Simulator
+builds and code tests do not require membership. APNs credentials for the chosen remote-push route
+require paid membership even for a private app; App Store publication is not required. No EAS
+project, account, profile or credential is automatically created. T2.4's physical hello(), counted
+walking/permission checks, genuine BG cold start, locked Keychain behavior and at least three
+locked-phone tick→event observations within 60 seconds remain **pending**. See the device checklist
+in `docs/plans/T2.4-plan.md`; do not mark full T2.4/M2 acceptance complete from Simulator evidence.
