@@ -358,3 +358,13 @@ test('native expiration aborts in-flight transport and cannot ACK after a late r
 	expect(JSON.stringify(f.rows())).toBe(saved);
 	expect(f.telemetry.status().lastResult).toBeNull();
 });
+
+test('terminal drop is failed, never queued or an earlier invocation success', async () => {
+	const f = fixture();
+	await expect(f.telemetry.sampleAndSend('manual')).resolves.toBe('sent');
+	f.transport.mockResolvedValueOnce(response(422, 'clock_skew'));
+	await expect(f.telemetry.sampleAndSend('silent_push')).resolves.toBe('failed');
+	expect(f.rows()).toHaveLength(0);
+	expect(f.telemetry.status().diagnostics.join(' ')).toContain('snapshot dropped');
+	await expect(f.telemetry.flush()).resolves.toBe('skipped');
+});

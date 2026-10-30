@@ -91,6 +91,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 							throw new Error('corrupt');
 					} catch {
 						deps.outbox.ack(lease.identity, row.seq);
+						outcome = 'failed';
 						note('An invalid queued snapshot was dropped.');
 						continue;
 					}
@@ -135,6 +136,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 							![408, 429].includes(error.status)
 						) {
 							deps.outbox.ack(lease.identity, row.seq);
+							outcome = 'failed';
 							note(
 								error.code === 'clock_skew'
 									? 'Laptop rejected the original sample time; snapshot dropped. Check the phone clock.'
@@ -152,6 +154,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 						break;
 					}
 				}
+				if (controller.signal.aborted || elapsed() >= deadline) outcome = 'failed';
 			} catch {
 				outcome = 'failed';
 				if (lease.current())
@@ -217,8 +220,11 @@ export function createTelemetryController(deps: TelemetryDeps) {
 					message: 'Snapshot saved locally.',
 				});
 				const result = await flush(attempt);
-				if (!valid() || result === 'failed') return 'failed';
-				return lastAck?.identity === lease.identity && lastAck.seq === row.seq ? 'sent' : 'queued';
+				if (!valid()) return 'failed';
+				if (lastAck?.identity === lease.identity && lastAck.seq === row.seq) return 'sent';
+				if (result === 'failed') return 'failed';
+				const head = deps.outbox.head(lease.identity);
+				return head && head.seq <= row.seq ? 'queued' : 'failed';
 			} catch {
 				if (lease.current())
 					publish({
