@@ -164,7 +164,7 @@ describe('ChronosSensors module (mocked native module via jest.mock)', () => {
 	});
 
 	it('completeBackgroundRefresh() does not throw', () => {
-		expect(() => ChronosSensors.completeBackgroundRefresh(true)).not.toThrow();
+		expect(() => ChronosSensors.completeBackgroundRefresh('execution-1', true)).not.toThrow();
 	});
 
 	it('addListener() returns an object with a remove() method', () => {

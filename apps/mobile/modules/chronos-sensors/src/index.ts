@@ -20,7 +20,7 @@ export type ActivitySummary = {
 };
 
 export type DeviceState = {
-	/** true when the screen is unlocked (isProtectedDataAvailable) */
+	/** Protected-data availability proxy, not an exact screen-unlock event. */
 	isUnlocked: boolean;
 	batteryState: 'unplugged' | 'charging' | 'full' | 'unknown';
 	/** Battery level [0, 1] or null when unavailable */
@@ -31,6 +31,8 @@ export type DeviceState = {
 };
 
 export type BGRefreshEvent = { id: string };
+export type BGRefreshExecution = { id: string; executionId: string };
+export type RefreshStatus = 'available' | 'denied' | 'restricted' | 'unknown';
 
 // ─── Module interface ─────────────────────────────────────────────────────────
 
@@ -78,14 +80,18 @@ export type ChronosSensorsModuleType = {
 	 * Schedule the next BGAppRefreshTask to run no earlier than
 	 * `earliestInSec` seconds from now.
 	 */
-	scheduleBackgroundRefresh(identifier: string, earliestInSec: number): void;
+	scheduleBackgroundRefresh(identifier: string, earliestInSec: number): boolean;
+	/** Actual UIKit setting; this is not a requestable permission. */
+	backgroundRefreshStatus(): RefreshStatus;
+	/** Atomically claim a pending execution after the event listener is installed. */
+	takePendingBackgroundRefresh(): BGRefreshExecution | null;
 
 	/**
-	 * Signal that the JS handler has finished processing the background refresh.
+	 * Signal completion for the claimed execution ID; stale IDs cannot complete a newer task.
 	 * Must be called within ~25 s of receiving the event; the native module
 	 * auto-completes with success=false after that timeout.
 	 */
-	completeBackgroundRefresh(success: boolean): void;
+	completeBackgroundRefresh(executionId: string, success: boolean): void;
 
 	/**
 	 * Subscribe to background refresh events.
@@ -124,7 +130,9 @@ const stub: ChronosSensorsModuleType = {
 		iosVersion: '0.0',
 	}),
 	registerBackgroundRefresh: () => {},
-	scheduleBackgroundRefresh: () => {},
+	scheduleBackgroundRefresh: () => false,
+	backgroundRefreshStatus: () => 'unknown',
+	takePendingBackgroundRefresh: () => null,
 	completeBackgroundRefresh: () => {},
 	addListener: () => ({ remove: () => {} }),
 };
