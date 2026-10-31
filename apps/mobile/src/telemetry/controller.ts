@@ -1,5 +1,5 @@
 import { ApiError } from '../api/client';
-import type { SessionController } from '../session/store';
+import type { SessionController, SessionLease } from '../session/store';
 import {
 	buildTelemetry,
 	type Telemetry,
@@ -15,6 +15,8 @@ export type TelemetryStatus = {
 	count: number;
 	lastSeq: number | null;
 	lastResult: TelemetryResult | null;
+	latestLocal: Telemetry | null;
+	acknowledged: { sample: Telemetry; result: TelemetryResult } | null;
 	message: string;
 	diagnostics: string[];
 	retryAt: number;
@@ -32,15 +34,27 @@ export type TelemetryDeps = {
 /** One sample/flush owner; persistent immutable rows always precede network transmission. */
 export function createTelemetryController(deps: TelemetryDeps) {
 	const elapsed = deps.elapsed ?? (() => performance.now());
-	let status: TelemetryStatus = {
+	const empty = (): TelemetryStatus => ({
 		busy: false,
 		count: 0,
 		lastSeq: null,
 		lastResult: null,
+		latestLocal: null,
+		acknowledged: null,
 		message: 'No telemetry sent yet.',
 		diagnostics: [],
 		retryAt: 0,
-	};
+	});
+	let status = empty();
+	let owner: SessionLease | null = null;
+	function scope() {
+		const lease = deps.session.lease();
+		if (!owner?.current() || owner.identity !== lease?.identity) {
+			status = empty();
+			owner = lease;
+		}
+		return lease;
+	}
 	const listeners = new Set<() => void>();
 	let sampling: Promise<TelemetryOutcome> | undefined;
 	let flushing: Promise<TelemetryOutcome> | undefined;
@@ -53,7 +67,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 		publish({ message, diagnostics: [...status.diagnostics.slice(-7), message] });
 	function flush(attempt: WakeAttempt = {}): Promise<TelemetryOutcome> {
 		if (flushing) return attempt.signal ? Promise.resolve('queued') : flushing;
-		const lease = deps.session.lease();
+		const lease = scope();
 		if (!lease) return Promise.resolve('skipped');
 		const controller = new AbortController();
 		const deadline = Math.min(elapsed() + 8000, attempt.deadline ?? Infinity);
@@ -118,6 +132,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 						publish({
 							lastSeq: row.seq,
 							lastResult: result,
+							acknowledged: immutable({ sample: body, result }),
 							message: 'Telemetry acknowledged by the laptop.',
 							count: deps.outbox.count(lease.identity),
 							retryAt: 0,
@@ -189,7 +204,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 		attempt: WakeAttempt = {},
 	): Promise<TelemetryOutcome> {
 		if (sampling) return Promise.resolve('skipped');
-		const lease = deps.session.lease();
+		const lease = scope();
 		if (!lease) return Promise.resolve('skipped');
 		const valid = () =>
 			lease.current() && !attempt.signal?.aborted && elapsed() < (attempt.deadline ?? Infinity);
@@ -215,6 +230,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 				);
 				publish({
 					lastSeq: row.seq,
+					latestLocal: immutable(JSON.parse(row.body) as Telemetry),
 					count: deps.outbox.count(lease.identity),
 					diagnostics: sampled.diagnostics.slice(0, 8),
 					message: 'Snapshot saved locally.',
@@ -245,7 +261,10 @@ export function createTelemetryController(deps: TelemetryDeps) {
 	return {
 		flush,
 		sampleAndSend,
-		status: () => status,
+		status: () => {
+			scope();
+			return status;
+		},
 		subscribe(listener: () => void) {
 			listeners.add(listener);
 			return () => {
@@ -253,7 +272,7 @@ export function createTelemetryController(deps: TelemetryDeps) {
 			};
 		},
 		refresh() {
-			const lease = deps.session.lease();
+			const lease = scope();
 			if (lease) {
 				try {
 					publish({ count: deps.outbox.count(lease.identity) });
@@ -267,3 +286,16 @@ export function createTelemetryController(deps: TelemetryDeps) {
 	};
 }
 export type TelemetryController = ReturnType<typeof createTelemetryController>;
+
+/** Copy and freeze bounded JSON display data; callers cannot mutate queued/ACK evidence. */
+function immutable<T>(value: T): T {
+	const copy: T = JSON.parse(JSON.stringify(value));
+	function freeze(item: unknown) {
+		if (item && typeof item === 'object') {
+			for (const child of Object.values(item)) freeze(child);
+			Object.freeze(item);
+		}
+	}
+	freeze(copy);
+	return copy;
+}

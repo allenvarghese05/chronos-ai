@@ -18,6 +18,7 @@ from chronos.db import get_session_dep
 from chronos.errors import ProblemException
 from chronos.models.devices import Device
 from chronos.models.wake import Day, TelemetryEvent, WakeEvaluation
+from chronos.ratelimit import rate_limit
 from chronos.wake.rules import get_rules_cache
 from chronos.wake.window import local_date_for
 
@@ -224,7 +225,7 @@ def get_day(
     return _day_to_response(session, device, _fetch_day_or_404(session, device, local_date_str))
 
 
-@router.put("/{local_date_str}/actual-wake")
+@router.put("/{local_date_str}/actual-wake", dependencies=[Depends(rate_limit("default", 120))])
 def put_actual_wake(
     local_date_str: str,
     body: ActualWakeBody,

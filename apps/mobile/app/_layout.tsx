@@ -8,6 +8,7 @@ export default function RootLayout() {
 				screenOptions={{ headerStyle: { backgroundColor: '#faf9f6' }, headerTintColor: '#202722' }}
 			>
 				<Stack.Screen name="index" options={{ title: 'Chronos' }} />
+				<Stack.Screen name="debug" options={{ title: 'Wake diagnostics' }} />
 				<Stack.Screen name="pairing" options={{ title: 'Pair your laptop' }} />
 				<Stack.Screen name="certificate" options={{ title: 'Trust your laptop' }} />
 			</Stack>

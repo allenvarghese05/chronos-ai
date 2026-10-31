@@ -36,6 +36,10 @@ function fixture(initial: string | null = null) {
 		}),
 	};
 	const api: Api = {
+		debugSnapshot: jest.fn(),
+		debugScores: jest.fn(),
+		debugTicks: jest.fn(),
+		actualWake: jest.fn(),
 		telemetry: jest.fn(),
 		pair: jest.fn(async () => session),
 		getDevice: jest.fn(async () => session.deviceId),

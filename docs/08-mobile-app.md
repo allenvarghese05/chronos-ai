@@ -278,3 +278,30 @@ project, account, profile or credential is automatically created. T2.4's physica
 walking/permission checks, genuine BG cold start, locked Keychain behavior and at least three
 locked-phone tick→event observations within 60 seconds remain **pending**. See the device checklist
 in `docs/plans/T2.4-plan.md`; do not mark full T2.4/M2 acceptance complete from Simulator evidence.
+
+### T2.5 wake diagnostics
+
+Authenticated Home links to **Open wake diagnostics** (`/debug`). Send now uses the same bounded
+manual wake runtime, sampler and SQLite queue as the other wake sources. Merely viewing the
+screen never queries Motion history or creates a second background/foreground listener.
+
+The screen distinguishes the latest local snapshot, the exact last locally acknowledged
+sample/result pair and the latest persisted server pair. Each retains sequence, timestamp and
+source. Server details survive process restart; an offline refresh leaves dated values visibly
+stale. Unknown battery values and denied/unavailable Motion remain explicit. The unlock field
+is labeled as the protected-data proxy rather than a precise screen-unlock event.
+
+Stored breakdown/thresholds/derived facts/penalties are displayed without recomputing scores.
+The timeline covers24elapsed hours with original decisions and a fixed0–100scale; no sample
+is not a zero score. History is bounded and explicitly paginated; empty/partial states are
+labeled. Tick status means correlation, not proof of Apple delivery or reason for a missing wake.
+
+Mark actual wake time is an explicit exact `HH:MM` annotation for the displayed server day and
+timezone. It saves only after pressing the button and confirms success by server readback,
+including recovery from a lost PUT response. A failed confirmation preserves the draft.
+App/iOS/server/active-rule/evaluation-rule versions are labeled separately. Existing permission
+controls and force-quit/iOS caveats remain available. Focus/foreground/explicit actions refresh
+diagnostics; blur/background/unmount/session-generation changes cancel or discard stale work.
+
+No new dependencies, database tables or credentials are introduced. T2.4's physical-device
+acceptance checklist remains pending and cannot be closed by this screen.

@@ -168,6 +168,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/debug/scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Score History
+         * @description Return offset-normalized score history over a frozen elapsed 24-hour interval.
+         */
+        get: operations["debug_get_score_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/debug/ticks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tick History
+         * @description Return actual send attempts; receipt status never implies execution.
+         */
+        get: operations["debug_get_tick_history"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/debug/wake": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Wake Debug
+         * @description Return the original latest sample/evaluation and explicit annotation day, without scoring.
+         */
+        get: operations["debug_get_wake_debug"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/device/me": {
         parameters: {
             query?: never;
@@ -389,6 +449,50 @@ export interface components {
             };
         };
         /**
+         * DebugDay
+         * @description Annotation target is explicit; HH:MM is a wall time, not an inferred instant.
+         */
+        DebugDay: {
+            /** Actual Wake Local */
+            actual_wake_local: string | null;
+            /** Local Date */
+            local_date: string;
+            /** State */
+            state: string;
+            /** Tz */
+            tz: string;
+        };
+        /** DebugSnapshot */
+        DebugSnapshot: {
+            /** Active Rule Version */
+            active_rule_version: number;
+            day: components["schemas"]["DebugDay"] | null;
+            latest: components["schemas"]["StoredSample"] | null;
+            /** Server Time */
+            server_time: string;
+            /** Server Version */
+            server_version: string;
+        };
+        /**
+         * DerivedFacts
+         * @description Server-derived facts computed inside :func:`evaluate`; emitted for debugging.
+         *
+         *     These are **not** passed in externally — they are computed from
+         *     ``ctx.previous`` + ``signals`` inside ``evaluate``.
+         */
+        DerivedFacts: {
+            /** Charger Disconnected */
+            charger_disconnected: boolean;
+            /** Consecutive Unlocked Ticks */
+            consecutive_unlocked_ticks: number;
+            /** Minutes Since Window Start */
+            minutes_since_window_start: number;
+            /** Pedometer Unavailable */
+            pedometer_unavailable: boolean;
+            /** Ticks Received Today */
+            ticks_received_today: number;
+        };
+        /**
          * DeviceInfo
          * @description Device metadata sent at pairing time.
          */
@@ -449,6 +553,45 @@ export interface components {
             /** Tz */
             tz: string;
         };
+        /**
+         * Evaluation
+         * @description Complete scoring result returned by :func:`evaluate`.
+         */
+        Evaluation: {
+            /** Breakdown */
+            breakdown: components["schemas"]["RuleBreakdown"][];
+            /** Confirm Reason */
+            confirm_reason?: ("strong" | "consecutive" | "both") | null;
+            /** Consecutive High */
+            consecutive_high: number;
+            decision: components["schemas"]["EvaluationDecision"];
+            derived: components["schemas"]["DerivedFacts"];
+            gate: components["schemas"]["EvaluationGate"];
+            /**
+             * Notes
+             * @default []
+             */
+            notes: string[];
+            /** Penalties */
+            penalties: components["schemas"]["PenaltyBreakdown"][];
+            /** Rule Version */
+            rule_version: number;
+            /** Score */
+            score: number;
+            thresholds: components["schemas"]["ThresholdsEcho"];
+        };
+        /**
+         * EvaluationDecision
+         * @description Outcome of a wake evaluation.
+         * @enum {string}
+         */
+        EvaluationDecision: "outside_window" | "low" | "high" | "confirm" | "ignored_dedupe" | "already_confirmed";
+        /**
+         * EvaluationGate
+         * @description Whether the evaluation window was open.
+         * @enum {string}
+         */
+        EvaluationGate: "open" | "closed";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -496,6 +639,18 @@ export interface components {
             when: {
                 [key: string]: string | string[];
             };
+        };
+        /**
+         * PenaltyBreakdown
+         * @description Per-penalty contribution.
+         */
+        PenaltyBreakdown: {
+            /** Note */
+            note?: string | null;
+            /** Points */
+            points: number;
+            /** Rule Id */
+            rule_id: string;
         };
         /**
          * Problem
@@ -561,6 +716,50 @@ export interface components {
             } | null;
             /** Signal */
             signal: string;
+        };
+        /**
+         * RuleBreakdown
+         * @description Per-rule contribution to the score.
+         */
+        RuleBreakdown: {
+            /** Cap */
+            cap: number;
+            /** Input */
+            input: number | boolean | string;
+            /** Note */
+            note?: string | null;
+            /** Points */
+            points: number;
+            /** Rule Id */
+            rule_id: string;
+        };
+        /** ScorePage */
+        ScorePage: {
+            /** End */
+            end: string;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Points */
+            points: components["schemas"]["ScorePoint"][];
+            /** Start */
+            start: string;
+        };
+        /** ScorePoint */
+        ScorePoint: {
+            /** At */
+            at: string;
+            decision: components["schemas"]["EvaluationDecision"];
+            /** Evaluation Id */
+            evaluation_id: number;
+            /** Event Id */
+            event_id: number;
+            /** Local Date */
+            local_date: string;
+            /** Score */
+            score: number;
+            /** Seq */
+            seq: number;
+            wake_source: components["schemas"]["WakeSource"];
         };
         /** ScoreTimelinePoint */
         ScoreTimelinePoint: {
@@ -628,6 +827,19 @@ export interface components {
             /** Walking Sec 10M */
             walking_sec_10m: number;
         };
+        /** StoredSample */
+        StoredSample: {
+            /** Evaluated At */
+            evaluated_at: string;
+            evaluation: components["schemas"]["Evaluation"];
+            /** Evaluation Id */
+            evaluation_id: number;
+            /** Event Id */
+            event_id: number;
+            /** Received At */
+            received_at: string;
+            signals: components["schemas"]["Signals"];
+        };
         /**
          * TelemetryResponse
          * @description Response body for POST /v1/telemetry (docs/05-api-contracts.md §2).
@@ -682,6 +894,45 @@ export interface components {
             dedupe_min: number;
             /** Strong */
             strong: number;
+        };
+        /**
+         * ThresholdsEcho
+         * @description Echo of active thresholds for the API response.
+         */
+        ThresholdsEcho: {
+            /** Confirm */
+            confirm: number;
+            /** Confirm Max Gap Min */
+            confirm_max_gap_min: number;
+            /** Strong */
+            strong: number;
+        };
+        /** TickPage */
+        TickPage: {
+            /** End */
+            end: string;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Points */
+            points: components["schemas"]["TickPoint"][];
+            /** Start */
+            start: string;
+        };
+        /** TickPoint */
+        TickPoint: {
+            /** At */
+            at: string;
+            /** Attempt Id */
+            attempt_id: number;
+            /** Local Date */
+            local_date: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "received" | "awaiting" | "overdue" | "send_failed";
+            /** Tick Seq */
+            tick_seq: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -1075,6 +1326,180 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DayResponse"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    debug_get_score_history: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScorePage"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    debug_get_tick_history: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickPage"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    debug_get_wake_debug: {
+        parameters: {
+            query?: {
+                local_date?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebugSnapshot"];
                 };
             };
             /** @description Unauthorized — missing or invalid bearer token. */

@@ -1,4 +1,6 @@
 import createClient from 'openapi-fetch';
+import type { DebugSnapshot, ScorePage, TickPage } from '../debug/validation';
+import { calendarDate, debugSnapshot, scorePage, tickPage, wakeTime } from '../debug/validation';
 import { canonicalApiBase, parsePairResponse, record, type Session } from '../pairing/validation';
 import type { components, paths } from './schema';
 
@@ -196,10 +198,17 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		return createClient<paths>({
 			baseUrl: origin,
 			fetch: async (request: Request) => {
-				if (
-					new URL(request.url).origin !== origin ||
-					!['/v1/pair', '/v1/device/me', '/v1/telemetry'].includes(new URL(request.url).pathname)
-				)
+				const url = new URL(request.url);
+				const allowed =
+					(url.pathname === '/v1/pair' && request.method === 'POST') ||
+					(url.pathname === '/v1/device/me' &&
+						['GET', 'PATCH', 'DELETE'].includes(request.method)) ||
+					(url.pathname === '/v1/telemetry' && request.method === 'POST') ||
+					(['/v1/debug/wake', '/v1/debug/scores', '/v1/debug/ticks'].includes(url.pathname) &&
+						request.method === 'GET') ||
+					(/^\/v1\/day\/\d{4}-\d{2}-\d{2}\/actual-wake$/.test(url.pathname) &&
+						request.method === 'PUT');
+				if (url.origin !== origin || !allowed)
 					throw new ApiError(0, 'The API destination is not approved.');
 				const controller = new AbortController();
 				const abort = () => controller.abort();
@@ -212,7 +221,7 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 						throw new ApiError(0, 'The request deadline expired.');
 					const headers = new Headers(request.headers);
 					headers.delete('authorization');
-					if (request.url.endsWith('/v1/device/me') || request.url.endsWith('/v1/telemetry')) {
+					if (url.pathname !== '/v1/pair') {
 						if (!token) throw new ApiError(401, 'Pair this phone before continuing.');
 						headers.set('authorization', `Bearer ${token}`);
 					}
@@ -254,7 +263,69 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 			throw new ApiError(0, 'The laptop returned an invalid device response.');
 		}
 	}
+	async function diagnosticResult<T>(
+		call: () => Promise<{ data?: unknown }>,
+		valid: (v: unknown) => v is T,
+	): Promise<T> {
+		try {
+			const { data } = await call();
+			if (!valid(data)) throw new ApiError(0, 'The laptop returned invalid diagnostics.');
+			return data;
+		} catch (error) {
+			if (error instanceof ApiError) throw error;
+			throw new ApiError(0, 'The laptop returned invalid diagnostics.');
+		}
+	}
 	return {
+		async debugSnapshot(localDate?: string, budget?: RequestBudget): Promise<DebugSnapshot> {
+			if (localDate !== undefined && !calendarDate(localDate))
+				throw new ApiError(0, 'Use a valid server day.');
+			return diagnosticResult(
+				() =>
+					scopedClient(budget).GET('/v1/debug/wake', {
+						params: { query: { local_date: localDate } },
+					}),
+				debugSnapshot,
+			);
+		},
+		async debugScores(cursor?: string, budget?: RequestBudget): Promise<ScorePage> {
+			if (cursor !== undefined && (cursor.length > 512 || !/^[\w-]+$/.test(cursor)))
+				throw new ApiError(0, 'Refresh diagnostics to restart history.');
+			return diagnosticResult(
+				() =>
+					scopedClient(budget).GET('/v1/debug/scores', {
+						params: { query: { cursor } },
+					}),
+				scorePage,
+			);
+		},
+		async debugTicks(cursor?: string, budget?: RequestBudget): Promise<TickPage> {
+			if (cursor !== undefined && (cursor.length > 512 || !/^[\w-]+$/.test(cursor)))
+				throw new ApiError(0, 'Refresh diagnostics to restart history.');
+			return diagnosticResult(
+				() =>
+					scopedClient(budget).GET('/v1/debug/ticks', {
+						params: { query: { cursor } },
+					}),
+				tickPage,
+			);
+		},
+		async actualWake(localDate: string, hhmm: string, budget?: RequestBudget): Promise<void> {
+			if (!calendarDate(localDate) || !wakeTime(hhmm))
+				throw new ApiError(0, 'Use the displayed server day and exact HH:MM.');
+			try {
+				await scopedClient(budget).PUT('/v1/day/{local_date_str}/actual-wake', {
+					params: { path: { local_date_str: localDate } },
+					body: { actual_wake_local: hhmm },
+				});
+			} catch (error) {
+				if (error instanceof ApiError) throw error;
+				throw new ApiError(
+					0,
+					'Wake time save was not confirmed. Refresh to check the saved value.',
+				);
+			}
+		},
 		async telemetry(body: Telemetry, budget: RequestBudget): Promise<TelemetryResult> {
 			try {
 				const { data } = await scopedClient(budget).POST('/v1/telemetry', { body });

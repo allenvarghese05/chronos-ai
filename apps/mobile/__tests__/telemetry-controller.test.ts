@@ -368,3 +368,32 @@ test('terminal drop is failed, never queued or an earlier invocation success', a
 	expect(f.telemetry.status().diagnostics.join(' ')).toContain('snapshot dropped');
 	await expect(f.telemetry.flush()).resolves.toBe('skipped');
 });
+
+test('latest queued sample stays separate from original immutable acknowledged pair', async () => {
+	const f = fixture();
+	await f.telemetry.sampleAndSend('manual');
+	f.transport.mockRejectedValueOnce(new Error('offline'));
+	await f.telemetry.sampleAndSend('bg_refresh');
+	const status = f.telemetry.status();
+	expect(status.latestLocal?.seq).toBe(2);
+	expect(status.acknowledged?.sample.seq).toBe(1);
+	expect(status.acknowledged?.result.evaluation_id).toBe(7);
+	expect(Object.isFrozen(status.latestLocal)).toBe(true);
+	expect(Object.isFrozen(status.acknowledged?.result)).toBe(true);
+	if (status.latestLocal) expect(Reflect.set(status.latestLocal, 'seq', 99)).toBe(false);
+	expect(status.latestLocal?.seq).toBe(2);
+	expect(JSON.parse(f.rows()[0].body).seq).toBe(2);
+});
+test('forget and re-pair clear every local and acknowledged display field', async () => {
+	const f = fixture();
+	await f.telemetry.sampleAndSend('manual');
+	await f.session.forget();
+	f.session.store.setState({
+		phase: 'authenticated',
+		session: { ...pairing, deviceId: '01ARZ3NDEKTSV4RRFFQ69G5FAW' },
+	});
+	expect(f.telemetry.status().latestLocal).toBeNull();
+	expect(f.telemetry.status().acknowledged).toBeNull();
+	expect(f.telemetry.status().lastResult).toBeNull();
+	expect(f.telemetry.status().lastSeq).toBeNull();
+});

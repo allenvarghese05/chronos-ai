@@ -219,6 +219,124 @@
         "title": "DayResponse",
         "type": "object"
       },
+      "DebugDay": {
+        "additionalProperties": false,
+        "description": "Annotation target is explicit; HH:MM is a wall time, not an inferred instant.",
+        "properties": {
+          "actual_wake_local": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Wake Local"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "local_date",
+          "tz",
+          "state",
+          "actual_wake_local"
+        ],
+        "title": "DebugDay",
+        "type": "object"
+      },
+      "DebugSnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "active_rule_version": {
+            "title": "Active Rule Version",
+            "type": "integer"
+          },
+          "day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DebugDay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoredSample"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "server_time": {
+            "title": "Server Time",
+            "type": "string"
+          },
+          "server_version": {
+            "title": "Server Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "server_time",
+          "server_version",
+          "active_rule_version",
+          "day",
+          "latest"
+        ],
+        "title": "DebugSnapshot",
+        "type": "object"
+      },
+      "DerivedFacts": {
+        "additionalProperties": false,
+        "description": "Server-derived facts computed inside :func:`evaluate`; emitted for debugging.\n\nThese are **not** passed in externally \u2014 they are computed from\n``ctx.previous`` + ``signals`` inside ``evaluate``.",
+        "properties": {
+          "charger_disconnected": {
+            "title": "Charger Disconnected",
+            "type": "boolean"
+          },
+          "consecutive_unlocked_ticks": {
+            "title": "Consecutive Unlocked Ticks",
+            "type": "integer"
+          },
+          "minutes_since_window_start": {
+            "title": "Minutes Since Window Start",
+            "type": "integer"
+          },
+          "pedometer_unavailable": {
+            "title": "Pedometer Unavailable",
+            "type": "boolean"
+          },
+          "ticks_received_today": {
+            "title": "Ticks Received Today",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "charger_disconnected",
+          "consecutive_unlocked_ticks",
+          "minutes_since_window_start",
+          "ticks_received_today",
+          "pedometer_unavailable"
+        ],
+        "title": "DerivedFacts",
+        "type": "object"
+      },
       "DeviceInfo": {
         "additionalProperties": false,
         "description": "Device metadata sent at pairing time.",
@@ -421,6 +539,109 @@
         "title": "DeviceResponse",
         "type": "object"
       },
+      "Evaluation": {
+        "additionalProperties": false,
+        "description": "Complete scoring result returned by :func:`evaluate`.",
+        "properties": {
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/RuleBreakdown"
+            },
+            "title": "Breakdown",
+            "type": "array"
+          },
+          "confirm_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "strong",
+                  "consecutive",
+                  "both"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Reason"
+          },
+          "consecutive_high": {
+            "title": "Consecutive High",
+            "type": "integer"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/EvaluationDecision"
+          },
+          "derived": {
+            "$ref": "#/components/schemas/DerivedFacts"
+          },
+          "gate": {
+            "$ref": "#/components/schemas/EvaluationGate"
+          },
+          "notes": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "penalties": {
+            "items": {
+              "$ref": "#/components/schemas/PenaltyBreakdown"
+            },
+            "title": "Penalties",
+            "type": "array"
+          },
+          "rule_version": {
+            "title": "Rule Version",
+            "type": "integer"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          },
+          "thresholds": {
+            "$ref": "#/components/schemas/ThresholdsEcho"
+          }
+        },
+        "required": [
+          "gate",
+          "score",
+          "decision",
+          "consecutive_high",
+          "thresholds",
+          "rule_version",
+          "breakdown",
+          "penalties",
+          "derived"
+        ],
+        "title": "Evaluation",
+        "type": "object"
+      },
+      "EvaluationDecision": {
+        "description": "Outcome of a wake evaluation.",
+        "enum": [
+          "outside_window",
+          "low",
+          "high",
+          "confirm",
+          "ignored_dedupe",
+          "already_confirmed"
+        ],
+        "title": "EvaluationDecision",
+        "type": "string"
+      },
+      "EvaluationGate": {
+        "description": "Whether the evaluation window was open.",
+        "enum": [
+          "open",
+          "closed"
+        ],
+        "title": "EvaluationGate",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -532,6 +753,37 @@
           "points"
         ],
         "title": "Penalty",
+        "type": "object"
+      },
+      "PenaltyBreakdown": {
+        "additionalProperties": false,
+        "description": "Per-penalty contribution.",
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "points"
+        ],
+        "title": "PenaltyBreakdown",
         "type": "object"
       },
       "Problem": {
@@ -675,6 +927,149 @@
         "title": "Rule",
         "type": "object"
       },
+      "RuleBreakdown": {
+        "additionalProperties": false,
+        "description": "Per-rule contribution to the score.",
+        "properties": {
+          "cap": {
+            "title": "Cap",
+            "type": "integer"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Input"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule_id",
+          "input",
+          "points",
+          "cap"
+        ],
+        "title": "RuleBreakdown",
+        "type": "object"
+      },
+      "ScorePage": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/ScorePoint"
+            },
+            "maxItems": 40,
+            "title": "Points",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "next_cursor",
+          "points"
+        ],
+        "title": "ScorePage",
+        "type": "object"
+      },
+      "ScorePoint": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/EvaluationDecision"
+          },
+          "evaluation_id": {
+            "title": "Evaluation Id",
+            "type": "integer"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "integer"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "score": {
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "wake_source": {
+            "$ref": "#/components/schemas/WakeSource"
+          }
+        },
+        "required": [
+          "event_id",
+          "evaluation_id",
+          "at",
+          "seq",
+          "score",
+          "decision",
+          "wake_source",
+          "local_date"
+        ],
+        "title": "ScorePoint",
+        "type": "object"
+      },
       "ScoreTimelinePoint": {
         "additionalProperties": false,
         "properties": {
@@ -816,6 +1211,43 @@
         "title": "Signals",
         "type": "object"
       },
+      "StoredSample": {
+        "additionalProperties": false,
+        "properties": {
+          "evaluated_at": {
+            "title": "Evaluated At",
+            "type": "string"
+          },
+          "evaluation": {
+            "$ref": "#/components/schemas/Evaluation"
+          },
+          "evaluation_id": {
+            "title": "Evaluation Id",
+            "type": "integer"
+          },
+          "event_id": {
+            "title": "Event Id",
+            "type": "integer"
+          },
+          "received_at": {
+            "title": "Received At",
+            "type": "string"
+          },
+          "signals": {
+            "$ref": "#/components/schemas/Signals"
+          }
+        },
+        "required": [
+          "event_id",
+          "evaluation_id",
+          "received_at",
+          "evaluated_at",
+          "signals",
+          "evaluation"
+        ],
+        "title": "StoredSample",
+        "type": "object"
+      },
       "TelemetryResponse": {
         "additionalProperties": false,
         "description": "Response body for POST /v1/telemetry (docs/05-api-contracts.md \u00a72).",
@@ -952,6 +1384,118 @@
           "dedupe_min"
         ],
         "title": "Thresholds",
+        "type": "object"
+      },
+      "ThresholdsEcho": {
+        "additionalProperties": false,
+        "description": "Echo of active thresholds for the API response.",
+        "properties": {
+          "confirm": {
+            "title": "Confirm",
+            "type": "integer"
+          },
+          "confirm_max_gap_min": {
+            "title": "Confirm Max Gap Min",
+            "type": "integer"
+          },
+          "strong": {
+            "title": "Strong",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "confirm",
+          "strong",
+          "confirm_max_gap_min"
+        ],
+        "title": "ThresholdsEcho",
+        "type": "object"
+      },
+      "TickPage": {
+        "additionalProperties": false,
+        "properties": {
+          "end": {
+            "title": "End",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TickPoint"
+            },
+            "maxItems": 40,
+            "title": "Points",
+            "type": "array"
+          },
+          "start": {
+            "title": "Start",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "next_cursor",
+          "points"
+        ],
+        "title": "TickPage",
+        "type": "object"
+      },
+      "TickPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "attempt_id": {
+            "title": "Attempt Id",
+            "type": "integer"
+          },
+          "local_date": {
+            "title": "Local Date",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "received",
+              "awaiting",
+              "overdue",
+              "send_failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tick_seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tick Seq"
+          }
+        },
+        "required": [
+          "attempt_id",
+          "at",
+          "local_date",
+          "tick_seq",
+          "status"
+        ],
+        "title": "TickPoint",
         "type": "object"
       },
       "ValidationError": {
@@ -1537,6 +2081,264 @@
         "summary": "Put Actual Wake",
         "tags": [
           "day"
+        ]
+      }
+    },
+    "/v1/debug/scores": {
+      "get": {
+        "description": "Return offset-normalized score history over a frozen elapsed 24-hour interval.",
+        "operationId": "debug_get_score_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScorePage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Score History",
+        "tags": [
+          "debug"
+        ]
+      }
+    },
+    "/v1/debug/ticks": {
+      "get": {
+        "description": "Return actual send attempts; receipt status never implies execution.",
+        "operationId": "debug_get_tick_history",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TickPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Tick History",
+        "tags": [
+          "debug"
+        ]
+      }
+    },
+    "/v1/debug/wake": {
+      "get": {
+        "description": "Return the original latest sample/evaluation and explicit annotation day, without scoring.",
+        "operationId": "debug_get_wake_debug",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "local_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 10,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Local Date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Wake Debug",
+        "tags": [
+          "debug"
         ]
       }
     },
