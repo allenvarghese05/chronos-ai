@@ -27,18 +27,23 @@ export function deviceMetadata(): DeviceInfo {
 		tz,
 	};
 }
-/** Explicit, nonblocking registration; never invent a Simulator token or create Expo resources. */
+/** Existing project only; reading configuration creates no Expo resources. */
+export function notificationProjectId(): string | null {
+	const id = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
+	return typeof id === 'string' &&
+		/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+		? id
+		: null;
+}
+/** Explicit foreground registration; never invent a Simulator token or create Expo resources. */
 export async function requestPushToken(): Promise<PushResult> {
-	if (!Device.isDevice)
+	if (Platform.OS !== 'ios' || !Device.isDevice)
 		return {
 			unavailable:
-				'Push registration needs a signed physical iPhone build (T2.4). Pairing works in Simulator.',
+				'Push registration needs a signed physical iPhone build. Pairing works in Simulator.',
 		};
-	const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
-	if (
-		typeof projectId !== 'string' ||
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)
-	)
+	const projectId = notificationProjectId();
+	if (!projectId)
 		return {
 			unavailable:
 				'Set EXPO_PROJECT_ID for your existing Expo project and rebuild to enable notifications.',

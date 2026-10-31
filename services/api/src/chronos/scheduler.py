@@ -475,6 +475,7 @@ class Scheduler:
 
         msg = PushMessage(
             to=device.expo_push_token,
+            priority="normal",  # APNs 5: background-only updates must not use alert priority.
             data={
                 "type": "tick",
                 "local_date": day.local_date,

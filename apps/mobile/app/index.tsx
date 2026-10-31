@@ -7,6 +7,7 @@ import ChronosSensors, {
 import { ProtectedScene, useSession } from '../src/session/provider';
 import { TelemetryControls } from '../src/telemetry/controls';
 import { ui } from '../src/ui';
+import { WakePermissions } from '../src/wake/permissions';
 
 export default function Index() {
 	return (
@@ -26,7 +27,12 @@ function PairedHome() {
 		setDeviceState(ChronosSensors.deviceState());
 		const now = Date.now();
 		let mounted = true;
-		ChronosSensors.querySteps(now - 600_000, now)
+		ChronosSensors.pedometerAuthorization()
+			.then((auth) => {
+				if (auth !== 'authorized')
+					throw new Error(`Motion queries skipped: ${auth}. Use Allow Motion access below.`);
+				return ChronosSensors.querySteps(now - 600_000, now);
+			})
 			.then((result) => {
 				if (mounted) setStepsResult(result);
 			})
@@ -42,6 +48,7 @@ function PairedHome() {
 			<Text style={ui.title}>Connected to your laptop.</Text>
 			<Text style={ui.host}>{state.session?.apiBase}</Text>
 			<TelemetryControls />
+			<WakePermissions />
 			<Text style={ui.subtitle}>Chronos Sensors</Text>
 			<Text style={ui.label}>deviceState()</Text>
 			<Text style={ui.text}>{deviceState ? JSON.stringify(deviceState, null, 2) : 'loading…'}</Text>
@@ -53,13 +60,6 @@ function PairedHome() {
 				title={state.checking ? 'Checking laptop…' : 'Check connection'}
 				disabled={state.checking || state.busy}
 				onPress={() => void state.controller.validate()}
-			/>
-			<Text style={ui.subtitle}>Notifications</Text>
-			<Text style={ui.text}>{state.pushStatus}</Text>
-			<Button
-				title="Set up or retry notifications"
-				onPress={() => void state.controller.registerPush()}
-				disabled={state.busy}
 			/>
 			<Text style={ui.subtitle}>Pairing controls</Text>
 			<Text style={ui.text}>

@@ -3,15 +3,6 @@ import CoreMotion
 import UIKit
 import BackgroundTasks
 
-// MARK: - Shared BG task notification
-
-/// Posted by ChronosSensorsAppDelegateSubscriber when a BGAppRefreshTask fires.
-extension Notification.Name {
-    static let chronosBGRefreshFired = Notification.Name("ChronosSensorsBGRefreshFired")
-}
-/// UserInfo key for the BGAppRefreshTask object.
-let kChronosBGTaskKey = "task"
-
 // MARK: - CoreMotion Adapters
 
 /// Wraps CMPedometer to satisfy StepQuerying.
@@ -66,48 +57,10 @@ final class ActivityAdapter: ActivityQuerying, @unchecked Sendable {
 
 // MARK: - Module
 
-/// Keeps the BG task, timeout, and expiration completion on one actor.
-@MainActor private final class BackgroundRefreshState {
-    private var pendingTask: BGAppRefreshTask?
-    private var completionTimer: Timer?
-
-    nonisolated init() {}
-
-    func begin(_ task: BGAppRefreshTask) {
-        finish(success: false)
-        pendingTask = task
-        let taskID = ObjectIdentifier(task)
-        // Retain the state until safety completion even if Expo releases the module.
-        let timer = Timer(timeInterval: 25, repeats: false) { [self] _ in
-            DispatchQueue.main.async {
-                self.finish(success: false, expectedTask: taskID)
-            }
-        }
-        RunLoop.main.add(timer, forMode: .default)
-        completionTimer = timer
-        task.expirationHandler = { [weak self] in
-            DispatchQueue.main.async {
-                self?.finish(success: false, expectedTask: taskID)
-            }
-        }
-    }
-
-    func finish(success: Bool, expectedTask: ObjectIdentifier? = nil) {
-        // An already queued timeout/expiration must not finish a newer task.
-        if let expectedTask, pendingTask.map(ObjectIdentifier.init) != expectedTask { return }
-        completionTimer?.invalidate()
-        completionTimer = nil
-        pendingTask?.expirationHandler = nil
-        pendingTask?.setTaskCompleted(success: success)
-        pendingTask = nil
-    }
-}
-
 public class ChronosSensorsModule: Module {
     // Adapters are created once; CoreMotion objects are thread-safe.
     private let pedometer = PedometerAdapter()
     private let activityAdapter = ActivityAdapter()
-    private let backgroundRefresh = BackgroundRefreshState()
 
     public func definition() -> ModuleDefinition {
         Name("ChronosSensors")
@@ -216,21 +169,37 @@ public class ChronosSensorsModule: Module {
             // This JS call is a no-op (the identifier is already registered).
         }
 
-        Function("scheduleBackgroundRefresh") { (identifier: String, earliestInSec: Double) in
-            let request = BGAppRefreshTaskRequest(identifier: identifier)
-            request.earliestBeginDate = Date(timeIntervalSinceNow: earliestInSec)
-            do {
-                try BGTaskScheduler.shared.submit(request)
-            } catch {
-                print("[ChronosSensors] scheduleBackgroundRefresh error: \(error)")
+        Function("backgroundRefreshStatus") { () -> String in
+            Self.onMain {
+                switch UIApplication.shared.backgroundRefreshStatus {
+                case .available: return "available"
+                case .denied: return "denied"
+                case .restricted: return "restricted"
+                @unknown default: return "unknown"
+                }
             }
         }
 
-        Function("completeBackgroundRefresh") { (success: Bool) in
-            let state = self.backgroundRefresh
-            DispatchQueue.main.async {
-                state.finish(success: success)
+        Function("scheduleBackgroundRefresh") { (identifier: String, earliestInSec: Double) -> Bool in
+            guard identifier == BG_REFRESH_IDENTIFIER, earliestInSec.isFinite,
+                  earliestInSec >= 60, earliestInSec <= 86400 else { return false }
+            return Self.onMain {
+                let request = BGAppRefreshTaskRequest(identifier: identifier)
+                request.earliestBeginDate = Date(timeIntervalSinceNow: earliestInSec)
+                BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: identifier)
+                do {
+                    try BGTaskScheduler.shared.submit(request)
+                    return true
+                } catch { return false }
             }
+        }
+
+        Function("takePendingBackgroundRefresh") { () -> [String: String]? in
+            Self.onMain { NativeRefreshOwner.shared.claim() }
+        }
+
+        Function("completeBackgroundRefresh") { (executionId: String, success: Bool) in
+            Self.onMain { NativeRefreshOwner.shared.finish(id: executionId, success: success) }
         }
 
         Events("backgroundRefresh")
@@ -269,11 +238,16 @@ public class ChronosSensorsModule: Module {
     }
 
     @MainActor @objc private func handleBGRefreshNotification(_ notification: Notification) {
-        // The subscriber registers its launch handler on DispatchQueue.main, and
-        // NotificationCenter delivers this selector synchronously on that queue.
-        guard let task = notification.userInfo?[kChronosBGTaskKey] as? BGAppRefreshTask else { return }
-        backgroundRefresh.begin(task)
-        self.sendEvent("backgroundRefresh", ["id": task.identifier])
+        // Availability only: JS claims after it has installed its listener, also replaying cold starts.
+        var payload = ["id": BG_REFRESH_IDENTIFIER]
+        if let ended = notification.userInfo?["endedExecutionId"] as? String {
+            payload["endedExecutionId"] = ended
+        }
+        self.sendEvent("backgroundRefresh", payload)
     }
 
+    private static func onMain<T: Sendable>(_ operation: @MainActor () -> T) -> T {
+        if Thread.isMainThread { return MainActor.assumeIsolated { operation() } }
+        return DispatchQueue.main.sync { MainActor.assumeIsolated { operation() } }
+    }
 }

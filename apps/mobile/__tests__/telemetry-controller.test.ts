@@ -250,16 +250,16 @@ test('real client aborts ignoring fetch at8s; late resolution leaves immutable r
 		jest.useRealTimers();
 	}
 });
-test('concurrent sample requests coalesce and enqueue before first network attempt', async () => {
+test('overlapping source skips without borrowing another sample outcome', async () => {
 	const f = fixture();
 	f.transport.mockImplementationOnce(async () => {
 		expect(f.rows()).toHaveLength(1);
 		return response();
 	});
 	const one = f.telemetry.sampleAndSend('manual');
-	const two = f.telemetry.sampleAndSend('manual');
-	expect(one).toBe(two);
-	await one;
+	const two = f.telemetry.sampleAndSend('silent_push');
+	await expect(two).resolves.toBe('skipped');
+	await expect(one).resolves.toBe('sent');
 	expect(f.sample).toHaveBeenCalledTimes(1);
 	expect(f.rows()).toHaveLength(0);
 });
@@ -295,3 +295,76 @@ test.each([401, 403])(
 		}
 	},
 );
+
+test('current attempt remains queued despite a previous successful ACK', async () => {
+	const f = fixture();
+	await expect(f.telemetry.sampleAndSend('manual')).resolves.toBe('sent');
+	f.transport.mockRejectedValueOnce(new Error('offline'));
+	await expect(f.telemetry.sampleAndSend('bg_refresh')).resolves.toBe('queued');
+	expect(f.rows()).toHaveLength(1);
+});
+test('outer abort releases hanging sample; late native result cannot enqueue', async () => {
+	const f = fixture();
+	let resolve!: (value: Sample) => void;
+	f.sample.mockImplementationOnce(
+		() =>
+			new Promise((yes) => {
+				resolve = yes;
+			}),
+	);
+	const controller = new AbortController();
+	const pending = f.telemetry.sampleAndSend('silent_push', undefined, {
+		signal: controller.signal,
+		tickSeq: 9,
+	});
+	controller.abort();
+	await expect(pending).resolves.toBe('failed');
+	resolve(sampled());
+	await Promise.resolve();
+	expect(f.rows()).toHaveLength(0);
+	expect(f.transport).not.toHaveBeenCalled();
+	expect(f.sample).toHaveBeenCalledWith('silent_push', undefined, 9);
+});
+test('expired outer deadline never calls native sensors', async () => {
+	const f = fixture();
+	await expect(
+		f.telemetry.sampleAndSend('bg_refresh', undefined, { deadline: performance.now() - 1 }),
+	).resolves.toBe('failed');
+	expect(f.sample).not.toHaveBeenCalled();
+});
+
+test('native expiration aborts in-flight transport and cannot ACK after a late response', async () => {
+	const f = fixture();
+	queue(f, 1);
+	let resolve!: (value: Response) => void;
+	let signal!: AbortSignal;
+	f.transport.mockImplementationOnce((_, options) => {
+		signal = options.signal;
+		return new Promise((yes) => {
+			resolve = yes;
+		});
+	});
+	const native = new AbortController();
+	const pending = f.telemetry.flush({ signal: native.signal });
+	await Promise.resolve();
+	await Promise.resolve();
+	native.abort();
+	await pending;
+	expect(signal.aborted).toBe(true);
+	expect(f.rows()).toHaveLength(1);
+	const saved = JSON.stringify(f.rows());
+	resolve(response());
+	await Promise.resolve();
+	expect(JSON.stringify(f.rows())).toBe(saved);
+	expect(f.telemetry.status().lastResult).toBeNull();
+});
+
+test('terminal drop is failed, never queued or an earlier invocation success', async () => {
+	const f = fixture();
+	await expect(f.telemetry.sampleAndSend('manual')).resolves.toBe('sent');
+	f.transport.mockResolvedValueOnce(response(422, 'clock_skew'));
+	await expect(f.telemetry.sampleAndSend('silent_push')).resolves.toBe('failed');
+	expect(f.rows()).toHaveLength(0);
+	expect(f.telemetry.status().diagnostics.join(' ')).toContain('snapshot dropped');
+	await expect(f.telemetry.flush()).resolves.toBe('skipped');
+});

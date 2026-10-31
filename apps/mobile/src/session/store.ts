@@ -117,7 +117,7 @@ export function createSessionStore(deps: SessionDeps) {
 		validation = { generation: ticket, promise };
 		return promise;
 	}
-	function hydrate(): Promise<void> {
+	function restore(): Promise<void> {
 		if (hydration) return hydration;
 		const ticket = generation;
 		hydration = (async () => {
@@ -126,7 +126,6 @@ export function createSessionStore(deps: SessionDeps) {
 				const session = raw === null ? null : parseSession(JSON.parse(raw));
 				if (!current(ticket)) return;
 				store.setState({ session, phase: session ? 'authenticated' : 'unpaired' });
-				if (session) await validate();
 			} catch {
 				if (current(ticket))
 					store.setState({
@@ -137,6 +136,10 @@ export function createSessionStore(deps: SessionDeps) {
 			}
 		})();
 		return hydration;
+	}
+	async function hydrate(): Promise<void> {
+		await restore();
+		await validate();
 	}
 	async function pair(apiBase: string, code: string): Promise<boolean> {
 		const state = store.getState();
@@ -262,6 +265,7 @@ export function createSessionStore(deps: SessionDeps) {
 	}
 	return {
 		lease,
+		restore,
 		store,
 		hydrate,
 		retryHydration,

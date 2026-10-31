@@ -5,6 +5,7 @@
 		"types": []
 	},
 	"include": [
+		"index.ts",
 		"app/**/*.ts",
 		"app/**/*.tsx",
 		"modules/**/*.ts",
