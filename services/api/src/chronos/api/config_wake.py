@@ -21,7 +21,7 @@ problem+json with per-field paths in the ``errors`` list (RFC 9457 extension).
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import re
 
 import structlog
 from fastapi import APIRouter, Depends, Request
@@ -30,11 +30,13 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlmodel import Session
 
 from chronos.auth import require_device
+from chronos.config import Settings
 from chronos.db import get_session_dep
 from chronos.errors import PROBLEM_CONTENT_TYPE, ProblemException
 from chronos.models.devices import Device
 from chronos.ratelimit import rate_limit
 from chronos.wake.rules import (
+    RulesConflict,
     WakeRules,
     activate_new_version,
     get_rules_cache,
@@ -51,7 +53,6 @@ _default_rate_limit = rate_limit("default", per_minute=120)
 
 # Path to the canonical YAML file.
 # parents[3] of src/chronos/api/config_wake.py is services/api/
-_YAML_PATH: Path = Path(__file__).parents[3] / "config" / "wake_rules.yaml"
 
 
 # ── response model ────────────────────────────────────────────────────────────
@@ -70,6 +71,14 @@ class ConfigWakeResponse(BaseModel):
     yaml_stale: bool
     created_at: str
     created_by: str
+
+
+class ConfigWakeSaved(BaseModel):
+    """Activation result; GET readback supplies authoritative content and provenance."""
+
+    model_config = ConfigDict(extra="forbid")
+    version: int
+    created: bool
 
 
 # ── GET ───────────────────────────────────────────────────────────────────────
@@ -101,12 +110,13 @@ def get_config_wake(
         ) from exc
 
     # Compute the SHA of the YAML file on disk for the yaml_sha256 / yaml_stale fields.
-    stale = _yaml_stale(session, _YAML_PATH)
+    settings: Settings = request.app.state.settings
+    stale = _yaml_stale(session, settings.wake_rules_path)
     # For yaml_sha256, load and hash the current YAML file content.
     try:
         from chronos.wake.rules import load_yaml
 
-        yaml_rules = load_yaml(_YAML_PATH)
+        yaml_rules = load_yaml(settings.wake_rules_path)
         y_sha = rules_sha256(yaml_rules)
     except Exception:
         y_sha = ""
@@ -143,7 +153,24 @@ _PUT_OPENAPI_EXTRA: dict[str, object] = {
 }
 
 
-@router.put("/wake", status_code=201, openapi_extra=_PUT_OPENAPI_EXTRA)
+@router.put(
+    "/wake",
+    status_code=201,
+    response_model=ConfigWakeSaved,
+    responses={200: {"model": ConfigWakeSaved}, 409: {"description": "Active rules changed"}},
+    openapi_extra={
+        **_PUT_OPENAPI_EXTRA,
+        "parameters": [
+            {
+                "name": "If-Match",
+                "in": "header",
+                "required": False,
+                "schema": {"type": "string", "pattern": '^"[a-f0-9]{64}"$'},
+                "description": "Quoted active SHA from GET; stale differing drafts conflict.",
+            }
+        ],
+    },
+)
 async def put_config_wake(
     request: Request,
     device: Device = Depends(require_device),
@@ -236,8 +263,31 @@ async def put_config_wake(
         )
 
     created_by = f"api:{device.public_id}"
-    rv, created = activate_new_version(session, rules, source="api", created_by=created_by)
-    session.commit()
+    expected = request.headers.get("if-match")
+    if expected is not None and not re.fullmatch('"[a-f0-9]{64}"', expected):
+        raise ProblemException(
+            400,
+            "rules_precondition_invalid",
+            "Invalid Precondition",
+            "Use the quoted active rules SHA from GET.",
+        )
+    try:
+        rv, created = activate_new_version(
+            session,
+            rules,
+            source="api",
+            created_by=created_by,
+            expected_sha=expected[1:-1] if expected is not None else None,
+        )
+        session.commit()
+    except RulesConflict as exc:
+        raise ProblemException(
+            409,
+            "rules_conflict",
+            "Rules Changed",
+            "Refresh active rules before reapplying your draft.",
+        ) from exc
+    get_rules_cache().invalidate()
 
     status_code = 201 if created else 200
     log.info(
