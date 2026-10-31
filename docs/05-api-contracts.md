@@ -200,3 +200,36 @@ Both `services/api/openapi.json` and `apps/mobile/src/api/schema.d.ts` are commi
 - `mobile` job: `openapi-typescript … --output /tmp/schema.d.ts && diff -u src/api/schema.d.ts /tmp/schema.d.ts`
 
 A PR that modifies a router without running `just gen-types` will fail CI.
+
+## 8. Wake diagnostics (T2.5)
+
+All three reads require the current device bearer, are device-scoped and share the existing
+120/minute default rate limiter. They do not score or modify records. Responses are capped below
+the mobile client's unchanged32KiB streamed limit; an oversized/corrupt stored breakdown returns
+a sanitized503 instead of an incomplete evaluation disguised as complete.
+
+- `GET /v1/debug/wake?local_date=YYYY-MM-DD`: server UTC/version, active rule version,
+  explicit day/date/timezone/state/actual-wake metadata and latest stored Signals/Evaluation pair
+  with event/evaluation IDs and capture/receive/evaluation timestamps. Omit `local_date` for the
+  server's current device day (03:00 boundary). Missing day/latest are explicit null values.
+- `GET /v1/debug/scores?cursor=...`: original scores/decisions/sources, at most40 per page,
+  newest first over exactly24 elapsed hours anchored at the first request's server UTC time.
+- `GET /v1/debug/ticks?cursor=...`: recorded tick attempts, at most40 per page. Matching is
+  accepted `silent_push` telemetry for the same device/local-date/tick-sequence. Ticket failures
+  are `send_failed`; accepted/unmatched ticks younger than60seconds are `awaiting`, otherwise
+  `overdue`; matching records are `received`. No counter subtraction, inferred unsent tick or
+  APNs/application-delivery claim is made. Late accepted telemetry can resolve an overdue tick
+  on a fresh request.
+
+History pages return `start`, `end`, `points`, `next_cursor`. Offset timestamps are ordered by
+instant with ID tie-breaks. Bounded versioned opaque cursors retain the interval and per-device
+row watermark so newly inserted old captures cannot enter an existing traversal. Invalid,
+cross-device, mismatched-kind or expired cursors return422; refresh to obtain a new interval.
+The UI loads pages explicitly up to400rows and labels remaining history as partial. Neither
+push payloads/errors/tickets nor credentials/settings are projected.
+
+Actual-wake integration reuses `PUT /v1/day/{local_date}/actual-wake` with exact `HH:MM` and
+the default rate limiter. The mobile client verifies the explicit day's saved value via the
+compact debug snapshot even if the PUT response was lost or exceeded its body limit. A draft
+is never auto-saved; a failed readback remains unconfirmed. Annotation does not confirm a day or
+change scoring. HH:MM storage cannot distinguish repeated DST-fold times.

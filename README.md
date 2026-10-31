@@ -178,3 +178,18 @@ Open the installed development client and connect to `http://127.0.0.1:8081`. Th
 development server address; keep the paired HTTPS `/v1` API address separate. The T2.4 native
 Simulator foreground/outbox/API acceptance passes with this setup; physical push acceptance
 remains pending.
+
+### Wake diagnostics (T2.5)
+
+Open **Open wake diagnostics** from paired Home. **Send now** collects one manual snapshot through
+the shared runtime/outbox, then refreshes the stored server breakdown and rolling24-hour history.
+Local and acknowledged sequences are shown separately so queued data cannot borrow an older score.
+Use **Load older scores/ticks** for bounded paging; partial history and missing samples are explicit.
+
+Tick “Overdue — no matching telemetry yet” means an Expo-accepted attempt has lacked matching
+accepted silent-push telemetry for60seconds. It does not prove APNs delivery, force-quit or a lost
+notification. **Mark actual wake time** records exact `HH:MM` for the labeled server day/timezone;
+the app confirms it by readback, and annotations do not alter the wake decision. Existing Motion,
+background status and version information help explain unavailable readings. See
+`docs/plans/T2.5-plan.md` for automated and native acceptance evidence; real iPhone/APNs/Motion
+acceptance remains pending under T2.4.
