@@ -163,3 +163,18 @@ No Apple/Expo credentials or EAS setup are created. No paid Apple Developer memb
 for Simulator development. The chosen iPhone APNs route requires paid membership independently of
 App Store publishing; the owner has none currently. Real Motion, physical installation and at least three
 locked-phone silent tick observations remain pending. Full T2.4 acceptance is not complete.
+
+
+If the Simulator cannot load Metro while `localhost:8081/status` works on the Mac, check explicit
+IPv4 with `curl --fail http://127.0.0.1:8081/status`. Metro's localhost binding can resolve only to
+IPv6 while the native dev-client uses IPv4. Stop that Metro instance with Ctrl-C, then in
+`apps/mobile` run this loopback-only development server:
+
+```sh
+NODE_OPTIONS=--dns-result-order=ipv4first pnpm exec expo start --dev-client --localhost --port 8081
+```
+
+Open the installed development client and connect to `http://127.0.0.1:8081`. This is the JavaScript
+development server address; keep the paired HTTPS `/v1` API address separate. The T2.4 native
+Simulator foreground/outbox/API acceptance passes with this setup; physical push acceptance
+remains pending.
