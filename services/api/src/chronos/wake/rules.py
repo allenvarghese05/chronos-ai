@@ -48,7 +48,7 @@ from typing import Annotated, Any, cast
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import text
+from sqlalchemy import text, update
 from sqlmodel import Session, select
 
 from chronos.models.wake import RuleVersion
@@ -204,7 +204,7 @@ class Rule(BaseModel):
                     award = cells[1]
                     if not isinstance(award, int) or isinstance(award, bool) or award < 0:
                         raise ValueError("rule awards must be nonnegative integers")
-        return value
+        return cast(object, value)
 
     @model_validator(mode="after")
     def _validate_rule(self) -> Rule:
@@ -561,8 +561,8 @@ def activate_new_version(
             # Acquire SQLite's writer reservation before reading the active version.
             # The predicate is rechecked after a competing writer commits, so only
             # one distinct draft based on this SHA can activate. No values change.
-            session.execute(
-                text("UPDATE rule_versions SET active=1 WHERE active=1 AND sha256=:sha"),
+            session.exec(
+                update(RuleVersion).where(text("active=1 AND sha256=:sha")).values(active=1),
                 params={"sha": expected_sha},
             )
         # Check current active version (autoflush suppressed to avoid side effects
