@@ -3,6 +3,9 @@ import { StyleSheet } from 'react-native';
 /** Shared quiet, readable styles for the small setup flow. */
 export const ui = StyleSheet.create({
 	page: { flexGrow: 1, backgroundColor: '#faf9f6', padding: 24, gap: 18 },
+	debugGroup: { gap: 6 },
+	scoreTrack: { height: 8, backgroundColor: '#e0e4df', overflow: 'hidden' },
+	scoreFill: { height: 8, backgroundColor: '#245c43' },
 	title: { fontSize: 30, fontWeight: '600', color: '#202722' },
 	subtitle: { fontSize: 18, fontWeight: '600', color: '#202722' },
 	text: { fontSize: 16, lineHeight: 24, color: '#414943' },

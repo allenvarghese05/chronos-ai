@@ -1,3 +1,4 @@
+import { Link } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Button, ScrollView, Text } from 'react-native';
 import ChronosSensors, {
@@ -47,6 +48,9 @@ function PairedHome() {
 		<ScrollView contentContainerStyle={ui.page}>
 			<Text style={ui.title}>Connected to your laptop.</Text>
 			<Text style={ui.host}>{state.session?.apiBase}</Text>
+			<Link href="/debug" style={ui.host}>
+				Open wake diagnostics
+			</Link>
 			<TelemetryControls />
 			<WakePermissions />
 			<Text style={ui.subtitle}>Chronos Sensors</Text>

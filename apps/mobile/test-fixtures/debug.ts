@@ -1,4 +1,6 @@
+import type { DebugState } from '../src/debug/controller';
 import type { DebugSnapshot, ScorePage, TickPage } from '../src/debug/validation';
+import type { TelemetryStatus } from '../src/telemetry/controller';
 
 export const debugFixture = (): DebugSnapshot => ({
 	server_time: '2026-11-01T08:00:00Z',
@@ -88,4 +90,29 @@ export const tickFixture = (): TickPage => ({
 			status: 'overdue',
 		},
 	],
+});
+
+export const telemetryFixture = (): TelemetryStatus => ({
+	busy: false,
+	count: 0,
+	lastSeq: 7,
+	lastResult: null,
+	latestLocal: null,
+	acknowledged: null,
+	message: 'No local snapshot in this process.',
+	diagnostics: [],
+	retryAt: 0,
+});
+export const debugStateFixture = (): DebugState => ({
+	snapshot: debugFixture(),
+	scores: scoreFixture(),
+	ticks: tickFixture(),
+	telemetry: telemetryFixture(),
+	busy: false,
+	sending: false,
+	saving: false,
+	error: '',
+	message: '',
+	draft: '',
+	loadedAt: Date.parse('2026-11-01T08:00:00Z'),
 });

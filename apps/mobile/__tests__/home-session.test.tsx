@@ -7,7 +7,7 @@ import { createSessionStore } from '../src/session/store';
 jest.mock('../src/session/native', () => ({ sessionController: undefined }));
 jest.mock('../src/telemetry/controls', () => ({ TelemetryControls: () => null }));
 jest.mock('../src/wake/permissions', () => ({ WakePermissions: () => null }));
-jest.mock('expo-router', () => ({ Redirect: 'Redirect' }));
+jest.mock('expo-router', () => ({ Redirect: 'Redirect', Link: 'Link' }));
 jest.mock('../modules/chronos-sensors/src', () => ({
 	__esModule: true,
 	default: {

@@ -101,8 +101,9 @@ function evaluation(v: unknown): boolean {
 				'breakdown',
 				'penalties',
 				'derived',
+				'notes',
 			],
-			['confirm_reason', 'notes'],
+			['confirm_reason'],
 		)
 	)
 		return false;
