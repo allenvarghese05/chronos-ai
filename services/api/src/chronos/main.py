@@ -28,6 +28,7 @@ from starlette.exceptions import HTTPException
 from chronos import __version__
 from chronos.api.config_wake import router as config_wake_router
 from chronos.api.day import router as day_router
+from chronos.api.debug import router as debug_router
 from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
 from chronos.api.pair import router as pair_router
@@ -188,6 +189,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(config_wake_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(telemetry_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(debug_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(report_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
     # Publish the manually size-bounded raw-body contract without installing an automatic
