@@ -23,6 +23,9 @@ auditConfig:
 
 # SDK57 CLI devtools schemas use APIs retained by patched Zod4.
 overrides:
+  # Patch the compatible CommonJS Forge used by both Expo certificate consumers.
+  "@expo/cli>node-forge": 1.4.1
+  "@expo/code-signing-certificates>node-forge": 1.4.1
   "@expo/cli>zod": 4.6.6
   "query-string@7.1.3>decode-uri-component": 0.5.1
 
