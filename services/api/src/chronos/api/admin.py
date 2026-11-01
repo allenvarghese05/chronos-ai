@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy import text, update
 from sqlmodel import Session
 
 from chronos.auth import require_device
@@ -101,8 +102,14 @@ async def push_test(
                 details.get("error") == "DeviceNotRegistered"
                 or tickets[0].message == "DeviceNotRegistered"
             ):
-                device.expo_push_token = None
-                session.add(device)
+                # A newer foreground registration may have replaced this token
+                # while Expo was answering. Never erase that newer registration.
+                session.exec(
+                    update(Device)
+                    .where(text("id=:device_id AND expo_push_token=:token"))
+                    .values(expo_push_token=None),
+                    params={"device_id": device.id, "token": message.to},
+                )
     except (TimeoutError, Exception):
         # A request may have reached Expo before its response was lost. No retry.
         outcome, reason = "unknown", "uncertain"

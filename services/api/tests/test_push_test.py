@@ -118,3 +118,27 @@ def test_timeout_is_unknown_and_never_retried(
             "reason": "uncertain",
         }
     assert fake.attempts == 1
+
+
+def test_old_registration_failure_does_not_clear_newer_token(test_settings: Settings) -> None:
+    class Rotating(FakePushClient):
+        async def send_once(self, messages: Sequence[PushMessage]) -> list[Ticket]:
+            with Session(create_db_engine(test_settings.database_url)) as session:
+                row = session.exec(select(Device)).one()
+                row.expo_push_token = "ExponentPushToken[new-isolated-registration]"
+                session.add(row)
+                session.commit()
+            return [Ticket(status="error", message="DeviceNotRegistered")]
+
+    fake = Rotating()
+    client, token = fixture_client(test_settings, fake)
+    with client:
+        assert (
+            client.post("/v1/admin/push-test", headers=auth_headers(token)).json()["outcome"]
+            == "failed"
+        )
+    with Session(create_db_engine(test_settings.database_url)) as session:
+        assert (
+            session.exec(select(Device)).one().expo_push_token
+            == "ExponentPushToken[new-isolated-registration]"
+        )

@@ -2,6 +2,23 @@ import createClient from 'openapi-fetch';
 import type { DebugSnapshot, ScorePage, TickPage } from '../debug/validation';
 import { calendarDate, debugSnapshot, scorePage, tickPage, wakeTime } from '../debug/validation';
 import { canonicalApiBase, parsePairResponse, record, type Session } from '../pairing/validation';
+import {
+	type FieldIssue,
+	fieldIssues,
+	type PreferencePatch,
+	type Preferences,
+	type PushResult,
+	preferencePatch,
+	preferences,
+	pushResult,
+	type RuleSaved,
+	savedRules,
+	sha,
+	type WakeConfig,
+	type WakeRules,
+	wakeConfig,
+	wakeRules,
+} from '../settings/validation';
 import type { components, paths } from './schema';
 
 export type DeviceInfo = components['schemas']['DeviceInfo'];
@@ -63,6 +80,7 @@ export class ApiError extends Error {
 		public readonly retryAfterSec = 0,
 		public readonly code = '',
 		public readonly serverTime?: string,
+		public readonly issues: readonly FieldIssue[] = [],
 	) {
 		super(message);
 		this.name = 'ApiError';
@@ -96,17 +114,28 @@ async function responseError(response: Response, signal: AbortSignal): Promise<A
 	const retry = Number(response.headers.get('retry-after'));
 	let code = '';
 	let serverTime: string | undefined;
+	let issues: FieldIssue[] = [];
 	try {
 		const bounded = await boundedResponse(response, signal);
 		const problem: unknown = await bounded.json();
 		if (record(problem)) {
 			if (
 				typeof problem.code === 'string' &&
-				['clock_skew', 'validation', 'rate_limited', 'revoked', 'unauthorized'].includes(
-					problem.code,
-				)
+				[
+					'clock_skew',
+					'validation',
+					'rate_limited',
+					'revoked',
+					'unauthorized',
+					'rules_invalid',
+					'settings_invalid',
+					'rules_conflict',
+					'rules_precondition_invalid',
+				].includes(problem.code)
 			)
 				code = problem.code;
+			if (problem.type === 'urn:chronos:error:rules_invalid') code = 'rules_invalid';
+			if (response.status === 422 && code === 'rules_invalid') issues = fieldIssues(problem.errors);
 			if (
 				typeof problem.server_time === 'string' &&
 				problem.server_time.length <= 40 &&
@@ -120,7 +149,16 @@ async function responseError(response: Response, signal: AbortSignal): Promise<A
 	}
 	return new ApiError(
 		response.status,
-		messages[response.status] ?? 'The laptop could not complete this request. Try again later.',
+		code === 'rules_conflict'
+			? 'Rules changed on the laptop. Reload, then explicitly reapply your edits.'
+			: code === 'rules_invalid'
+				? 'Wake rules were rejected. Check the highlighted fields.'
+				: code === 'settings_invalid'
+					? 'Use valid reel preferences.'
+					: code === 'rules_precondition_invalid'
+						? 'Reload the active rules before saving.'
+						: (messages[response.status] ??
+							'The laptop could not complete this request. Try again later.'),
 		response.status === 429
 			? Number.isFinite(retry) && retry > 0
 				? Math.min(3600, Math.ceil(retry))
@@ -128,6 +166,7 @@ async function responseError(response: Response, signal: AbortSignal): Promise<A
 			: 0,
 		code,
 		serverTime,
+		issues,
 	);
 }
 
@@ -204,6 +243,9 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 					(url.pathname === '/v1/device/me' &&
 						['GET', 'PATCH', 'DELETE'].includes(request.method)) ||
 					(url.pathname === '/v1/telemetry' && request.method === 'POST') ||
+					(url.pathname === '/v1/config/wake' && ['GET', 'PUT'].includes(request.method)) ||
+					(url.pathname === '/v1/config' && ['GET', 'PATCH'].includes(request.method)) ||
+					(url.pathname === '/v1/admin/push-test' && request.method === 'POST') ||
 					(['/v1/debug/wake', '/v1/debug/scores', '/v1/debug/ticks'].includes(url.pathname) &&
 						request.method === 'GET') ||
 					(/^\/v1\/day\/\d{4}-\d{2}-\d{2}\/actual-wake$/.test(url.pathname) &&
@@ -277,6 +319,38 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		}
 	}
 	return {
+		async getWakeConfig(budget?: RequestBudget): Promise<WakeConfig> {
+			return diagnosticResult(() => scopedClient(budget).GET('/v1/config/wake'), wakeConfig);
+		},
+		async putWakeConfig(
+			body: WakeRules,
+			expectedSha: string,
+			budget?: RequestBudget,
+		): Promise<RuleSaved> {
+			if (!wakeRules(body) || !sha(expectedSha))
+				throw new ApiError(0, 'Reload valid rules before saving.');
+			return diagnosticResult(
+				() =>
+					scopedClient(budget).PUT('/v1/config/wake', {
+						body,
+						params: { header: { 'If-Match': `"${expectedSha}"` } },
+					}),
+				savedRules,
+			);
+		},
+		async getPreferences(budget?: RequestBudget): Promise<Preferences> {
+			return diagnosticResult(() => scopedClient(budget).GET('/v1/config'), preferences);
+		},
+		async patchPreferences(body: PreferencePatch, budget?: RequestBudget): Promise<Preferences> {
+			if (!preferencePatch(body)) throw new ApiError(0, 'Choose valid reel preferences.');
+			return diagnosticResult(
+				() => scopedClient(budget).PATCH('/v1/config', { body }),
+				preferences,
+			);
+		},
+		async testPush(budget?: RequestBudget): Promise<PushResult> {
+			return diagnosticResult(() => scopedClient(budget).POST('/v1/admin/push-test'), pushResult);
+		},
 		async debugSnapshot(localDate?: string, budget?: RequestBudget): Promise<DebugSnapshot> {
 			if (localDate !== undefined && !calendarDate(localDate))
 				throw new ApiError(0, 'Use a valid server day.');
