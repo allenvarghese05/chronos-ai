@@ -193,3 +193,21 @@ the app confirms it by readback, and annotations do not alter the wake decision.
 background status and version information help explain unavailable readings. See
 `docs/plans/T2.5-plan.md` for automated and native acceptance evidence; real iPhone/APNs/Motion
 acceptance remains pending under T2.4.
+
+### Settings (T2.6)
+
+Open **Settings** from paired Home. Edit weekday/weekend clock windows and confirm/strong
+thresholds, then **Save wake rules**. **Show weight controls** reveals existing rule awards,
+caps, bonuses and without-pedometer weights. Unedited rules, conditions, penalties, holidays,
+cadence, day boundary and document version are preserved. A save is confirmed only by GET
+readback of the newly assigned active version. A stale draft conflicts instead of overwriting
+another edit; **Discard drafts and reload active settings** explicitly reloads before reapplying.
+
+Reel theme (`auto`, `dawn`, `mono`, `ink`), render mode and optional Pexels preferences are stored
+for the future pipeline. Automatic theme means dawn weekdays/ink weekends. They do not change
+mobile appearance or render a reel yet. A Pexels key stays in server environment only; the phone
+shows key availability separately from the requested flag. No external Pexels fetch occurs here.
+
+**Send test push** makes one bounded attempt to the registered phone, with no automatic retries.
+Expo acceptance is not proof of delivery. A missing token is expected in this Simulator setup;
+real APNs/visible-notification acceptance remains pending. No new dependencies or tables.
