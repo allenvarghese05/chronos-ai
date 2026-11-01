@@ -145,6 +145,64 @@ class ReceiptStatus(enum.StrEnum):
     invalid_credentials = "InvalidCredentials"
 
 
+class SourceKind(enum.StrEnum):
+    """Supported future content adapters."""
+
+    hf_api = "hf_api"
+    arxiv_api = "arxiv_api"
+    rss = "rss"
+    hn_rss = "hn_rss"
+
+
+class ContentCategory(enum.StrEnum):
+    """Selection categories, shared by content storage and future loaders."""
+
+    ai = "ai"
+    tech = "tech"
+    world = "world"
+    india = "india"
+
+
+class BriefStatus(enum.StrEnum):
+    """A stored draft is not yet a validated ready script."""
+
+    drafting = "drafting"
+    ready = "ready"
+    failed = "failed"
+
+
+class BriefItemRole(enum.StrEnum):
+    """An item's role in a future scene."""
+
+    primary = "primary"
+    mention = "mention"
+
+
+class JobKind(enum.StrEnum):
+    """Trusted internal stage identifiers; not executable module names."""
+
+    ingest = "ingest"
+    script = "script"
+    assets = "assets"
+    tts = "tts"
+    captions = "captions"
+    render = "render"
+    deliver = "deliver"
+    receipts = "receipts"
+    retention = "retention"
+    report = "report"
+
+
+class JobStatus(enum.StrEnum):
+    """Durable execution states."""
+
+    queued = "queued"
+    running = "running"
+    done = "done"
+    failed = "failed"
+    cancelled = "cancelled"
+
+
 def ck_values(e: type[enum.Enum]) -> str:
     """Return a SQL IN-list string for use in a ``CheckConstraint``.
 
