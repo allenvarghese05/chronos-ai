@@ -31,6 +31,7 @@ export function SettingsView({
 	actions: SettingsActions;
 	permissions?: ReactNode;
 }) {
+	const [showWeights, setShowWeights] = useState(false);
 	const wake = state.wake,
 		prefs = state.preferenceDraft;
 	return (
@@ -94,22 +95,28 @@ export function SettingsView({
 						Windows are local clock times. Thresholds are 1–100; strong must be at least confirm.
 						Awards are nonnegative whole numbers and cannot exceed their cap.
 					</Text>
-					{ruleFields(wake.rules).map((field) => (
-						<View key={field.key} style={ui.debugGroup}>
-							<Text style={ui.label}>{field.label}</Text>
-							<TextInput
-								accessibilityLabel={field.label}
-								value={state.fields[field.key] ?? field.value}
-								style={ui.input}
-								editable={!state.saving}
-								keyboardType={field.kind === 'integer' ? 'number-pad' : 'numbers-and-punctuation'}
-								autoCorrect={false}
-								autoCapitalize="none"
-								maxLength={32}
-								onChangeText={(value) => actions.editField(field.key, value)}
-							/>
-						</View>
-					))}
+					<Button
+						title={showWeights ? 'Hide weight controls' : 'Show weight controls'}
+						onPress={() => setShowWeights(!showWeights)}
+					/>
+					{ruleFields(wake.rules)
+						.filter((_, index) => index < 6 || showWeights)
+						.map((field) => (
+							<View key={field.key} style={ui.debugGroup}>
+								<Text style={ui.label}>{field.label}</Text>
+								<TextInput
+									accessibilityLabel={field.label}
+									value={state.fields[field.key] ?? field.value}
+									style={ui.input}
+									editable={!state.saving}
+									keyboardType={field.kind === 'integer' ? 'number-pad' : 'numbers-and-punctuation'}
+									autoCorrect={false}
+									autoCapitalize="none"
+									maxLength={32}
+									onChangeText={(value) => actions.editField(field.key, value)}
+								/>
+							</View>
+						))}
 					<Text style={ui.notice}>
 						Preserved advanced settings: day boundary {wake.rules.window.day_boundary}; tick
 						interval {wake.rules.window.tick_interval_min} min; dedupe{' '}

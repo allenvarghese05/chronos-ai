@@ -62,8 +62,6 @@ test('settings fixture renders preserving form, origins, future capabilities and
 		'Active version',
 		'document version',
 		'Confirm threshold',
-		'custom.steps: award',
-		'without-pedometer weight',
 		'Reel preferences',
 		'future rendering pipeline',
 		'not configured',
@@ -72,6 +70,11 @@ test('settings fixture renders preserving form, origins, future capabilities and
 		'Save wake rules',
 	])
 		expect(text).toContain(label);
+	await act(async () => {
+		(tree.root.findByProps({ title: 'Show weight controls' }).props.onPress as () => void)();
+	});
+	expect(JSON.stringify(tree.toJSON())).toContain('custom.steps: award');
+	expect(JSON.stringify(tree.toJSON())).toContain('without-pedometer weight');
 	expect(calls.saveRules).not.toHaveBeenCalled();
 	expect(calls.testPush).not.toHaveBeenCalled();
 	await act(async () => {
