@@ -227,3 +227,12 @@ test('overlapping test taps coalesce; unknown never triggers an automatic retry'
 	expect(f.api.testPush).toHaveBeenCalledTimes(2);
 	expect(f.controller.status().error).toContain('unknown');
 });
+
+test('unchanged rules save is read-only and never creates a version', async () => {
+	const f = fixture();
+	await ready(f);
+	await f.controller.saveRules();
+	expect(f.api.putWakeConfig).not.toHaveBeenCalled();
+	expect(f.controller.status().wake?.version).toBe(3);
+	expect(f.controller.status().message).toContain('verified');
+});

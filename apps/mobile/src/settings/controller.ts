@@ -156,9 +156,11 @@ export function createSettingsController(deps: SettingsDeps) {
 				if (!run.valid()) return;
 				let failure: unknown;
 				try {
-					await run.lease.run((api) =>
-						api.putWakeConfig(draft.rules, baseline.sha256, run.budget()),
-					);
+					if (!sameContent(draft.rules, baseline.rules)) {
+						await run.lease.run((api) =>
+							api.putWakeConfig(draft.rules, baseline.sha256, run.budget()),
+						);
+					}
 				} catch (error) {
 					failure = error;
 				}
