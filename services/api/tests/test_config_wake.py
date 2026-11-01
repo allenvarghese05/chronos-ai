@@ -557,3 +557,8 @@ class TestConditionalWakeWrites:
             rows = session.exec(select(RuleVersion)).all()
             assert len(rows) == 2
             assert sum(row.active for row in rows) == 1
+
+
+# Shared public fixture helpers for the adjacent settings/test-push suites.
+insert_device_for_test = _insert_device
+auth_headers = _auth

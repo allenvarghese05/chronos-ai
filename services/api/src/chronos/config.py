@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -82,6 +83,12 @@ class Settings(BaseSettings):
     # ── tool endpoints ───────────────────────────────────────────────────────
     ollama_endpoint: str = "http://localhost:11434"
     llm_provider: str = "ollama"
+
+    # Reel preferences: consumed by the future pipeline, not mobile appearance.
+    theme: Literal["auto", "dawn", "mono", "ink"] = "auto"
+    render_mode: Literal["eager", "on_trigger"] = "eager"
+    pexels_enabled: bool = False
+    pexels_api_key: SecretStr | None = None
 
     # ── scheduler ────────────────────────────────────────────────────────────
     #: Set to False to disable the background scheduler (tests, debug).

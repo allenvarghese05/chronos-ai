@@ -341,3 +341,33 @@ class TestExpoPushClientClose:
 
         # _closed flag ensures aclose() is called exactly once, not twice.
         assert mock_http.aclose.await_count == 1
+
+
+@pytest.mark.anyio
+async def test_explicit_visible_test_has_one_network_attempt() -> None:
+    transport = _MockTransport(
+        [httpx.Response(503), httpx.Response(200, content=_expo_ok_response())]
+    )
+    async with httpx.AsyncClient(transport=transport) as http:
+        client = ExpoPushClient(http_client=http)
+        visible = PushMessage(
+            to=TOKEN,
+            _contentAvailable=False,
+            title="Chronos test",
+            body="Connection check",
+            sound="default",
+            data={"type": "test"},
+        )
+        with pytest.raises(PushClientError):
+            await client.send_once([visible])
+    assert len(transport.requests) == 1
+    wire = json.loads(transport.requests[0].content)
+    assert wire[0]["_contentAvailable"] is False and wire[0]["title"] == "Chronos test"
+    assert wire[0]["sound"] == "default"
+    assert "to" not in visible.to_payload_dict_without_token()
+    assert _make_msg().to_expo_dict() == {
+        "to": TOKEN,
+        "_contentAvailable": True,
+        "priority": "high",
+        "data": {"type": "tick", "tick_seq": 0},
+    }

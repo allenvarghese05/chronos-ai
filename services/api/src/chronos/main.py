@@ -26,6 +26,9 @@ from fastapi.routing import APIRoute
 from starlette.exceptions import HTTPException
 
 from chronos import __version__
+from chronos.api.admin import router as admin_router
+from chronos.api.config import PreferencesPatch
+from chronos.api.config import router as config_router
 from chronos.api.config_wake import router as config_wake_router
 from chronos.api.day import router as day_router
 from chronos.api.debug import router as debug_router
@@ -120,19 +123,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Start scheduler if enabled.
         _scheduler_task: asyncio.Task[None] | None = None
         _stop_event: asyncio.Event | None = None
-        _push_client: ExpoPushClient | None = None
+        import httpx as _httpx
+
+        from chronos.delivery.push import ExpoPushClient
+
+        _push_client = ExpoPushClient(
+            access_token=resolved.expo_access_token,
+            base_url=resolved.expo_push_base_url,
+            http_client=_httpx.AsyncClient(),
+        )
+        app.state.push_client = _push_client
         if resolved.scheduler_enabled:
-            import httpx as _httpx
             from sqlmodel import Session as _SchedSession
 
-            from chronos.delivery.push import ExpoPushClient
             from chronos.scheduler import Scheduler
 
-            _push_client = ExpoPushClient(
-                access_token=resolved.expo_access_token,
-                base_url=resolved.expo_push_base_url,
-                http_client=_httpx.AsyncClient(),
-            )
             _scheduler = Scheduler(
                 session_factory=lambda: _SchedSession(engine),
                 push_client=_push_client,
@@ -155,8 +160,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await asyncio.wait_for(_scheduler_task, timeout=5.0)
             except TimeoutError:
                 log.warning("scheduler_stop_timeout")
-        if _push_client is not None:
-            await _push_client.close()
+        await _push_client.close()
 
         engine.dispose()
         reset_rules_cache()
@@ -187,6 +191,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     # Authenticated endpoints: add shared 401/403/422/429 Problem responses (T0.7).
     app.include_router(device_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(config_wake_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(config_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(admin_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(telemetry_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(debug_router, prefix="/v1", responses=PROBLEM_RESPONSES)
@@ -204,6 +210,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         components = schema.setdefault("components", {}).setdefault("schemas", {})
         components.update(signals.pop("$defs", {}))
         components["Signals"] = signals
+        patch_schema = PreferencesPatch.model_json_schema()
+        for field in patch_schema.get("properties", {}).values():
+            field.pop("default", None)
+            if "anyOf" in field:
+                field["anyOf"] = [part for part in field["anyOf"] if part.get("type") != "null"]
+        components["PreferencesPatch"] = patch_schema
         schema["paths"]["/v1/telemetry"]["post"]["requestBody"] = {
             "required": True,
             "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Signals"}}},

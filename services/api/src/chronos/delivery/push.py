@@ -26,7 +26,7 @@ import asyncio
 import json
 import uuid
 from collections.abc import Sequence
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Literal, Protocol, runtime_checkable
 
 import httpx
 import structlog
@@ -62,23 +62,26 @@ class PushMessage(BaseModel):
     content_available: bool = Field(default=True, alias="_contentAvailable")
     priority: str = "high"
     data: dict[str, Any] = Field(default_factory=dict)
+    title: str | None = Field(default=None, max_length=120)
+    body: str | None = Field(default=None, max_length=500)
+    sound: Literal["default"] | None = None
 
     def to_expo_dict(self) -> dict[str, Any]:
         """Serialise to the dict Expo expects, using the wire key names."""
-        return {
-            "to": self.to,
-            "_contentAvailable": self.content_available,
-            "priority": self.priority,
-            "data": self.data,
-        }
+        return {"to": self.to, **self.to_payload_dict_without_token()}
 
     def to_payload_dict_without_token(self) -> dict[str, Any]:
         """Serialise without the token (safe for DB storage / logging)."""
-        return {
+        payload: dict[str, Any] = {
             "_contentAvailable": self.content_available,
             "priority": self.priority,
             "data": self.data,
         }
+        for key in ("title", "body", "sound"):
+            value = getattr(self, key)
+            if value is not None:
+                payload[key] = value
+        return payload
 
 
 class Ticket(BaseModel):
@@ -124,6 +127,10 @@ class PushClient(Protocol):
         Returns:
             Mapping of ticket_id → :class:`Receipt`.  Unknown IDs are absent.
         """
+        ...
+
+    async def send_once(self, messages: Sequence[PushMessage]) -> list[Ticket]:
+        """Send one attempt without automatic retries for an explicit user test."""
         ...
 
 
@@ -186,7 +193,9 @@ class ExpoPushClient:
             headers["Authorization"] = f"Bearer {self._access_token.get_secret_value()}"
         return headers
 
-    async def _post(self, path: str, body: object) -> dict[str, Any]:
+    async def _post(
+        self, path: str, body: object, *, attempts: int | None = None
+    ) -> dict[str, Any]:
         """POST to *path* (relative) and return parsed JSON.
 
         Retries on 5xx / 429 with exponential backoff.  Raises
@@ -196,7 +205,7 @@ class ExpoPushClient:
         payload = json.dumps(body)
         last_exc: Exception | None = None
 
-        for attempt in range(self.MAX_RETRIES):
+        for attempt in range(self.MAX_RETRIES if attempts is None else attempts):
             if attempt > 0:
                 backoff = min(self.BASE_BACKOFF_S * (2 ** (attempt - 1)), self.MAX_BACKOFF_S)
                 await asyncio.sleep(backoff)
@@ -237,6 +246,15 @@ class ExpoPushClient:
                 raise PushClientError(f"Invalid JSON from Expo: {exc}") from exc
 
         raise PushClientError(f"Expo push failed after {self.MAX_RETRIES} attempts") from last_exc
+
+    async def send_once(self, messages: Sequence[PushMessage]) -> list[Ticket]:
+        """Send at most one small batch once; the caller bounds the total duration."""
+        if not messages:
+            return []
+        if len(messages) > self.CHUNK_SIZE:
+            raise ValueError("One-attempt sends must fit one batch")
+        response = await self._post("push/send", [m.to_expo_dict() for m in messages], attempts=1)
+        return [Ticket.model_validate(item) for item in response.get("data", [])]
 
     async def send(self, messages: Sequence[PushMessage]) -> list[Ticket]:
         """Send *messages* in chunks of ≤ 100; return one Ticket per message."""
@@ -322,6 +340,10 @@ class FakePushClient:
             else:
                 tickets.append(Ticket(status="error", id=None, message=outcome))
         return tickets
+
+    async def send_once(self, messages: Sequence[PushMessage]) -> list[Ticket]:
+        """A fake send has no automatic retries, matching the explicit test action."""
+        return await self.send(messages)
 
     async def get_receipts(self, ticket_ids: Sequence[str]) -> dict[str, Receipt]:
         self.receipts_checked.extend(ticket_ids)
