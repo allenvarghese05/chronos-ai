@@ -1018,3 +1018,28 @@ class TestReweightBonusConstraint:
         rw_val = rules.reweight_without_pedometer["unlocked"]
         assert unlocked_rule.bonus_consecutive is not None
         assert rw_val > unlocked_rule.bonus_consecutive.points
+
+
+@pytest.mark.parametrize("value", [-1, 0.5, float("nan"), float("inf"), True, "15"])
+def test_awards_are_strict_nonnegative_integers(value: object) -> None:
+    body = make_valid()
+    body["rules"][0]["points"][0][1] = value
+    with pytest.raises(ValidationError):
+        WakeRules.model_validate(body)
+
+
+@pytest.mark.parametrize("value", [-1, 0.5, True, "15"])
+def test_reweights_are_strict_nonnegative_integers(value: object) -> None:
+    body = make_valid()
+    body["reweight_without_pedometer"] = {"steps_10m": value}
+    with pytest.raises(ValidationError):
+        WakeRules.model_validate(body)
+
+
+def test_award_strictness_preserves_threshold_types() -> None:
+    body = make_valid()
+    body["rules"][0]["points"] = [[35.5, 30], [20, 18]]
+    rules = WakeRules.model_validate(body)
+    assert rules.rules[0].points[0][0] == 35.5
+    assert rules.rules[1].points[0][0] is True
+    assert rules.rules[2].points[0][0] == "foreground"

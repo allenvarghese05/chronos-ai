@@ -107,6 +107,26 @@
         "title": "ConfigWakeResponse",
         "type": "object"
       },
+      "ConfigWakeSaved": {
+        "additionalProperties": false,
+        "description": "Activation result; GET readback supplies authoritative content and provenance.",
+        "properties": {
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "created"
+        ],
+        "title": "ConfigWakeSaved",
+        "type": "object"
+      },
       "DayResponse": {
         "additionalProperties": false,
         "description": "Response schema for all day endpoints.",
@@ -786,6 +806,48 @@
         "title": "PenaltyBreakdown",
         "type": "object"
       },
+      "PreferencesPatch": {
+        "additionalProperties": false,
+        "description": "Only these explicit keys can be changed; null is never a reset operation.",
+        "properties": {
+          "pexels_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              }
+            ],
+            "title": "Pexels Enabled"
+          },
+          "render_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "eager",
+                  "on_trigger"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Render Mode"
+          },
+          "theme": {
+            "anyOf": [
+              {
+                "enum": [
+                  "auto",
+                  "dawn",
+                  "mono",
+                  "ink"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Theme"
+          }
+        },
+        "title": "PreferencesPatch",
+        "type": "object"
+      },
       "Problem": {
         "additionalProperties": true,
         "description": "RFC 9457 problem+json response body (OpenAPI component schema \u2014 T0.7).\n\nUsed as the ``model=`` reference in ``responses=`` on authenticated routers\nso that FastAPI generates a shared ``Problem`` component in the OpenAPI schema.\nActual error responses are produced by :func:`make_problem` (not validated\nthrough this model at runtime).",
@@ -848,6 +910,110 @@
           "instance"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "PushTestResult": {
+        "additionalProperties": false,
+        "description": "Ticket outcome, never proof of APNs delivery or a provider error dump.",
+        "properties": {
+          "outcome": {
+            "enum": [
+              "accepted",
+              "failed",
+              "unavailable",
+              "unknown"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "enum": [
+              "ticket_accepted",
+              "provider_rejected",
+              "not_registered",
+              "not_configured",
+              "uncertain"
+            ],
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "outcome",
+          "reason"
+        ],
+        "title": "PushTestResult",
+        "type": "object"
+      },
+      "ReelPreferences": {
+        "additionalProperties": false,
+        "description": "Safe effective preferences; availability is distinct from requested Pexels use.",
+        "properties": {
+          "origins": {
+            "additionalProperties": {
+              "enum": [
+                "default",
+                "env",
+                "db"
+              ],
+              "type": "string"
+            },
+            "propertyNames": {
+              "enum": [
+                "theme",
+                "render_mode",
+                "pexels_enabled"
+              ]
+            },
+            "title": "Origins",
+            "type": "object"
+          },
+          "pexels_effective": {
+            "title": "Pexels Effective",
+            "type": "boolean"
+          },
+          "pexels_enabled": {
+            "title": "Pexels Enabled",
+            "type": "boolean"
+          },
+          "pexels_key_configured": {
+            "title": "Pexels Key Configured",
+            "type": "boolean"
+          },
+          "render_mode": {
+            "enum": [
+              "eager",
+              "on_trigger"
+            ],
+            "title": "Render Mode",
+            "type": "string"
+          },
+          "rendering_available": {
+            "const": false,
+            "default": false,
+            "title": "Rendering Available",
+            "type": "boolean"
+          },
+          "theme": {
+            "enum": [
+              "auto",
+              "dawn",
+              "mono",
+              "ink"
+            ],
+            "title": "Theme",
+            "type": "string"
+          }
+        },
+        "required": [
+          "theme",
+          "render_mode",
+          "pexels_enabled",
+          "pexels_effective",
+          "pexels_key_configured",
+          "origins"
+        ],
+        "title": "ReelPreferences",
         "type": "object"
       },
       "Rule": {
@@ -1552,6 +1718,7 @@
           },
           "reweight_without_pedometer": {
             "additionalProperties": {
+              "minimum": 0.0,
               "type": "integer"
             },
             "default": {},
@@ -1711,6 +1878,215 @@
         ]
       }
     },
+    "/v1/admin/push-test": {
+      "post": {
+        "description": "Send fixed visible content once, with no caller-selected token or payload.",
+        "operationId": "admin_push_test",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Push Test",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/config": {
+      "get": {
+        "description": "Return only the settings projection, never the runtime configuration object.",
+        "operationId": "config_get_config",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReelPreferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Config",
+        "tags": [
+          "config"
+        ]
+      },
+      "patch": {
+        "description": "Validate a small patch before atomically writing only its allowlisted keys.",
+        "operationId": "config_patch_config",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PreferencesPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReelPreferences"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Patch Config",
+        "tags": [
+          "config"
+        ]
+      }
+    },
     "/v1/config/wake": {
       "get": {
         "description": "Return the currently active wake-engine rule version.\n\nRaises:\n    :class:`~chronos.errors.ProblemException` 500 if no active version\n        exists (startup guard should prevent this in prod).",
@@ -1780,6 +2156,18 @@
       "put": {
         "description": "Validate and activate a new WakeRules document.\n\nRaw request bytes are read so that both the Content-Length pre-check AND\nan actual ``len(raw) > _MAX_BODY_BYTES`` guard cover chunked transfers\nwhere ``Content-Length`` is absent.  The bytes are decoded with\n``json.loads`` before Pydantic validation so that malformed JSON surfaces\nas ``422 rules_invalid`` rather than a bare 400.\nRequests exceeding ``_MAX_BODY_BYTES`` are rejected with **413**.\n\nReturns:\n    ``200`` \u2014 SHA matches active version (no-op).\n    ``201`` \u2014 New version created.\n\nRaises:\n    :class:`~chronos.errors.ProblemException` 422 ``rules_invalid`` with\n        ``errors: [{loc, msg, type}]`` on validation failure.",
         "operationId": "config_put_config_wake",
+        "parameters": [
+          {
+            "description": "Quoted active SHA from GET; stale differing drafts conflict.",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "pattern": "^\"[a-f0-9]{64}\"$",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -1791,10 +2179,22 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigWakeSaved"
+                }
+              }
+            },
+            "description": "OK"
+          },
           "201": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigWakeSaved"
+                }
               }
             },
             "description": "Successful Response"
@@ -1818,6 +2218,9 @@
               }
             },
             "description": "Forbidden \u2014 device token revoked."
+          },
+          "409": {
+            "description": "Active rules changed"
           },
           "422": {
             "content": {

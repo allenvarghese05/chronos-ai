@@ -50,6 +50,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/push-test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Push Test
+         * @description Send fixed visible content once, with no caller-selected token or payload.
+         */
+        post: operations["admin_push_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Config
+         * @description Return only the settings projection, never the runtime configuration object.
+         */
+        get: operations["config_get_config"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Config
+         * @description Validate a small patch before atomically writing only its allowlisted keys.
+         */
+        patch: operations["config_patch_config"];
+        trace?: never;
+    };
     "/v1/config/wake": {
         parameters: {
             query?: never;
@@ -413,6 +457,16 @@ export interface components {
             yaml_stale: boolean;
         };
         /**
+         * ConfigWakeSaved
+         * @description Activation result; GET readback supplies authoritative content and provenance.
+         */
+        ConfigWakeSaved: {
+            /** Created */
+            created: boolean;
+            /** Version */
+            version: number;
+        };
+        /**
          * DayResponse
          * @description Response schema for all day endpoints.
          */
@@ -653,6 +707,18 @@ export interface components {
             rule_id: string;
         };
         /**
+         * PreferencesPatch
+         * @description Only these explicit keys can be changed; null is never a reset operation.
+         */
+        PreferencesPatch: {
+            /** Pexels Enabled */
+            pexels_enabled?: boolean;
+            /** Render Mode */
+            render_mode?: "eager" | "on_trigger";
+            /** Theme */
+            theme?: "auto" | "dawn" | "mono" | "ink";
+        };
+        /**
          * Problem
          * @description RFC 9457 problem+json response body (OpenAPI component schema — T0.7).
          *
@@ -694,6 +760,54 @@ export interface components {
             type: string;
         } & {
             [key: string]: unknown;
+        };
+        /**
+         * PushTestResult
+         * @description Ticket outcome, never proof of APNs delivery or a provider error dump.
+         */
+        PushTestResult: {
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "accepted" | "failed" | "unavailable" | "unknown";
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "ticket_accepted" | "provider_rejected" | "not_registered" | "not_configured" | "uncertain";
+        };
+        /**
+         * ReelPreferences
+         * @description Safe effective preferences; availability is distinct from requested Pexels use.
+         */
+        ReelPreferences: {
+            /** Origins */
+            origins: {
+                [key: string]: "default" | "env" | "db";
+            };
+            /** Pexels Effective */
+            pexels_effective: boolean;
+            /** Pexels Enabled */
+            pexels_enabled: boolean;
+            /** Pexels Key Configured */
+            pexels_key_configured: boolean;
+            /**
+             * Render Mode
+             * @enum {string}
+             */
+            render_mode: "eager" | "on_trigger";
+            /**
+             * Rendering Available
+             * @default false
+             * @constant
+             */
+            rendering_available: false;
+            /**
+             * Theme
+             * @enum {string}
+             */
+            theme: "auto" | "dawn" | "mono" | "ink";
         };
         /**
          * Rule
@@ -1074,6 +1188,178 @@ export interface operations {
             };
         };
     };
+    admin_push_test: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushTestResult"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    config_get_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReelPreferences"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    config_patch_config: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PreferencesPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReelPreferences"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     config_get_config_wake: {
         parameters: {
             query?: never;
@@ -1133,7 +1419,10 @@ export interface operations {
     config_put_config_wake: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Quoted active SHA from GET; stale differing drafts conflict. */
+                "If-Match"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -1143,13 +1432,22 @@ export interface operations {
             };
         };
         responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfigWakeSaved"];
+                };
+            };
             /** @description Successful Response */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ConfigWakeSaved"];
                 };
             };
             /** @description Unauthorized — missing or invalid bearer token. */
@@ -1169,6 +1467,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Problem"];
                 };
+            };
+            /** @description Active rules changed */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Unprocessable Entity — validation failed. */
             422: {

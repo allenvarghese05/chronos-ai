@@ -36,6 +36,11 @@ function fixture(initial: string | null = null) {
 		}),
 	};
 	const api: Api = {
+		getWakeConfig: jest.fn(),
+		putWakeConfig: jest.fn(),
+		getPreferences: jest.fn(),
+		patchPreferences: jest.fn(),
+		testPush: jest.fn(),
 		debugSnapshot: jest.fn(),
 		debugScores: jest.fn(),
 		debugTicks: jest.fn(),

@@ -129,11 +129,36 @@ Body: `WakeRules` JSON document (full schema, not a patch).
 Response `201` — new version created (`{ "version": n+1, "created": true }`).
 Response `200` — SHA matches active version; no-op (`{ "version": n, "created": false }`).
 Response `422 rules_invalid` (problem+json) with `"errors": [{"loc": [...], "msg": "...", "type": "..."}]` for each validation failure.
-### `GET /v1/config` → effective settings with origin (`env` \| `yaml` \| `db`): `render_mode`, `llm_provider`, `pexels_enabled`, `tick_interval_min`, `retention`.
-### `PATCH /v1/config` → subset of the above; stored in `settings`.
+
+`If-Match: "<active SHA>"` is optional on PUT. A stale different document returns409
+`rules_conflict`; identical active content remains200/no-op even after an uncertain retry. Legacy
+no-header callers remain supported. Validation rejects nonnegative-award violations (including
+bool/string/fractional awards and reweights) before activation; thresholds/penalties keep their types.
+The configured wake-rules path supplies YAML provenance, including custom paths.
+
+### `GET /v1/config` and `PATCH /v1/config` (T2.6)
+
+The implemented projection exposes only `theme: auto|dawn|mono|ink`, `render_mode: eager|on_trigger`,
+`pexels_enabled` (requested), `pexels_key_configured`, `pexels_effective`, and per-key
+`origins: default|env|db`. `rendering_available` is false until the future pipeline integrates them.
+DB overrides safe environment/default values. PATCH accepts only a subset of theme/render mode/
+Pexels boolean, rejects null/unknown/wrong-type fields atomically and preserves unrelated rows.
+No secret or general runtime-settings object is exposed. Requests are authenticated, rate-limited
+and bounded to64KiB; the mobile response cap remains32KiB. LLM/retention/cadence settings editing
+is future scope.
 ### `POST /v1/admin/run` `{ "local_date": "2026-10-06", "stages": ["ingest","script","assets","tts","captions","render"], "force": false }` → enqueues the chain; 202 with job ids. Used by the debug panel and `chronos run`.
 ### `POST /v1/admin/deliver` `{ "local_date": "2026-10-06" }` → force delivery (sets `fallback_used=false`, cause `manual`).
-### `POST /v1/admin/push-test` → sends a visible test push.
+### `POST /v1/admin/push-test` (T2.6)
+
+An empty request targets only the authenticated device's registered Expo token, never a caller
+payload/destination. It sends fixed bounded visible title/body/default sound with
+`_contentAvailable=false`, one HTTP attempt and a5-second total budget, throttled to one/minute.
+Result is `{outcome: accepted|failed|unavailable|unknown, reason: <safe enum>}`. Accepted means a
+provider ticket, not delivery; timeout means unknown with no automatic retry. Missing registration
+returns unavailable without outbound I/O. Token-free `kind=test` audit records do not increment
+tick counters or create wake evaluations/day transitions. DeviceNotRegistered clears only the
+registration actually used, preserving a newer concurrent registration. Tests inject a fake client;
+physical APNs acceptance remains pending.
 ### `GET /v1/jobs?status=&limit=` → job list for the debug panel.
 ### `GET /v1/report/{local_date}` → the nightly Markdown report as text.
 

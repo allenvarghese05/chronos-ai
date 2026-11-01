@@ -44,11 +44,11 @@ import json
 import logging
 import threading
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any, cast
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import text
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlalchemy import text, update
 from sqlmodel import Session, select
 
 from chronos.models.wake import RuleVersion
@@ -191,6 +191,21 @@ class Rule(BaseModel):
     requires: dict[str, list[str]] | None = None
     bonus_consecutive: BonusConsecutive | None = None
 
+    @field_validator("points", mode="before")
+    @classmethod
+    def _strict_awards(cls, value: object) -> object:
+        """Reject invalid award slots before union coercion; thresholds keep their types."""
+        if isinstance(value, list):
+            for row in cast(list[object], value):
+                if isinstance(row, list):
+                    cells = cast(list[object], row)
+                    if len(cells) != 2:
+                        continue
+                    award = cells[1]
+                    if not isinstance(award, int) or isinstance(award, bool) or award < 0:
+                        raise ValueError("rule awards must be nonnegative integers")
+        return cast(object, value)
+
     @model_validator(mode="after")
     def _validate_rule(self) -> Rule:
         # 1. Signal must be in the registry.
@@ -299,7 +314,7 @@ class WakeRules(BaseModel):
     thresholds: Thresholds
     rules: list[Rule]
     penalties: list[Penalty] = []
-    reweight_without_pedometer: dict[str, int] = {}
+    reweight_without_pedometer: dict[str, Annotated[int, Field(strict=True, ge=0)]] = {}
 
     @model_validator(mode="after")
     def _validate_wake_rules(self) -> WakeRules:
@@ -502,11 +517,16 @@ def reset_rules_cache() -> None:
 # ---------------------------------------------------------------------------
 
 
+class RulesConflict(Exception):
+    """The expected active SHA no longer matches a different submitted document."""
+
+
 def activate_new_version(
     session: Session,
     rules: WakeRules,
     source: str,
     created_by: str,
+    expected_sha: str | None = None,
 ) -> tuple[RuleVersion, bool]:
     """Atomically deactivate the current version and insert a new active one.
 
@@ -537,6 +557,14 @@ def activate_new_version(
     now = utc_now_iso()
 
     with session.no_autoflush, session.begin_nested():
+        if expected_sha is not None:
+            # Acquire SQLite's writer reservation before reading the active version.
+            # The predicate is rechecked after a competing writer commits, so only
+            # one distinct draft based on this SHA can activate. No values change.
+            session.exec(
+                update(RuleVersion).where(text("active=1 AND sha256=:sha")).values(active=1),
+                params={"sha": expected_sha},
+            )
         # Check current active version (autoflush suppressed to avoid side effects
         # from implicit flushes inside the savepoint).
         active_stmt = select(RuleVersion).where(RuleVersion.active == 1)
@@ -545,6 +573,9 @@ def activate_new_version(
         if active_rv is not None and active_rv.sha256 == sha:
             # Identical rules — no-op.
             return active_rv, False
+
+        if expected_sha is not None and (active_rv is None or active_rv.sha256 != expected_sha):
+            raise RulesConflict("Refresh active rules before reapplying this draft.")
 
         # Get next version number.
         all_rvs = session.exec(select(RuleVersion)).all()  # type: ignore[call-overload]

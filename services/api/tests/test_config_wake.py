@@ -453,3 +453,112 @@ class TestCliApplyYaml:
         with Session(engine) as session:
             rvs = list(session.exec(select(RuleVersion).where(RuleVersion.active == 1)).all())  # type: ignore[call-overload]
         assert len(rvs) == 1
+
+
+class TestConditionalWakeWrites:
+    def test_phone_precondition_and_identical_noop(
+        self, authed_client: tuple[TestClient, str]
+    ) -> None:
+        client, token = authed_client
+        current = client.get("/v1/config/wake", headers=_auth(token)).json()
+        changed = copy.deepcopy(current["rules"])
+        changed["thresholds"]["confirm"] += 1
+        headers = {**_auth(token), "If-Match": f'"{current["sha256"]}"'}
+        saved = client.put("/v1/config/wake", json=changed, headers=headers)
+        assert saved.status_code == 201
+        assert saved.json() == {"version": current["version"] + 1, "created": True}
+        same = client.put("/v1/config/wake", json=changed, headers=headers)
+        assert same.status_code == 200 and same.json()["created"] is False
+        changed["thresholds"]["confirm"] += 1
+        stale = client.put("/v1/config/wake", json=changed, headers=headers)
+        assert stale.status_code == 409
+        assert stale.json()["code"] == "rules_conflict"
+        actual = client.get("/v1/config/wake", headers=_auth(token)).json()
+        assert actual["version"] == current["version"] + 1
+        assert actual["rules"]["thresholds"]["confirm"] == changed["thresholds"]["confirm"] - 1
+
+    @pytest.mark.parametrize("header", ["*", "abc", 'W/"' + "a" * 64 + '"', '"' + "A" * 64 + '"'])
+    def test_invalid_precondition(self, authed_client: tuple[TestClient, str], header: str) -> None:
+        client, token = authed_client
+        response = client.put(
+            "/v1/config/wake", json=VALID_BODY, headers={**_auth(token), "If-Match": header}
+        )
+        assert response.status_code == 400
+
+    @pytest.mark.parametrize("value", [-1, 1.5, True, "15", None])
+    def test_invalid_award_cannot_activate(
+        self, authed_client: tuple[TestClient, str], value: object
+    ) -> None:
+        client, token = authed_client
+        before = client.get("/v1/config/wake", headers=_auth(token)).json()
+        body = copy.deepcopy(before["rules"])
+        body["rules"][0]["points"][0][1] = value
+        response = client.put("/v1/config/wake", json=body, headers=_auth(token))
+        assert response.status_code == 422
+        assert response.json()["type"] == "urn:chronos:error:rules_invalid"
+        assert client.get("/v1/config/wake", headers=_auth(token)).json() == before
+
+    def test_configured_yaml_provenance(self, settings: Settings, tmp_path: Path) -> None:
+        import yaml
+
+        from chronos.wake.rules import WakeRules, rules_sha256
+
+        body = copy.deepcopy(VALID_BODY)
+        body["thresholds"]["confirm"] = 81
+        custom = tmp_path / "custom.yaml"
+        custom.write_text(yaml.safe_dump(body))
+        settings.wake_rules_path = custom
+        plain, _ = _insert_device(settings)
+        with TestClient(create_app(settings)) as client:
+            response = client.get("/v1/config/wake", headers=_auth(plain))
+        assert response.status_code == 200
+        assert response.json()["yaml_sha256"] == rules_sha256(WakeRules.model_validate(body))
+        assert response.json()["yaml_stale"] is False
+
+    def test_two_concurrent_drafts_only_one_activates(self, settings: Settings) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Barrier
+
+        from chronos.wake.rules import (
+            RulesConflict,
+            WakeRules,
+            activate_new_version,
+            ensure_initial_version,
+        )
+
+        engine = create_db_engine(settings.database_url)
+        with Session(engine) as session:
+            expected = ensure_initial_version(session, settings.wake_rules_path).sha256
+        barrier = Barrier(2)
+
+        def write(confirm: int) -> str:
+            body = copy.deepcopy(VALID_BODY)
+            body["thresholds"]["confirm"] = confirm
+            with Session(engine) as session:
+                barrier.wait(timeout=5)
+                try:
+                    activate_new_version(
+                        session,
+                        WakeRules.model_validate(body),
+                        "api",
+                        "test",
+                        expected_sha=expected,
+                    )
+                    session.commit()
+                    return "saved"
+                except RulesConflict:
+                    session.rollback()
+                    return "conflict"
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(write, [71, 72]))
+        assert sorted(results) == ["conflict", "saved"]
+        with Session(engine) as session:
+            rows = session.exec(select(RuleVersion)).all()
+            assert len(rows) == 2
+            assert sum(row.active for row in rows) == 1
+
+
+# Shared public fixture helpers for the adjacent settings/test-push suites.
+insert_device_for_test = _insert_device
+auth_headers = _auth

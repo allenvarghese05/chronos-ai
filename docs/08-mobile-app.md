@@ -305,3 +305,25 @@ diagnostics; blur/background/unmount/session-generation changes cancel or discar
 
 No new dependencies, database tables or credentials are introduced. T2.4's physical-device
 acceptance checklist remains pending and cannot be closed by this screen.
+
+### T2.6 settings
+
+Paired Home links to protected `/settings`. Focused reads load complete versioned wake rules and
+safe reel preferences. Explicit leaf edits preserve the rest of the rule document; the long weight
+section is initially collapsed behind **Show weight controls**. Inputs are not auto-saved or queued
+for offline mutation. New reads preserve dirty drafts. Validation issues are bounded fixed guidance
+for known field paths; remote detail, submitted values and provider messages are never rendered.
+
+Wake saves send the original SHA in `If-Match`, then GET readback must match the intended complete
+rules before success. Stale edited drafts receive a conflict and require explicit reload/reapply.
+An uncertain response preserves the draft until readback confirms it. Outer active version and
+inner document version are distinct. New evaluations use active rules; saved day metadata and
+historical evaluation breakdowns remain original. Cadence/day-boundary/condition editors are out
+of scope. Background/blur/unmount/re-pair cancels or discards stale operations.
+
+Theme/render mode/Pexels are reel preferences for future pipeline integration. Origin, requested
+Pexels flag and key-dependent effective capability are shown separately; no key input, cloud setup
+or Pexels fetch occurs. The visible test-push action is coalesced and server-throttled to one/minute,
+uses one network attempt within5seconds and reports accepted/failed/unavailable/unknown honestly.
+It never claims APNs delivery or automatically retries uncertainty. Existing explicit permission
+and connection/revoke controls remain available. Physical delivery remains pending from T2.4.

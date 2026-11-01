@@ -51,6 +51,9 @@ function PairedHome() {
 			<Link href="/debug" style={ui.host}>
 				Open wake diagnostics
 			</Link>
+			<Link href="/settings" style={ui.host}>
+				Settings
+			</Link>
 			<TelemetryControls />
 			<WakePermissions />
 			<Text style={ui.subtitle}>Chronos Sensors</Text>
