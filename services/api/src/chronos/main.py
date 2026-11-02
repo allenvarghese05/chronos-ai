@@ -156,6 +156,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Start job worker if enabled.
         _worker_thread: threading.Thread | None = None
         _worker_stop: threading.Event | None = None
+        _worker_engine: Any | None = None
         if resolved.effective_worker_enabled:
             from chronos.db import create_db_engine as _create_engine
             from chronos.jobs.queue import JobQueue
@@ -192,6 +193,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             if _worker_thread.is_alive():
                 log.warning("worker_stop_timeout")
+        if _worker_engine is not None:
+            _worker_engine.dispose()
 
         if _stop_event is not None:
             _stop_event.set()
