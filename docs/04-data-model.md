@@ -296,6 +296,8 @@ shows the effective value and its origin.
 ```
 data/
 ├── chronos.db (+ -wal, -shm)
+├── jobs/
+│   └── execution.lock  (non-unlinked regular file; flock held by supervisor while a job runs)
 ├── media/<local_date>/<reel_public_id>/
 │   ├── reel.json  voice.wav  voice.mp3  captions.json
 │   ├── assets/scene-01.jpg  scene-02.mp4 ...

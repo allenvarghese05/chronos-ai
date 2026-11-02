@@ -57,6 +57,13 @@
 Single-process API+worker is deliberate (D10). The worker runs pipeline stages **serially** (one
 job at a time) because Ollama, Chrome and whisper.cpp together would exceed 16 GB comfortably.
 
+The worker holds an OS-level non-blocking `flock` on `data/jobs/execution.lock` while a job is
+running. It passes the open file-description FD to an ephemeral Python supervisor process that
+manages the handler, monitors a liveness pipe, escalates TERM→KILL on timeout, and only releases
+the lock after all descendants are reaped. If cleanup is uncertain the supervisor keeps the lock
+and the worker stops claiming — fail-closed, not fail-open. Recovery is at-least-once: handlers
+must be idempotent; retries are bounded by `max_attempts` with exponential back-off.
+
 ## 3. Daily sequence (eager render mode, D09)
 
 ```
@@ -194,6 +201,8 @@ src/
 | Kokoro failure | exception / empty WAV | `edge-tts` fallback (network) → if offline, render captions-only reel with music bed |
 | whisper.cpp failure | non-zero exit / no words | Fallback: proportional word timing from TTS per-scene durations |
 | Remotion failure | non-zero exit / ffprobe mismatch | Retry once with concurrency 1 → push text-only notification with the script |
+| Worker crash mid-job | liveness pipe closes; supervisor detects parent death | Supervisor retains execution lock; worker restarts and skips claim until lock is released; retry bounded by `max_attempts` |
+| Execution lock stuck | supervisor PID gone but lock not released (kernel reboot etc.) | Lock is released by OS on FD close; a fresh API start can acquire it immediately |
 | Silent pushes throttled | No telemetry for 20 min inside window | Tick continues; BGAppRefresh and foreground still work; fallback at window end |
 | Clock skew on phone | `device_ts` vs server > 5 min | Reject with 422 `clock_skew`; app shows warning |
 | Phone token revoked / app reinstalled | 401 | App returns to pairing screen |
