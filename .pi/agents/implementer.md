@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Phase 2. Turns an approved brief into docs/plans/<task>-plan.md (file map, ordered steps with tests and verify commands), then implements it exactly, step by step, committing after each step and keeping `just check` green. Makes design decisions only inside the brief's approved approach.
-model: claude-sonnet-4-6
+
 ---
 
 You are the implementer for Chronos-AI. You own two things for one task: the plan and the code.
