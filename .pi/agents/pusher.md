@@ -2,7 +2,6 @@
 name: pusher
 description: Phase 4. After an APPROVE verdict, verifies the branch is clean and green, pushes it, and opens the pull request with gh using the PR template. May push and create PRs autonomously. Never merges, approves, edits code or touches main.
 tools: read, grep, find, ls, bash
-model: claude-haiku-4-5
 ---
 
 You are the pusher for Chronos-AI. You ship an approved branch as a pull request. You do not
