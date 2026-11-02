@@ -131,6 +131,9 @@ before `launchctl bootstrap`.
 | `pmset repeat wakeorpoweron MTWRF 05:25:00 SU 07:25:00` | requires `sudo`; `laptop-setup.sh` prints a RUN-THIS banner in non-interactive shells |
 | Lid closed | scheduled wake works with lid closed **only** when on power + external display/keyboard; otherwise leave lid open at night |
 | App Nap / idle sleep during render | worker wraps jobs in `caffeinate -i -w <pid>` |
+| Worker controls | `CHRONOS_WORKER_ENABLED=false` env var or `chronos serve --no-worker` disables the in-process serial job worker independently of the scheduler. Worker is automatically disabled when `CHRONOS_ENV=test`. Empty handler registry in production until future pipeline tasks register real stages. |
+| Execution lock | `data/jobs/execution.lock` (non-unlinked regular file, flock); one locked owner per host data root at a time. Supervisor inherits the FD; lock releases only after all descendant processes are reaped and the supervisor exits. Uncertain cleanup fails closed (no new attempt until lock is re-acquirable). |
+| At-least-once recovery | Job handlers must be idempotent. The queue provides at-most-one-running via DB CAS + OS lock, but external effects (network, filesystem) cannot be rolled back after a handler crash. Retry is bounded by `max_attempts` and exponential backoff (`min(300, 5 * 2^(attempts-1))` seconds). |
 | Time sync | `sntp` check in doctor (clock skew rejects phone events) |
 | Logs | structlog JSONL, `logrotate`-style rotation in-process (size 50 MB / 14 days) |
 | Backups | `data/chronos.db` nightly `VACUUM INTO data/backups/chronos-<date>.db` (7 kept); media not backed up |

@@ -675,6 +675,161 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "JobKind": {
+        "description": "Trusted internal stage identifiers; not executable module names.",
+        "enum": [
+          "ingest",
+          "script",
+          "assets",
+          "tts",
+          "captions",
+          "render",
+          "deliver",
+          "receipts",
+          "retention",
+          "report"
+        ],
+        "title": "JobKind",
+        "type": "string"
+      },
+      "JobPage": {
+        "additionalProperties": false,
+        "description": "Bounded response page; next_cursor=None means no more results.",
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "title": "Jobs",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "jobs"
+        ],
+        "title": "JobPage",
+        "type": "object"
+      },
+      "JobStatus": {
+        "description": "Durable execution states.",
+        "enum": [
+          "queued",
+          "running",
+          "done",
+          "failed",
+          "cancelled"
+        ],
+        "title": "JobStatus",
+        "type": "string"
+      },
+      "JobSummary": {
+        "additionalProperties": false,
+        "description": "Safe projection of a job row; no key, payload, lock token, path or raw output.",
+        "properties": {
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/JobKind"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "max_attempts": {
+            "title": "Max Attempts",
+            "type": "integer"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "run_after": {
+            "title": "Run After",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/JobStatus"
+          },
+          "timeout_sec": {
+            "title": "Timeout Sec",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "priority",
+          "attempts",
+          "max_attempts",
+          "timeout_sec",
+          "run_after",
+          "created_at"
+        ],
+        "title": "JobSummary",
+        "type": "object"
+      },
       "PairRequest": {
         "additionalProperties": false,
         "description": "Body of ``POST /v1/pair``.",
@@ -2942,6 +3097,122 @@
         "summary": "Update push token, timezone, or version strings.",
         "tags": [
           "device"
+        ]
+      }
+    },
+    "/v1/jobs": {
+      "get": {
+        "description": "List job metadata in reverse ID order (newest first).\n\n- ``status``: optional filter; omit to return all statuses.\n- ``limit``: 1-40 rows (default 40).\n- ``cursor``: return rows with id < cursor (keyset pagination, newest-first).\n\nReturns:\n    200 ``JobPage`` with ``jobs`` and optional ``next_cursor``.\n    401 if no valid bearer token.\n    422 ``validation`` if query parameters are invalid.",
+        "operationId": "jobs_list_jobs",
+        "parameters": [
+          {
+            "description": "Filter by job status.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/JobStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by job status.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 40,
+              "maximum": 40,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Jobs",
+        "tags": [
+          "jobs"
         ]
       }
     },

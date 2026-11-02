@@ -94,6 +94,23 @@ class Settings(BaseSettings):
     #: Set to False to disable the background scheduler (tests, debug).
     scheduler_enabled: bool = True
 
+    # ── job worker ───────────────────────────────────────────────────────────
+    #: Set to False to disable the in-process serial job worker.
+    #: Automatically disabled in env=test unless explicitly set to True.
+    #: Also controlled via --no-worker CLI flag or CHRONOS_WORKER_ENABLED=false.
+    worker_enabled: bool | None = None
+
+    #: Canonical data directory for execution locks, job work dirs and media artifacts.
+    #: Must be an absolute path or relative to the working directory at startup.
+    data_root: Path = Path("data")
+
+    @property
+    def effective_worker_enabled(self) -> bool:
+        """True when the worker is enabled; default off in env=test, on elsewhere."""
+        if self.worker_enabled is not None:
+            return self.worker_enabled
+        return self.env is not Env.test
+
     # ── Expo push ────────────────────────────────────────────────────────────
     expo_access_token: SecretStr | None = None
     #: Base URL for the Expo push API. Override in tests with a mock server URL.

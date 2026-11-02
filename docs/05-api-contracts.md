@@ -159,7 +159,17 @@ returns unavailable without outbound I/O. Token-free `kind=test` audit records d
 tick counters or create wake evaluations/day transitions. DeviceNotRegistered clears only the
 registration actually used, preserving a newer concurrent registration. Tests inject a fake client;
 physical APNs acceptance remains pending.
-### `GET /v1/jobs?status=&limit=` → job list for the debug panel.
+### `GET /v1/jobs?status=&limit=&cursor=` → job list for the debug panel.
+
+**Auth:** Bearer device token required.
+**Response:** `200 application/json` with `JobPage { jobs: JobSummary[], next_cursor: int | null }`.
+  - `status`: optional filter (`queued`, `running`, `done`, `failed`, `cancelled`).
+  - `limit`: 1–40 rows (default 40), keyset cursor pagination.
+  - Response capped at 30 KiB; reduce limit or use cursor if exceeded.
+  - **Safe projection:** returns `id, kind, status, priority, attempts, max_attempts, timeout_sec, run_after, created_at, started_at, finished_at, duration_ms, last_error`.
+  - **Never returned:** `key`, `payload`, `locked_by`, raw traceback, process output or filesystem paths.
+  - `last_error` is one of the fixed allowlisted codes (`handler_failed`, `timeout`, `interrupted`, `worker_lost`, `spawn_failed`) or `null`; any non-allowlisted DB value is mapped to `handler_failed`.
+**Errors:** `401` no token, `422` invalid filter or limit.
 ### `GET /v1/report/{local_date}` → the nightly Markdown report as text.
 
 **Auth:** Bearer device token required.

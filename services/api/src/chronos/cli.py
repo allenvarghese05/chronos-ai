@@ -64,6 +64,11 @@ def serve(
         "--no-scheduler",
         help="Disable the background scheduler (dev / debug).",
     ),
+    no_worker: bool = typer.Option(
+        False,
+        "--no-worker",
+        help="Disable the in-process serial job worker (dev / debug).",
+    ),
 ) -> None:
     """Start the Chronos API server with uvicorn."""
     import os
@@ -73,6 +78,8 @@ def serve(
 
     if no_scheduler:
         os.environ["CHRONOS_SCHEDULER_ENABLED"] = "false"
+    if no_worker:
+        os.environ["CHRONOS_WORKER_ENABLED"] = "false"
 
     settings = get_settings()
     configure_logging(env=str(settings.env))

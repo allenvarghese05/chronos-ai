@@ -308,6 +308,35 @@ export interface paths {
         patch: operations["device_patch_device"];
         trace?: never;
     };
+    "/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Jobs
+         * @description List job metadata in reverse ID order (newest first).
+         *
+         *     - ``status``: optional filter; omit to return all statuses.
+         *     - ``limit``: 1-40 rows (default 40).
+         *     - ``cursor``: return rows with id < cursor (keyset pagination, newest-first).
+         *
+         *     Returns:
+         *         200 ``JobPage`` with ``jobs`` and optional ``next_cursor``.
+         *         401 if no valid bearer token.
+         *         422 ``validation`` if query parameters are invalid.
+         */
+        get: operations["jobs_list_jobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/pair": {
         parameters: {
             query?: never;
@@ -650,6 +679,58 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * JobKind
+         * @description Trusted internal stage identifiers; not executable module names.
+         * @enum {string}
+         */
+        JobKind: "ingest" | "script" | "assets" | "tts" | "captions" | "render" | "deliver" | "receipts" | "retention" | "report";
+        /**
+         * JobPage
+         * @description Bounded response page; next_cursor=None means no more results.
+         */
+        JobPage: {
+            /** Jobs */
+            jobs: components["schemas"]["JobSummary"][];
+            /** Next Cursor */
+            next_cursor?: number | null;
+        };
+        /**
+         * JobStatus
+         * @description Durable execution states.
+         * @enum {string}
+         */
+        JobStatus: "queued" | "running" | "done" | "failed" | "cancelled";
+        /**
+         * JobSummary
+         * @description Safe projection of a job row; no key, payload, lock token, path or raw output.
+         */
+        JobSummary: {
+            /** Attempts */
+            attempts: number;
+            /** Created At */
+            created_at: string;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: number;
+            kind: components["schemas"]["JobKind"];
+            /** Last Error */
+            last_error?: string | null;
+            /** Max Attempts */
+            max_attempts: number;
+            /** Priority */
+            priority: number;
+            /** Run After */
+            run_after: string;
+            /** Started At */
+            started_at?: string | null;
+            status: components["schemas"]["JobStatus"];
+            /** Timeout Sec */
+            timeout_sec: number;
         };
         /**
          * PairRequest
@@ -1975,6 +2056,67 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeviceResponse"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    jobs_list_jobs: {
+        parameters: {
+            query?: {
+                /** @description Filter by job status. */
+                status?: components["schemas"]["JobStatus"] | null;
+                limit?: number;
+                cursor?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPage"];
                 };
             };
             /** @description Unauthorized — missing or invalid bearer token. */

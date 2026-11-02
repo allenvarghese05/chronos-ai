@@ -15,6 +15,7 @@ without a separate lifespan mock.
 from __future__ import annotations
 
 import asyncio
+import threading
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -34,6 +35,7 @@ from chronos.api.day import router as day_router
 from chronos.api.debug import router as debug_router
 from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
+from chronos.api.jobs import router as jobs_router
 from chronos.api.pair import router as pair_router
 from chronos.api.report import router as report_router
 from chronos.api.telemetry import router as telemetry_router
@@ -151,7 +153,45 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             log.info("scheduler_started")
 
+        # Start job worker if enabled.
+        _worker_thread: threading.Thread | None = None
+        _worker_stop: threading.Event | None = None
+        if resolved.effective_worker_enabled:
+            from chronos.db import create_db_engine as _create_engine
+            from chronos.jobs.queue import JobQueue
+            from chronos.jobs.worker import Worker
+
+            _worker_engine = _create_engine(resolved.database_url)
+            _worker_queue = JobQueue(_worker_engine)
+            _worker = Worker(
+                _worker_queue,
+                resolved.data_root.resolve(),
+                {},  # empty; future tasks register real handlers
+                poll_interval=0.25,
+            )
+            _worker_stop = threading.Event()
+            _worker_thread = threading.Thread(
+                target=_worker.run_forever,
+                args=(_worker_stop,),
+                name="chronos-worker",
+                daemon=True,
+            )
+            app.state.worker = _worker
+            _worker_thread.start()
+            log.info("worker_started")
+
         yield
+
+        # Stop worker first (reaps descendants) before engine disposal.
+        if _worker_stop is not None:
+            _worker_stop.set()
+        if _worker_thread is not None:
+            await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: _worker_thread.join(timeout=6),  # type: ignore[union-attr]
+            )
+            if _worker_thread.is_alive():
+                log.warning("worker_stop_timeout")
 
         if _stop_event is not None:
             _stop_event.set()
@@ -197,6 +237,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(day_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(debug_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(report_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(jobs_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
     # Publish the manually size-bounded raw-body contract without installing an automatic
     # Body parser, which would parse before the endpoint's 64 KiB validation gate.
