@@ -4,7 +4,7 @@ Source: docs/04-data-model.md §2.5.
 
 Note: ``reel_id`` has no FK constraint referencing the ``reels`` table because
 that table does not exist until T4.1.  The column is nullable and the FK will
-be added in migration 0003 (T4.1).  This is documented so reviewers do not add
+be added in the media migration (T4.1). This is documented so reviewers do not add
 it now.
 """
 

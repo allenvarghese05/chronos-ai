@@ -42,6 +42,7 @@ def make_settings(**overrides: object) -> Settings:
         "secret_key": "test-secret-key-32-bytes-exactly!",
         "database_url": "sqlite:///data/test.db",
         "scheduler_enabled": False,
+        "worker_enabled": False,
     }
     base.update(overrides)
     return Settings.model_validate(base)

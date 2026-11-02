@@ -211,3 +211,26 @@ shows key availability separately from the requested flag. No external Pexels fe
 **Send test push** makes one bounded attempt to the registered phone, with no automatic retries.
 Expo acceptance is not proof of delivery. A missing token is expected in this Simulator setup;
 real APNs/visible-notification acceptance remains pending. No new dependencies or tables.
+
+### Durable job queue and worker (T3.1)
+
+The API now includes a SQLite-backed durable job queue (`jobs` table) and a serial in-process
+worker. Five new tables land in migration `0003_content_jobs`: `sources`, `items`, `briefs`,
+`brief_items` and `jobs`. No live pipeline handlers are registered yet; the queue is empty in
+production until future tasks enqueue real stages.
+
+The worker holds an OS-level `flock` on `data/jobs/execution.lock` while a job runs, passed to
+an ephemeral Python supervisor. The supervisor manages the handler process, monitors a liveness
+pipe, escalates TERM → 1 s → KILL on timeout, and releases the lock only after all
+descendants are reaped. If cleanup is uncertain the worker stops claiming (fail-closed). Job
+handlers must be idempotent; retries are bounded by `max_attempts` with exponential back-off
+(`min(300, 5 × 2^(attempts-1))` seconds).
+
+Control independently of the scheduler:
+- `CHRONOS_WORKER_ENABLED=false` in `.env` (or in the environment)
+- `chronos serve --no-worker` CLI flag
+- Worker is always off when `CHRONOS_ENV=test`
+
+See `docs/02-architecture.md` §7 and `docs/10-cicd-and-ops.md` for the execution lock and
+recovery model. Authenticated `GET /v1/jobs` returns bounded safe job metadata (no payloads,
+no lock owner, no tracebacks).

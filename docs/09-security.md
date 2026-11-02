@@ -52,10 +52,14 @@
 - LLM output is never executed, templated into shell or HTML, or used as a filename.
 
 ### Subprocesses
-- One wrapper `media/subprocess.run(argv: list[str], *, timeout, cwd, env)` — no `shell=True`
-  anywhere (bandit `B602/B603/B607` enforced); arguments built from internal paths only; file
-  names are `scene-NN.jpg`, never titles; `cwd` under `data/`; minimal env; `timeout` kills the
-  process group; stdout/stderr truncated to 64 KB in logs.
+- One wrapper `media/subprocess.run(argv: list[str], *, timeout, cwd, data_root, env)` — no
+  `shell=True` anywhere (bandit `B602/B603/B607` enforced); argv lists only; `cwd` and
+  `data_root` validated via `resolve()` (symlink-escape rejected); env allowlist
+  (`PATH/LANG/LC_ALL/TZ/OMP/MKL`); process-group TERM→1 s→KILL via supervisor; stdout/stderr
+  bounded to 64 KB; raw output never logged or returned to clients.
+- Supervised handler: per-attempt supervisor inherits the OS execution lock FD and retains it
+  until all descendant processes stop; uncertain cleanup fails closed (no new attempt).
+- `GET /v1/jobs` never returns key, payload, `locked_by`, raw error text or filesystem paths.
 - ffmpeg invoked with `-nostdin -y -hide_banner` and explicit `-i` inputs; Remotion props passed
   via a JSON **file**, not the command line.
 
