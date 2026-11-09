@@ -40,3 +40,4 @@ D34: [Device-session Keychain accessibility](decisions/D34-device-session-keycha
 
 D35: [Near-duplicate headlines by word-set Jaccard](decisions/D35-title-dedupe-jaccard.md) supersedes the simhash-distance rule in docs/06 §2.3.
 D36: [Stale stories top a category up to its minimum](decisions/D36-stale-topup-to-minimum.md) refines the freshness rule in docs/06 §1.
+D37: [One LLM call per story; code assembles the script](decisions/D37-per-story-script-generation.md) supersedes the whole-script LLM output in docs/06 §4–5.

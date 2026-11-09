@@ -516,6 +516,31 @@ def doctor(
 _DEFAULT_OPENAPI_OUT: Path = Path(__file__).parents[2] / "openapi.json"
 
 
+schema_app = typer.Typer(name="schema", help="Renderer schema export (T3.4).", no_args_is_help=True)
+app.add_typer(schema_app)
+_DEFAULT_ZOD_OUT: Path = (
+    Path(__file__).parents[4] / "packages" / "renderer" / "src" / "schema.generated.ts"
+)
+_DEFAULT_REEL_SCHEMA_OUT: Path = Path(__file__).parents[2] / "reel_props.schema.json"
+
+
+@schema_app.command("export-reel-props")
+def schema_export_reel_props(
+    zod_out: Path = typer.Option(_DEFAULT_ZOD_OUT, "--zod-out", help="Generated zod module."),
+    json_out: Path = typer.Option(
+        _DEFAULT_REEL_SCHEMA_OUT, "--json-out", help="ReelProps JSON schema."
+    ),
+) -> None:
+    """Write the ReelProps JSON schema and its generated zod module (deterministic)."""
+    from chronos.schema_export import schema_json_text, zod_source
+
+    for path in (zod_out, json_out):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    json_out.write_text(schema_json_text(), encoding="utf-8")
+    zod_out.write_text(zod_source(), encoding="utf-8")
+    typer.echo(f"✓ wrote {json_out} and {zod_out}")
+
+
 @openapi_app.command("export")
 def openapi_export(
     out: Path = typer.Option(

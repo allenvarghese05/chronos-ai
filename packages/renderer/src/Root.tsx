@@ -28,7 +28,7 @@ export function RemotionRoot() {
 			defaultProps={{
 				localDate: '2026-10-06',
 				greeting: 'Good morning',
-				tone: 'friendly' as const,
+				tone: 'calm' as const,
 				audio: { src: 'audio/silence-3s.wav', durationSec: 3 },
 				scenes: [{ index: 0, type: 'cover' as const, startSec: 0, endSec: 3 }],
 				captions: [],
