@@ -139,7 +139,11 @@ Hard guarantees enforced *outside* the LLM:
 - Profanity/unsafe filter on `voiceover`/`title` (simple deny list + the LLM instruction);
   violation → retry.
 
-## 5. Prompting (`content/script/prompts/reel_script.v1.md`)
+## 5. Prompting (`content/script/prompts/reel_script.v2.md`)
+
+> **D37 (2026-11-09):** the model is called once per story (title, bullets, voiceover) and once
+> for the cover/outro lines; code assembles the `ReelScript` (order, ids, URLs, kickers). Story
+> voiceover 8–24 words for a 6-story reel. The text below describes the original v1 design.
 
 System:
 > You write the voiceover for a 60-second vertical morning news reel for one person. Calm, precise,

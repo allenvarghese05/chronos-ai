@@ -1,8 +1,9 @@
-"""Prompt v1 assembly for the reel script (docs/06 §5, docs/09 Content and LLM).
+"""Prompt v2 for the reel script (ADR D37: one call per story + one for the cover/outro).
 
-Stories go into the prompt as a JSON array (data, not instructions) with HTML already
-stripped and summaries capped. ``prompt_version`` identifies the exact prompt text + example
-and is stored on every brief for provenance.
+The model only writes words. Story ids, URLs, source names, kickers and scene order are
+attached by code (``service.assemble``), so they cannot be dropped, misplaced or invented.
+Stories go into the prompt as JSON (data, not instructions) with HTML already stripped and
+summaries capped. ``prompt_version`` identifies the prompt text + example for provenance.
 """
 
 from __future__ import annotations
@@ -15,117 +16,132 @@ from functools import cache
 from pathlib import Path
 from typing import Any, cast
 
-from chronos.content.script.schema import ReelScript, ScriptCandidate, word_budget
+from chronos.content.script.schema import (
+    FRAME_WORDS_MAX,
+    FRAME_WORDS_MIN,
+    FrameDraft,
+    ScriptCandidate,
+    StoryDraft,
+)
 
 PROMPT_DIR = Path(__file__).parent / "prompts"
-PROMPT_FILE = PROMPT_DIR / "reel_script.v1.md"
-EXAMPLE_FILE = PROMPT_DIR / "example_reel.json"
+PROMPT_FILE = PROMPT_DIR / "reel_script.v2.md"
+EXAMPLE_FILE = PROMPT_DIR / "example_story.json"
 SUMMARY_PROMPT_CHARS = 600
 
 Message = dict[str, str]
 
 
 @cache
-def _sections() -> tuple[str, str]:
+def _sections() -> dict[str, str]:
     text = PROMPT_FILE.read_text(encoding="utf-8")
-    _, _, rest = text.partition("## System\n")
-    system, _, user = rest.partition("## User\n")
-    if not system.strip() or not user.strip():
-        raise ValueError(f"{PROMPT_FILE.name} must have '## System' and '## User' sections")
-    return system.strip(), user.strip()
+    sections: dict[str, str] = {}
+    for chunk in text.split("## ")[1:]:
+        name, _, body = chunk.partition("\n")
+        sections[name.strip().lower()] = body.strip()
+    if set(sections) != {"system", "story", "frame"}:
+        raise ValueError(f"{PROMPT_FILE.name} needs System, Story and Frame sections")
+    return sections
 
 
 @cache
 def example() -> dict[str, Any]:
-    """The few-shot example: ``{"local_date", "stories": [...], "script": {...}}``."""
+    """The per-story few-shot example: ``{"story": {...}, "answer": {...}}``."""
     return cast("dict[str, Any]", json.loads(EXAMPLE_FILE.read_text(encoding="utf-8")))
 
 
 @cache
 def prompt_version() -> str:
-    """``v1:<sha256[:16]>`` of the prompt file and the example."""
+    """``v2:<sha256[:16]>`` of the prompt file and the example."""
     digest = hashlib.sha256(PROMPT_FILE.read_bytes() + EXAMPLE_FILE.read_bytes()).hexdigest()
-    return f"v1:{digest[:16]}"
+    return f"v2:{digest[:16]}"
 
 
-def _inline_refs(node: Any, defs: dict[str, Any]) -> Any:
-    if isinstance(node, dict):
-        mapping = cast("dict[str, Any]", node)
-        ref = mapping.get("$ref")
-        if isinstance(ref, str) and ref.startswith("#/$defs/"):
-            return _inline_refs(defs[ref.removeprefix("#/$defs/")], defs)
-        return {k: _inline_refs(v, defs) for k, v in mapping.items() if k != "$defs"}
-    if isinstance(node, list):
-        return [_inline_refs(v, defs) for v in cast("list[Any]", node)]
-    return node
+def _strict(schema: dict[str, Any]) -> dict[str, Any]:
+    """Flat object schema with every property required (small models skip optional keys)."""
+    props = cast("dict[str, Any]", schema.get("properties", {}))
+    return {"type": "object", "properties": props, "required": sorted(props)}
 
 
 @cache
-def _schema_json() -> str:
-    schema = ReelScript.model_json_schema()
-    defs = cast("dict[str, Any]", schema.get("$defs", {}))
-    return json.dumps(_inline_refs(schema, defs), sort_keys=True)
+def _story_schema_json() -> str:
+    return json.dumps(_strict(StoryDraft.model_json_schema()), sort_keys=True)
 
 
-def script_json_schema() -> dict[str, Any]:
-    """``ReelScript`` JSON schema with local ``$ref``s inlined (for constrained decoding)."""
-    return cast("dict[str, Any]", json.loads(_schema_json()))
+@cache
+def _frame_schema_json() -> str:
+    return json.dumps(_strict(FrameDraft.model_json_schema()), sort_keys=True)
 
 
-def stories_payload(candidates: Sequence[ScriptCandidate]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for c in candidates:
-        summary = c.summary or ""
-        if len(summary) > SUMMARY_PROMPT_CHARS:
-            summary = summary[:SUMMARY_PROMPT_CHARS].rsplit(" ", 1)[0] + "…"
-        out.append(
-            {
-                "item_id": c.item_id,
-                "category": c.category,
-                "source_name": c.source_name,
-                "source_url": c.url,
-                "title": c.title,
-                "summary": summary,
-            }
-        )
-    return out
+def story_json_schema() -> dict[str, Any]:
+    return cast("dict[str, Any]", json.loads(_story_schema_json()))
 
 
-def build_messages(
-    candidates: Sequence[ScriptCandidate],
-    local_date: datetime.date,
+def frame_json_schema() -> dict[str, Any]:
+    return cast("dict[str, Any]", json.loads(_frame_schema_json()))
+
+
+def story_payload(cand: ScriptCandidate) -> dict[str, str]:
+    summary = cand.summary or ""
+    if len(summary) > SUMMARY_PROMPT_CHARS:
+        summary = summary[:SUMMARY_PROMPT_CHARS].rsplit(" ", 1)[0] + "…"
+    return {
+        "category": cand.category,
+        "source": cand.source_name,
+        "title": cand.title,
+        "summary": summary,
+    }
+
+
+def _with_feedback(
+    messages: list[Message], feedback: Sequence[str], previous: str | None
+) -> list[Message]:
+    if feedback:
+        if previous:
+            messages.append({"role": "assistant", "content": previous[:4000]})
+        problems = "\n".join(f"- {p}" for p in feedback)
+        messages.append(
+            {"role": "user", "content": f"That answer was rejected. Fix every problem and "
+             f"return the full corrected JSON:\n{problems}"}
+        )  # fmt: skip
+    return messages
+
+
+def build_story_messages(
+    cand: ScriptCandidate,
+    word_range: tuple[int, int],
     feedback: Sequence[str] = (),
     previous: str | None = None,
 ) -> list[Message]:
-    """System + user messages; on retry, the rejected answer and the problems to fix."""
-    system, user_tpl = _sections()
-    low, high = word_budget(len(candidates))
+    s = _sections()
     ex = example()
-    replacements = {
-        "{local_date}": local_date.isoformat(),
-        "{weekday}": local_date.strftime("%A"),
-        "{n_stories}": str(len(candidates)),
-        "{word_min}": str(low),
-        "{word_max}": str(high),
-        "{stories_json}": json.dumps(stories_payload(candidates), ensure_ascii=False, indent=1),
-        "{example_json}": json.dumps(ex["script"], ensure_ascii=False),
-    }
-    user = user_tpl
-    for key, value in replacements.items():
-        user = user.replace(key, value)
-    messages: list[Message] = [
-        {"role": "system", "content": system},
-        {"role": "user", "content": user},
-    ]
-    if feedback:
-        if previous:
-            messages.append({"role": "assistant", "content": previous[:6000]})
-        problems = "\n".join(f"- {p}" for p in feedback)
-        messages.append(
-            {
-                "role": "user",
-                "content": f"That answer was rejected. Fix every problem and return the full "
-                f"corrected JSON:\n{problems}",
-            }
-        )
-    return messages
+    user = (
+        s["story"]
+        .replace("{story_json}", json.dumps(story_payload(cand), ensure_ascii=False))
+        .replace("{min_words}", str(word_range[0]))
+        .replace("{max_words}", str(word_range[1]))
+        .replace("{example_json}", json.dumps(ex, ensure_ascii=False))
+    )
+    return _with_feedback(
+        [{"role": "system", "content": s["system"]}, {"role": "user", "content": user}],
+        feedback,
+        previous,
+    )
+
+
+def build_frame_messages(
+    local_date: datetime.date, feedback: Sequence[str] = (), previous: str | None = None
+) -> list[Message]:
+    s = _sections()
+    user = (
+        s["frame"]
+        .replace("{weekday}", local_date.strftime("%A"))
+        .replace("{month_day}", f"{local_date.strftime('%B')} {local_date.day}")
+        .replace("{frame_min}", str(FRAME_WORDS_MIN))
+        .replace("{frame_max}", str(FRAME_WORDS_MAX))
+    )
+    return _with_feedback(
+        [{"role": "system", "content": s["system"]}, {"role": "user", "content": user}],
+        feedback,
+        previous,
+    )

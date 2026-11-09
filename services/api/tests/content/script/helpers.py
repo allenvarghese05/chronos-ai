@@ -59,3 +59,21 @@ def valid_script(cands: list[ScriptCandidate], story_words: int = 25) -> dict[st
         "total_words": 0,
         "tone": "calm",
     }
+
+
+def frame_reply(cover_words: int = 8, outro_words: int = 8) -> str:
+    import json
+
+    return json.dumps(
+        {
+            "greeting": "Good morning",
+            "cover_voiceover": words(cover_words, "c"),
+            "outro_voiceover": words(outro_words, "o"),
+        }
+    )
+
+
+def story_reply(n_words: int = 20, title: str = "A headline") -> str:
+    import json
+
+    return json.dumps({"title": title, "bullets": ["one point"], "voiceover": words(n_words, "v")})

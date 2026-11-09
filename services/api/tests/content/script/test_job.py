@@ -20,7 +20,7 @@ from chronos.content.script.job import (
     run_script_job,
     to_candidates,
 )
-from chronos.content.script.llm import FakeScriptGenerator, ProviderError
+from chronos.content.script.llm import FakeScriptGenerator, ProviderUnavailable
 from chronos.content.script.prompt import prompt_version
 from chronos.content.script.schema import ReelScript, ScriptCandidate
 from chronos.content.script.service import ProviderPlan
@@ -31,7 +31,7 @@ from chronos.jobs.worker import JobContext
 from chronos.models.content import Brief, BriefItem
 from chronos.models.wake import Day
 from tests.conftest import make_settings
-from tests.content.script.helpers import valid_script
+from tests.content.script.helpers import frame_reply, story_reply
 from tests.content.test_selection import _fixture, _outcomes  # pyright: ignore[reportPrivateUsage]
 from tests.factories import make_day, make_device
 
@@ -41,7 +41,7 @@ DAY_STR = "2026-10-06"
 PAYLOAD = ScriptJobPayload.model_validate({"local_date": DAY_STR, "device_id": 1})
 
 
-def _seed(session: Session, *, with_items: bool = True) -> tuple[str, int]:
+def seed_day(session: Session, *, with_items: bool = True) -> tuple[str, int]:
     now, items = _fixture()
     sync_sources(session, SOURCES, now)
     device = make_device(session)
@@ -53,7 +53,7 @@ def _seed(session: Session, *, with_items: bool = True) -> tuple[str, int]:
     return now, device.id
 
 
-def _candidates(session: Session, now: str) -> list[ScriptCandidate]:
+def candidates_for(session: Session, now: str) -> list[ScriptCandidate]:
     return to_candidates(session, select_stories(session, SOURCES.selection, now))
 
 
@@ -68,15 +68,15 @@ def _payload(device_id: int, **extra: Any) -> ScriptJobPayload:
 def test_fake_generator_end_to_end(test_settings: Settings, tmp_db_url: str) -> None:
     engine = create_db_engine(tmp_db_url)
     with Session(engine) as session:
-        now, device_id = _seed(session)
-        cands = _candidates(session, now)
+        now, device_id = seed_day(session)
+        cands = candidates_for(session, now)
         assert [c.source_name for c in cands][:2] == ["Hugging Face Papers"] * 2
-        reply = json.dumps({**valid_script(cands), "local_date": DAY_STR})
+        replies = [frame_reply(), *[story_reply(20, c.title[:60]) for c in cands]]
 
-        brief = run_script_job(session, _payload(device_id), SOURCES, now, [_plan(reply)])
+        brief = run_script_job(session, _payload(device_id), SOURCES, now, [_plan(*replies)])
 
         assert brief.status == "ready"
-        assert (brief.llm_provider, brief.llm_model, brief.attempts) == ("fake", "fake-model", 1)
+        assert (brief.llm_provider, brief.llm_model, brief.attempts) == ("fake", "fake-model", 7)
         assert brief.used_fallback_template == 0
         assert brief.prompt_version == prompt_version()  # provenance stored
         script = ReelScript.model_validate_json(brief.script_json)
@@ -92,7 +92,7 @@ def test_fake_generator_end_to_end(test_settings: Settings, tmp_db_url: str) -> 
 def test_ready_brief_is_kept_unless_forced(test_settings: Settings, tmp_db_url: str) -> None:
     engine = create_db_engine(tmp_db_url)
     with Session(engine) as session:
-        now, device_id = _seed(session)
+        now, device_id = seed_day(session)
         first = run_script_job(session, _payload(device_id), SOURCES, now, [])  # template
         assert first.used_fallback_template == 1 and first.status == "ready"
 
@@ -104,9 +104,9 @@ def test_ready_brief_is_kept_unless_forced(test_settings: Settings, tmp_db_url: 
 
         forced = run_script_job(
             session, _payload(device_id, force=True), SOURCES, now,
-            [_plan(ProviderError("down"), ProviderError("down"), ProviderError("down"))],
+            [_plan(ProviderUnavailable("down"))],
         )  # fmt: skip
-        assert forced.id == first.id and forced.attempts == 3
+        assert forced.id == first.id and forced.attempts == 1
         rows = session.exec(select(BriefItem).where(BriefItem.brief_id == forced.id)).all()
         assert len(rows) == 9  # replaced, not duplicated
         assert len(session.exec(select(Brief)).all()) == 1
@@ -115,7 +115,7 @@ def test_ready_brief_is_kept_unless_forced(test_settings: Settings, tmp_db_url: 
 def test_no_candidates_marks_brief_failed(test_settings: Settings, tmp_db_url: str) -> None:
     engine = create_db_engine(tmp_db_url)
     with Session(engine) as session:
-        now, device_id = _seed(session, with_items=False)
+        now, device_id = seed_day(session, with_items=False)
         brief = run_script_job(session, _payload(device_id), SOURCES, now, [_plan()])
         assert brief.status == "failed" and brief.script_json == "{}"
 
@@ -129,7 +129,7 @@ def test_missing_day_row_fails_clearly(test_settings: Settings, tmp_db_url: str)
 def test_long_urls_dropped_from_candidates(test_settings: Settings, tmp_db_url: str) -> None:
     engine = create_db_engine(tmp_db_url)
     with Session(engine) as session:
-        now, _ = _seed(session, with_items=False)
+        now, _ = seed_day(session, with_items=False)
         long_story = ParsedItem(
             external_id="long",
             url="https://bbc.co.uk/" + "a" * 2100,
@@ -138,7 +138,7 @@ def test_long_urls_dropped_from_candidates(test_settings: Settings, tmp_db_url: 
         )
         persist_outcomes(session, [SourceFetchOutcome("bbc_world", "ok", [long_story])], now)
         assert select_stories(session, SOURCES.selection, now)  # it was selected...
-        assert _candidates(session, now) == []  # ...but never offered to the script writer
+        assert candidates_for(session, now) == []  # ...but never offered to the script writer
 
 
 def test_worker_entry_point_uses_settings(
@@ -147,7 +147,7 @@ def test_worker_entry_point_uses_settings(
     """run(ctx): Ollama unreachable -> template; proves the subprocess wiring end to end."""
     engine = create_db_engine(tmp_db_url)
     with Session(engine) as session:
-        now, device_id = _seed(session)
+        now, device_id = seed_day(session)
     settings = make_settings(
         database_url=tmp_db_url, ollama_endpoint="http://127.0.0.1:9", ollama_timeout_sec=2.0
     )

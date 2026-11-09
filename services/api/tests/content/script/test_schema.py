@@ -71,13 +71,13 @@ def test_dropped_story_rejected() -> None:
 @pytest.mark.parametrize("story_words", [40])  # 6*40 + 10 = 250 > 185
 def test_over_budget_rejected(story_words: int) -> None:
     raw = valid_script(candidates(), story_words=story_words)
-    assert any("total voiceover words must be 130-185" in p for p in _problems(raw))  # case 5
+    assert any("total voiceover words must be 60-185" in p for p in _problems(raw))  # case 5
 
 
 def test_story_too_short_rejected() -> None:
     raw = valid_script(candidates())
     raw["scenes"][1]["voiceover"] = words(5)
-    assert any("scene 1: story voiceover must be 25-45 words" in p for p in _problems(raw))
+    assert any("scene 1: story voiceover must be 8-60 words" in p for p in _problems(raw))
 
 
 def test_denied_word_rejected() -> None:
@@ -120,10 +120,10 @@ def test_invalid_json_string() -> None:
 
 
 def test_word_budget_scales_for_short_days() -> None:
-    assert word_budget(6) == (130, 185)
-    assert word_budget(7) == (130, 185)
-    assert word_budget(3) == (65, 185)
-    assert word_budget(1) == (40, 185)
+    assert word_budget(6) == (60, 185)  # ADR D37
+    assert word_budget(7) == (68, 185)
+    assert word_budget(3) == (36, 185)
+    assert word_budget(1) == (20, 185)
 
 
 def test_one_story_script_valid() -> None:

@@ -15,7 +15,6 @@ Nothing returned by an LLM may be used before passing :func:`validate_script` (A
 from __future__ import annotations
 
 import datetime
-import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal
@@ -26,12 +25,12 @@ from chronos.content.script.denylist import find_denied
 
 MIN_SCENES = 3  # cover + 1 story + outro (owner decision 7)
 MAX_SCENES = 9
-WORDS_MIN_FULL = 130  # 6-story reel, ~50 s at Kokoro's ~165 wpm
-WORDS_MAX = 185  # ~68 s
-WORDS_MIN_FLOOR = 40
-FULL_REEL_STORIES = 6
-STORY_WORDS_MIN = 15  # prompt asks 25-45; validator leaves retry-friendly slack
-STORY_WORDS_MAX = 60
+WORDS_MAX = 185  # ~67 s at Kokoro's ~165 wpm
+STORY_WORDS_MIN = 8  # ADR D37: a headline-only story gets one honest sentence, never padding
+STORY_WORDS_CAP = 45
+STORY_WORDS_MAX = 60  # absolute validator ceiling (the budget below is tighter)
+FRAME_WORDS_MIN = 6
+FRAME_WORDS_MAX = 20
 
 Bullet = Annotated[str, Field(min_length=1, max_length=48)]
 
@@ -116,11 +115,18 @@ def count_words(text: str) -> int:
 
 
 def word_budget(n_stories: int) -> tuple[int, int]:
-    """(min, max) total voiceover words for a reel with *n_stories* stories."""
-    if n_stories >= FULL_REEL_STORIES:
-        return WORDS_MIN_FULL, WORDS_MAX
-    scaled = math.ceil(WORDS_MIN_FULL * n_stories / FULL_REEL_STORIES)
-    return max(WORDS_MIN_FLOOR, scaled), WORDS_MAX
+    """(min, max) total voiceover words for a reel with *n_stories* stories (ADR D37).
+
+    The minimum is what the shortest acceptable pieces add up to, so a script whose every
+    piece passed its own check always fits; the maximum keeps the reel near 60 s.
+    """
+    return STORY_WORDS_MIN * n_stories + 2 * FRAME_WORDS_MIN, WORDS_MAX
+
+
+def story_word_range(n_stories: int) -> tuple[int, int]:
+    """Per-story voiceover word range so the whole reel stays inside :func:`word_budget`."""
+    cap = (WORDS_MAX - 2 * FRAME_WORDS_MAX) // max(n_stories, 1)
+    return STORY_WORDS_MIN, max(STORY_WORDS_MIN, min(STORY_WORDS_CAP, cap))
 
 
 def _pydantic_problems(exc: ValidationError) -> list[str]:
@@ -176,7 +182,10 @@ def validate_script(
     for scene in stories:
         n = count_words(scene.voiceover)
         if not STORY_WORDS_MIN <= n <= STORY_WORDS_MAX:
-            problems.append(f"scene {scene.index}: story voiceover must be 25-45 words, got {n}")
+            problems.append(
+                f"scene {scene.index}: story voiceover must be "
+                f"{STORY_WORDS_MIN}-{STORY_WORDS_MAX} words, got {n}"
+            )
 
     texts = [script.greeting]
     for scene in script.scenes:
@@ -188,3 +197,62 @@ def validate_script(
     if problems:
         raise ScriptValidationError(problems)
     return script.model_copy(update={"total_words": total})
+
+
+class StoryDraft(BaseModel):
+    """What the LLM writes for ONE story (ADR D37); code adds ids, URLs, kicker, order."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    title: str = Field(min_length=1, max_length=60)
+    bullets: list[Bullet] = Field(default_factory=list[str], max_length=3)
+    voiceover: str = Field(min_length=10, max_length=320)
+
+
+class FrameDraft(BaseModel):
+    """What the LLM writes for the cover and outro (ADR D37)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    greeting: str = Field(min_length=1, max_length=80)
+    cover_voiceover: str = Field(min_length=10, max_length=320)
+    outro_voiceover: str = Field(min_length=10, max_length=320)
+
+
+def _denied_problem(texts: Sequence[str]) -> list[str]:
+    denied = sorted({w for t in texts for w in find_denied(t)})
+    return [f"remove disallowed words: {', '.join(denied)}"] if denied else []
+
+
+def check_story_draft(raw: str, word_range: tuple[int, int]) -> StoryDraft:
+    """Parse and check one story draft; raises :class:`ScriptValidationError`."""
+    try:
+        draft = StoryDraft.model_validate_json(raw)
+    except ValidationError as exc:
+        raise ScriptValidationError(_pydantic_problems(exc)) from exc
+    problems: list[str] = []
+    low, high = word_range
+    n = count_words(draft.voiceover)
+    if not low <= n <= high:
+        problems.append(f"voiceover must be {low}-{high} words, got {n}")
+    problems += _denied_problem([draft.title, draft.voiceover, *draft.bullets])
+    if problems:
+        raise ScriptValidationError(problems)
+    return draft
+
+
+def check_frame_draft(raw: str) -> FrameDraft:
+    """Parse and check the cover/outro draft; raises :class:`ScriptValidationError`."""
+    try:
+        draft = FrameDraft.model_validate_json(raw)
+    except ValidationError as exc:
+        raise ScriptValidationError(_pydantic_problems(exc)) from exc
+    problems: list[str] = []
+    for name in ("cover_voiceover", "outro_voiceover"):
+        n = count_words(getattr(draft, name))
+        if not FRAME_WORDS_MIN <= n <= FRAME_WORDS_MAX:
+            problems.append(f"{name} must be {FRAME_WORDS_MIN}-{FRAME_WORDS_MAX} words, got {n}")
+    problems += _denied_problem([draft.greeting, draft.cover_voiceover, draft.outro_voiceover])
+    if problems:
+        raise ScriptValidationError(problems)
+    return draft
