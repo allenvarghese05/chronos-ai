@@ -61,6 +61,25 @@ echo "╚═══════════════════════�
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# 0. macOS privacy (TCC) guard
+# ─────────────────────────────────────────────────────────────────────────────
+# launchd agents cannot read ~/Desktop, ~/Documents, ~/Downloads or iCloud Drive
+# unless their executable (uv, bash) has Full Disk Access. The API then crash-loops
+# with "Current directory does not exist" and deploy.sh with "Operation not
+# permitted". Keep the production checkout elsewhere (e.g. ~/chronos-ai), or set
+# CHRONOS_ALLOW_PROTECTED_PATH=1 after granting Full Disk Access yourself.
+case "${REPO_ROOT}/" in
+    "${HOME}/Desktop/"*|"${HOME}/Documents/"*|"${HOME}/Downloads/"*|"${HOME}/Library/Mobile Documents/"*)
+        msg="Repo is under a macOS privacy-protected folder (${REPO_ROOT}); launchd agents cannot run from here."
+        if [ "${SKIP_PLISTS}" = "1" ] || [ "${DRY_RUN}" = "1" ] || [ "${CHRONOS_ALLOW_PROTECTED_PATH:-0}" = "1" ]; then
+            warn "${msg}"
+        else
+            die "${msg} Clone to e.g. ~/chronos-ai, or grant Full Disk Access to uv and bash and re-run with CHRONOS_ALLOW_PROTECTED_PATH=1."
+        fi
+        ;;
+esac
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 1. Create data directories
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "${DRY_RUN}" = "1" ]; then
