@@ -307,6 +307,38 @@ class TestCheckOllama:
         warn_rows = [r for r in rows if r.status == WARN and "digest" in r.name]
         assert warn_rows
 
+    def test_exact_name_match_ignores_similar_model(self) -> None:
+        """A co-installed qwen2.5-coder must not be mistaken for qwen2.5:7b-instruct."""
+
+        class FakeResp:
+            status_code = 200
+
+            def json(self) -> dict[str, Any]:
+                return {
+                    "models": [
+                        {"name": "qwen2.5-coder:7b-instruct", "digest": "dae161e27b0e"},
+                        {"name": "qwen2.5:7b-instruct", "digest": "845dbda0ea48"},
+                    ]
+                }
+
+        p = _probes(http_resp=FakeResp())
+        rows = check_ollama(p, "qwen2.5:7b-instruct", "sha256:845dbda0ea48")
+        by_name = {r.name: r for r in rows}
+        assert by_name["ollama:model"].status == OK
+        assert "qwen2.5:7b-instruct" in by_name["ollama:model"].message
+        assert by_name["ollama:digest"].status == OK  # bare hex from /api/tags vs sha256: pin
+
+    def test_only_similar_model_installed_fails(self) -> None:
+        class FakeResp:
+            status_code = 200
+
+            def json(self) -> dict[str, Any]:
+                return {"models": [{"name": "qwen2.5-coder:7b-instruct", "digest": "dae161e27b0e"}]}
+
+        p = _probes(http_resp=FakeResp())
+        rows = check_ollama(p, "qwen2.5:7b-instruct", "")
+        assert any(r.name == "ollama:model" and r.status == FAIL for r in rows)
+
 
 # ---------------------------------------------------------------------------
 # _check_launchagents
