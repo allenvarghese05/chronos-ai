@@ -22,10 +22,8 @@ from chronos.content.script.schema import (
     ReelScript,
     Scene,
     ScriptCandidate,
-    count_words,
     story_word_range,
     validate_script,
-    word_budget,
 )
 
 GREETING = "Good morning"
@@ -86,11 +84,9 @@ OUTRO_VOICEOVER = "That is the brief for this morning. The sources are saved in 
 
 
 def template_story_words(n_stories: int) -> int:
-    """Per-story word count the template uses: the middle of the budget, inside the range."""
-    low, high = word_budget(n_stories)
-    fixed = count_words(cover_voiceover(datetime.date(2026, 9, 30))) + count_words(OUTRO_VOICEOVER)
-    lo, hi = story_word_range(n_stories)
-    return max(lo, min(hi, round(((low + high) // 2 - fixed) / n_stories)))
+    """Per-story word count the template uses: the top of the per-story range, so a template
+    reel fills ~60 s (6 stories x 24 words + cover/outro ~ 170 words ~ 63 s at 163 wpm)."""
+    return story_word_range(n_stories)[1]
 
 
 def template_story_scene(cand: ScriptCandidate, index: int, n_words: int) -> Scene:
