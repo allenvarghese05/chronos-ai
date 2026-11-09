@@ -2,6 +2,7 @@ import createClient from 'openapi-fetch';
 import type { DebugSnapshot, ScorePage, TickPage } from '../debug/validation';
 import { calendarDate, debugSnapshot, scorePage, tickPage, wakeTime } from '../debug/validation';
 import { canonicalApiBase, parsePairResponse, record, type Session } from '../pairing/validation';
+import { isReelDetail, isReelList, isReelSummary } from '../reels/model';
 import {
 	type FieldIssue,
 	fieldIssues,
@@ -231,6 +232,9 @@ async function boundedResponse(response: Response, signal: AbortSignal): Promise
 }
 
 /** Generated full paths are joined to origin exactly once. Transport must refuse redirects. */
+const REEL_PATH = /^\/v1\/reels\/[0-9A-HJKMNP-TV-Z]{26}$/;
+const REEL_SAVE_PATH = /^\/v1\/reels\/[0-9A-HJKMNP-TV-Z]{26}\/save$/;
+
 export function createApi(apiBase: string, transport: Transport, token?: string) {
 	const origin = new URL(canonicalApiBase(apiBase)).origin;
 	function scopedClient(budget?: RequestBudget) {
@@ -249,7 +253,10 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 					(['/v1/debug/wake', '/v1/debug/scores', '/v1/debug/ticks'].includes(url.pathname) &&
 						request.method === 'GET') ||
 					(/^\/v1\/day\/\d{4}-\d{2}-\d{2}\/actual-wake$/.test(url.pathname) &&
-						request.method === 'PUT');
+						request.method === 'PUT') ||
+					(url.pathname === '/v1/reels' && request.method === 'GET') ||
+					(REEL_PATH.test(url.pathname) && ['GET', 'DELETE'].includes(request.method)) ||
+					(REEL_SAVE_PATH.test(url.pathname) && ['POST', 'DELETE'].includes(request.method));
 				if (url.origin !== origin || !allowed)
 					throw new ApiError(0, 'The API destination is not approved.');
 				const controller = new AbortController();
@@ -303,6 +310,19 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 		} catch (error) {
 			if (error instanceof ApiError) throw error;
 			throw new ApiError(0, 'The laptop returned an invalid device response.');
+		}
+	}
+	async function reelResult<T>(
+		call: () => Promise<{ data?: unknown }>,
+		valid: (v: unknown) => v is T,
+	): Promise<T> {
+		try {
+			const { data } = await call();
+			if (!valid(data)) throw new ApiError(0, 'The laptop returned an invalid reel response.');
+			return data;
+		} catch (error) {
+			if (error instanceof ApiError) throw error;
+			throw new ApiError(0, 'The laptop returned an invalid reel response.');
 		}
 	}
 	async function diagnosticResult<T>(
@@ -421,6 +441,29 @@ export function createApi(apiBase: string, transport: Transport, token?: string)
 					0,
 					'Pairing response was invalid. Revoke the device on the laptop before retrying.',
 				);
+			}
+		},
+		listReels: () =>
+			reelResult(() => client.GET('/v1/reels', { params: { query: { limit: 20 } } }), isReelList),
+		getReel: (id: string) =>
+			reelResult(
+				() => client.GET('/v1/reels/{public_id}', { params: { path: { public_id: id } } }),
+				isReelDetail,
+			),
+		setSaved: (id: string, saved: boolean) =>
+			reelResult(
+				() =>
+					saved
+						? client.POST('/v1/reels/{public_id}/save', { params: { path: { public_id: id } } })
+						: client.DELETE('/v1/reels/{public_id}/save', { params: { path: { public_id: id } } }),
+				isReelSummary,
+			),
+		async deleteReel(id: string): Promise<void> {
+			try {
+				await client.DELETE('/v1/reels/{public_id}', { params: { path: { public_id: id } } });
+			} catch (error) {
+				if (error instanceof ApiError) throw error;
+				throw new ApiError(0, 'The laptop did not confirm the deletion.');
 			}
 		},
 		getDevice: () => deviceResult(() => client.GET('/v1/device/me')),

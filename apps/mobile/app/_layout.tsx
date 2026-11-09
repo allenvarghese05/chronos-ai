@@ -12,6 +12,10 @@ export default function RootLayout() {
 				<Stack.Screen name="settings" options={{ title: 'Settings' }} />
 				<Stack.Screen name="pairing" options={{ title: 'Pair your laptop' }} />
 				<Stack.Screen name="certificate" options={{ title: 'Trust your laptop' }} />
+				<Stack.Screen
+					name="reel/[id]"
+					options={{ title: 'Morning reel', headerTransparent: true, headerTintColor: '#fff' }}
+				/>
 			</Stack>
 		</SessionProvider>
 	);

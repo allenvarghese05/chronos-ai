@@ -5,6 +5,7 @@ import ChronosSensors, {
 	type DeviceState,
 	type StepQueryResult,
 } from '../modules/chronos-sensors/src';
+import { ReelFeed } from '../src/reels/feed';
 import { ProtectedScene, useSession } from '../src/session/provider';
 import { TelemetryControls } from '../src/telemetry/controls';
 import { ui } from '../src/ui';
@@ -46,6 +47,7 @@ function PairedHome() {
 	}, []);
 	return (
 		<ScrollView contentContainerStyle={ui.page}>
+			<ReelFeed />
 			<Text style={ui.title}>Connected to your laptop.</Text>
 			<Text style={ui.host}>{state.session?.apiBase}</Text>
 			<Link href="/debug" style={ui.host}>
