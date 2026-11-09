@@ -434,6 +434,85 @@ def ops_in_deploy_window(
         raise typer.Exit(code=1)  # exit 1 = proceed with deploy
 
 
+# ── run (pipeline) ────────────────────────────────────────────────────────────
+
+
+@app.command("run")
+def run_pipeline(
+    date: str = typer.Option("today", "--date", help="Local day YYYY-MM-DD or 'today'."),
+    stages: str = typer.Option(
+        "ingest,script", "--stages", help="Comma list; default the content stages."
+    ),
+    force: bool = typer.Option(False, "--force", help="Re-run stages that already ran."),
+    device_id: int | None = typer.Option(
+        None, "--device", help="Device id (default: the paired one)."
+    ),
+    timeout: float = typer.Option(1800.0, "--timeout", help="Seconds to wait for the chain."),
+) -> None:
+    """Run pipeline stages for one local day and wait for them (T3.5).
+
+    Idempotent: stages that already completed for that day are not re-run unless --force.
+    """
+    import datetime as _dt
+
+    from sqlmodel import Session, select
+
+    from chronos.config import get_settings
+    from chronos.db import create_db_engine
+    from chronos.enums import JobKind
+    from chronos.models.devices import Device
+    from chronos.pipeline import STAGE_ORDER, ensure_day, implemented, run_chain
+    from chronos.wake.rules import ensure_initial_version
+
+    try:
+        wanted = [JobKind(s.strip()) for s in stages.split(",") if s.strip()]
+    except ValueError as exc:
+        typer.echo(f"✗ unknown stage in {stages!r}; stages: {[s.value for s in STAGE_ORDER]}",
+                   err=True)  # fmt: skip
+        raise typer.Exit(code=2) from exc
+    runnable = implemented(wanted)
+    skipped = [s.value for s in wanted if s not in runnable]
+    if skipped:
+        typer.echo(f"! not implemented yet, skipped: {', '.join(skipped)}", err=True)
+    if not runnable:
+        raise typer.Exit(code=2)
+
+    settings = get_settings()
+    engine = create_db_engine(settings.database_url)
+    now = _dt.datetime.now(_dt.UTC)
+    with Session(engine) as session:
+        ensure_initial_version(session, settings.wake_rules_path)
+        session.commit()
+        query = select(Device).where(Device.status == "active")
+        if device_id is not None:
+            query = query.where(Device.id == device_id)
+        devices = session.exec(query).all()
+        if len(devices) != 1:
+            typer.echo(f"✗ need exactly one active device (found {len(devices)}); use --device",
+                       err=True)  # fmt: skip
+            raise typer.Exit(code=1)
+        device = devices[0]
+        assert device.id is not None
+        chosen_id: int = device.id
+        local_date = ensure_day(
+            session, device, now, None if date == "today" else _dt.date.fromisoformat(date)
+        )
+    typer.echo(f"→ {local_date} device {chosen_id}: {', '.join(s.value for s in runnable)}")
+    results = run_chain(
+        engine, settings.data_root.resolve(), settings, local_date=local_date, device_id=chosen_id,
+        stages=runnable, force=force, timeout_sec=timeout,
+    )  # fmt: skip
+    failed = False
+    for r in results:
+        mark = {"done": "✓", "failed": "✗", "cancelled": "✗"}.get(r.status, "…")
+        took = f" {r.duration_ms / 1000:.1f}s" if r.duration_ms is not None else ""
+        typer.echo(f"  {mark} {r.stage:9} {r.status}{took}" + (f"  {r.error}" if r.error else ""))
+        failed |= r.status != "done"
+    engine.dispose()
+    if failed:
+        raise typer.Exit(code=1)
+
+
 # ── doctor ────────────────────────────────────────────────────────────────────
 
 

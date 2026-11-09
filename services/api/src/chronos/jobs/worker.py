@@ -31,6 +31,18 @@ class Handler:
             raise ValueError("handler must be a trusted importable module/function")
 
 
+SETTINGS_FILE = "settings.json"
+
+
+def write_private(path: Path, text: str) -> None:
+    """Create *path* readable by the owner only (0600); never follows an existing file."""
+    import os
+
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(text)
+
+
 @dataclass(frozen=True)
 class JobContext:
     """Immutable attempt inputs; parse a copy of payload_json when a handler needs mutable data."""
@@ -53,8 +65,12 @@ class Worker:
         *,
         clock: Callable[[], dt.datetime] | None = None,
         poll_interval: float = 0.25,
+        settings_json: str | None = None,
     ) -> None:
         self.queue = queue
+        #: Settings snapshot handed to each attempt as ``work_dir/settings.json`` (mode 600).
+        #: Handlers run with a minimal environment and cannot read ``.env`` (T3.5).
+        self.settings_json = settings_json
         self.data_root = data_root.resolve()
         self.handlers = dict(handlers)
         self.clock = clock or (lambda: dt.datetime.now(dt.UTC))
@@ -78,6 +94,8 @@ class Worker:
             directory.mkdir(parents=True, exist_ok=False)
             if not directory.resolve().is_relative_to(self.data_root):
                 raise ValueError("job working directory escapes data root")
+            if self.settings_json is not None:
+                write_private(directory / SETTINGS_FILE, self.settings_json)
             handler = self.handlers[claim.kind]
             outcome = run_handler(
                 {

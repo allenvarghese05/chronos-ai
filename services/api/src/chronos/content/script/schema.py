@@ -224,6 +224,26 @@ def _denied_problem(texts: Sequence[str]) -> list[str]:
     return [f"remove disallowed words: {', '.join(denied)}"] if denied else []
 
 
+#: The narrator must not talk about the feed's gaps ("…with no details"); seen live 2026-11-09.
+META_PHRASES = (
+    "no details",
+    "no further details",
+    "no additional details",
+    "not provided",
+    "details were not",
+    "details are not",
+    "no more information",
+    "little information",
+    "few details",
+)
+
+
+def _meta_problem(text: str) -> list[str]:
+    lowered = text.casefold()
+    hits = [p for p in META_PHRASES if p in lowered]
+    return [f"do not mention missing details (remove: {', '.join(hits)})"] if hits else []
+
+
 def check_story_draft(raw: str, word_range: tuple[int, int]) -> StoryDraft:
     """Parse and check one story draft; raises :class:`ScriptValidationError`."""
     try:
@@ -236,6 +256,7 @@ def check_story_draft(raw: str, word_range: tuple[int, int]) -> StoryDraft:
     if not low <= n <= high:
         problems.append(f"voiceover must be {low}-{high} words, got {n}")
     problems += _denied_problem([draft.title, draft.voiceover, *draft.bullets])
+    problems += _meta_problem(draft.voiceover)
     if problems:
         raise ScriptValidationError(problems)
     return draft
