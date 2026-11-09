@@ -358,6 +358,21 @@ def render_job(ctx: JobContext) -> None:
         deps.engine.dispose()
 
 
+def retention_job(ctx: JobContext) -> None:
+    """Nightly purge + backup (not a pipeline stage; enqueued by the scheduler)."""
+    from chronos.delivery.retention import backup_database, run_retention
+
+    deps = _deps(ctx)
+    try:
+        data_root = deps.settings.data_root.resolve()
+        now = datetime.datetime.now(datetime.UTC)
+        with Session(deps.engine) as session:
+            run_retention(session, data_root, now)
+        backup_database(deps.engine, data_root, now)
+    finally:
+        deps.engine.dispose()
+
+
 HANDLERS: dict[JobKind, Handler] = {
     JobKind.ingest: Handler("chronos.pipeline", "ingest_job"),
     JobKind.script: Handler("chronos.pipeline", "script_job"),
@@ -365,6 +380,7 @@ HANDLERS: dict[JobKind, Handler] = {
     JobKind.tts: Handler("chronos.pipeline", "tts_job"),
     JobKind.captions: Handler("chronos.pipeline", "captions_job"),
     JobKind.render: Handler("chronos.pipeline", "render_job"),
+    JobKind.retention: Handler("chronos.pipeline", "retention_job"),
 }
 
 

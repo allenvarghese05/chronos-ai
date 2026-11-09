@@ -698,6 +698,32 @@ class Scheduler:
     # run_reports (T1.8)
     # ------------------------------------------------------------------
 
+    def enqueue_retention(self, now: datetime.datetime) -> str | None:
+        """Enqueue the nightly retention job once per local day, after the day boundary
+        (03:00 in the device timezone, docs/04 §3). Keyed by local date, so idempotent (T5.1).
+        """
+        from zoneinfo import ZoneInfo
+
+        from chronos.jobs.queue import JobInput
+
+        with self._session_factory() as session:
+            engine = session.get_bind()
+            device = session.exec(select(Device).where(Device.status == "active")).first()
+            if device is None:
+                return None
+            rules, _ = get_rules_cache().get_effective(session)
+            local_date = local_date_for(now, ZoneInfo(device.tz),
+                                        rules.window.to_window_config().day_boundary)  # fmt: skip
+        key = f"retention:{local_date.isoformat()}"
+        try:
+            JobQueue(engine).enqueue(  # type: ignore[arg-type]
+                JobInput(kind=JobKind.retention, key=key, payload={}, max_attempts=2), now
+            )
+        except Exception:
+            log.exception("retention_enqueue_error")
+            return None
+        return key
+
     async def run_reports(self, now: datetime.datetime) -> None:
         """After the day boundary + 15 min grace, write previous day's report once.
 
@@ -805,6 +831,11 @@ class Scheduler:
                 await self.run_reports(now)
             except Exception:
                 log.exception("scheduler_run_reports_error")
+
+            try:
+                self.enqueue_retention(now)
+            except Exception:
+                log.exception("scheduler_retention_error")
 
             try:
                 await asyncio.wait_for(stop_event.wait(), timeout=60.0)
