@@ -29,7 +29,9 @@ inside Remotion; a `thumb.jpg` is rendered as a still for the app feed).
 
 - **Kokoro-82M** through `kokoro-onnx` (ONNX Runtime, CoreML EP when available, CPU fallback).
   Files under `data/models/kokoro/` fetched by `just models` with pinned URLs + sha256.
-  Voice: `af_heart` (default, configurable `CHRONOS_TTS_VOICE`), speed 1.0, 24 kHz.
+  Voice: `af_heart` (default, configurable `CHRONOS_TTS_VOICE`), **speed 1.15** (`CHRONOS_TTS_SPEED`),
+  24 kHz. Measured 2026-11-09: `af_heart` speaks ~142 wpm at 1.0, so 1.15 (~163 wpm) keeps the
+  word budget near 60 s; the 6-story template reel (169 words) renders 59.6 s.
 - One WAV per scene (`voice/scene-NN.wav`) so per-scene durations are known exactly; 350 ms of
   silence between scenes; concatenated with `pydub`/numpy to `voice.wav`.
 - Loudness: `ffmpeg -af loudnorm=I=-16:TP=-1.5:LRA=11` → `voice.mp3` (AAC in the final mux, mp3
