@@ -262,9 +262,34 @@ def script_job(ctx: JobContext) -> None:
         deps.engine.dispose()
 
 
+def assets_job(ctx: JobContext) -> None:
+    from chronos.api.config import preferences
+    from chronos.media.reels import assets_stage
+
+    payload = StagePayload.model_validate_json(ctx.payload_json)
+    deps = _deps(ctx)
+    try:
+        sources = load_sources_yaml(deps.settings.sources_path)
+        with Session(deps.engine) as session:
+            prefs = preferences(session, deps.settings)
+            assets_stage(
+                session,
+                local_date=payload.local_date.isoformat(),
+                device_id=payload.device_id,
+                data_root=deps.settings.data_root.resolve(),
+                user_agent=sources.http.user_agent,
+                now=utc_now_iso(),
+                pexels_available=prefs.pexels_effective,
+            )
+        _chain_next(deps, payload, JobKind.assets)
+    finally:
+        deps.engine.dispose()
+
+
 HANDLERS: dict[JobKind, Handler] = {
     JobKind.ingest: Handler("chronos.pipeline", "ingest_job"),
     JobKind.script: Handler("chronos.pipeline", "script_job"),
+    JobKind.assets: Handler("chronos.pipeline", "assets_job"),
 }
 
 
