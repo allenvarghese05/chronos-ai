@@ -227,7 +227,7 @@ Indexes: `(device_id, received_at)`, `(local_date)`.
 | kind | TEXT | `voice_wav` \| `voice_mp3` \| `captions_json` \| `reel_json` \| `image` \| `broll` \| `thumbnail` |
 | path | TEXT | relative to `data/media/` |
 | source_url | TEXT NULL | where it was downloaded from |
-| licence | TEXT NULL | `pexels` \| `og_image` \| `generated` |
+| licence | TEXT NULL | `pexels` \| `og_image` \| `generated` \| `kokoro` \| `edge_tts` (migration 0005) |
 | width, height, duration_sec, size_bytes | nullable | |
 | sha256 | TEXT | |
 | scene_index | INTEGER NULL | |
