@@ -1,9 +1,16 @@
 import { Stack } from 'expo-router';
+import { useReelDeepLinks } from '../src/reels/deeplink';
 import { SessionProvider } from '../src/session/provider';
+
+function DeepLinks() {
+	useReelDeepLinks();
+	return null;
+}
 
 export default function RootLayout() {
 	return (
 		<SessionProvider>
+			<DeepLinks />
 			<Stack
 				screenOptions={{ headerStyle: { backgroundColor: '#faf9f6' }, headerTintColor: '#202722' }}
 			>
