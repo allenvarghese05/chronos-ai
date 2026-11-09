@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -16,7 +17,7 @@ import structlog
 from sqlmodel import Session, col, select
 
 from chronos.content.script.schema import ReelScript
-from chronos.enums import AssetLicence, BriefStatus, ReelAssetKind
+from chronos.enums import AssetLicence, BriefStatus, ReelAssetKind, ReelStatus
 from chronos.http import GuardedHttpClient
 from chronos.ids import new_ulid
 from chronos.media.assets import (
@@ -26,6 +27,7 @@ from chronos.media.assets import (
     SceneImageResult,
     fetch_scene_images,
 )
+from chronos.media.tts import TtsEngine, synthesize_scenes
 from chronos.models.content import Brief, Item
 from chronos.models.media import Reel, ReelAsset
 from chronos.time import format_utc_iso, parse_utc_iso
@@ -185,3 +187,100 @@ def assets_stage(
                           skipped)  # fmt: skip
     log.info("assets_done", reel=reel.public_id, images=report.images, gradients=report.gradients)
     return report
+
+
+# --- TTS stage (T4.2) ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class TtsReport:
+    reel_public_id: str
+    duration_sec: float
+    engines: tuple[str, ...]
+    skipped: bool
+
+
+def record_asset(
+    session: Session,
+    reel_id: int,
+    data_root: Path,
+    kind: ReelAssetKind,
+    path: Path,
+    *,
+    licence: AssetLicence | None = None,
+    duration_sec: float | None = None,
+    scene_index: int | None = None,
+    source_url: str | None = None,
+) -> ReelAsset:
+    """Replace any previous asset of the same kind/scene with *path* (sha256 + size)."""
+    import hashlib
+
+    old = existing_asset(session, reel_id, kind, scene_index)
+    if old is not None:
+        session.delete(old)
+    data = path.read_bytes()
+    asset = ReelAsset(
+        reel_id=reel_id,
+        kind=kind.value,
+        path=relative(data_root, path),
+        source_url=source_url,
+        licence=licence.value if licence else None,
+        duration_sec=duration_sec,
+        size_bytes=len(data),
+        sha256=hashlib.sha256(data).hexdigest(),
+        scene_index=scene_index,
+    )
+    session.add(asset)
+    return asset
+
+
+def reel_for_day(session: Session, local_date: str, device_id: int) -> tuple[Brief, Reel]:
+    brief = ready_brief(session, local_date, device_id)
+    reel = session.exec(select(Reel).where(Reel.brief_id == brief.id)).first()
+    if reel is None:
+        raise BriefNotReady(f"no reel yet for {local_date} / device {device_id} (assets stage)")
+    return brief, reel
+
+
+def tts_stage(
+    session: Session,
+    *,
+    local_date: str,
+    device_id: int,
+    data_root: Path,
+    engines: Sequence[TtsEngine],
+    ffmpeg_bin: str,
+    now: str,
+) -> TtsReport:
+    """Voice the day's script (idempotent: skips when voice.wav and tts.json exist)."""
+    import time
+
+    brief, reel = reel_for_day(session, local_date, device_id)
+    assert reel.id is not None
+    out_dir = reel_dir(data_root, reel)
+    existing = existing_asset(session, reel.id, ReelAssetKind.voice_wav, None)
+    if (
+        existing is not None
+        and (media_root(data_root) / existing.path).exists()
+        and (out_dir / "tts.json").exists()
+    ):
+        log.info("tts_skipped_existing", reel=reel.public_id)
+        return TtsReport(reel.public_id, existing.duration_sec or 0.0, (), True)
+
+    script = ReelScript.model_validate_json(brief.script_json)
+    texts = [(scene.index, scene.voiceover) for scene in script.scenes]
+    started = time.perf_counter()
+    result = synthesize_scenes(texts, out_dir, data_root, engines, ffmpeg_bin)
+    licence = AssetLicence.edge_tts if result.engines == {"edge_tts"} else AssetLicence.kokoro
+    record_asset(session, reel.id, data_root, ReelAssetKind.voice_wav, result.voice_wav,
+                 licence=licence, duration_sec=result.duration_sec)  # fmt: skip
+    record_asset(session, reel.id, data_root, ReelAssetKind.voice_mp3, result.voice_mp3,
+                 licence=licence, duration_sec=result.duration_sec)  # fmt: skip
+    reel.tts_ms = int((time.perf_counter() - started) * 1000)
+    reel.status = ReelStatus.tts.value
+    reel.updated_at = now
+    session.add(reel)
+    session.commit()
+    log.info("tts_done", reel=reel.public_id, seconds=round(result.duration_sec, 1),
+             engines=sorted(result.engines))  # fmt: skip
+    return TtsReport(reel.public_id, result.duration_sec, tuple(sorted(result.engines)), False)

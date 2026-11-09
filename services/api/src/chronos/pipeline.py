@@ -286,10 +286,39 @@ def assets_job(ctx: JobContext) -> None:
         deps.engine.dispose()
 
 
+def tts_job(ctx: JobContext) -> None:
+    from chronos.media.reels import reel_dir, reel_for_day, tts_stage
+    from chronos.media.tts import EdgeEngine, KokoroEngine, TtsEngine
+
+    payload = StagePayload.model_validate_json(ctx.payload_json)
+    deps = _deps(ctx)
+    try:
+        s = deps.settings
+        data_root = s.data_root.resolve()
+        with Session(deps.engine) as session:
+            _, reel = reel_for_day(session, payload.local_date.isoformat(), payload.device_id)
+            work = reel_dir(data_root, reel)
+            work.mkdir(parents=True, exist_ok=True)
+            engines: list[TtsEngine] = [
+                KokoroEngine(s.models_dir / "kokoro" / "kokoro-v1.0.onnx",
+                             s.models_dir / "kokoro" / "voices-v1.0.bin", s.tts_voice, s.tts_speed)
+            ]  # fmt: skip
+            if s.edge_tts_enabled:
+                engines.append(EdgeEngine(s.ffmpeg_bin, work, data_root, s.edge_tts_voice))
+            tts_stage(
+                session, local_date=payload.local_date.isoformat(), device_id=payload.device_id,
+                data_root=data_root, engines=engines, ffmpeg_bin=s.ffmpeg_bin, now=utc_now_iso(),
+            )  # fmt: skip
+        _chain_next(deps, payload, JobKind.tts)
+    finally:
+        deps.engine.dispose()
+
+
 HANDLERS: dict[JobKind, Handler] = {
     JobKind.ingest: Handler("chronos.pipeline", "ingest_job"),
     JobKind.script: Handler("chronos.pipeline", "script_job"),
     JobKind.assets: Handler("chronos.pipeline", "assets_job"),
+    JobKind.tts: Handler("chronos.pipeline", "tts_job"),
 }
 
 
