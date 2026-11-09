@@ -40,7 +40,7 @@ def valid_script(cands: list[ScriptCandidate], story_words: int = 25) -> dict[st
             {
                 "index": i,
                 "type": "story",
-                "title": c.title,
+                "title": c.title[:60],
                 "kicker": c.category.upper(),
                 "bullets": ["one point", "another point"],
                 "voiceover": words(story_words, f"s{i}w"),
