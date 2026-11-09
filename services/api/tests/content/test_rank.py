@@ -167,6 +167,31 @@ def test_stale_ignored_unless_category_empty() -> None:
     assert sorted(_ids(out)) == [2, 3]
 
 
+def test_weekend_minimum_topped_up_from_stale() -> None:
+    """ADR D36: no fresh AI (weekend) -> the two best stale AI stories fill ai's minimum."""
+    clusters = [
+        solo(cand(1, "ai1", "ai", hours_ago=40)),
+        solo(cand(2, "ai1", "ai", hours_ago=30)),
+        solo(cand(3, "ai2", "ai", hours_ago=50)),
+        solo(cand(4, "world1", "world")),
+        solo(cand(5, "world2", "world")),
+        solo(cand(6, "india1", "india")),
+        solo(cand(7, "tech1", "tech")),
+        solo(cand(8, "india2", "india")),
+    ]
+    out = select(clusters, QUOTAS, CFG, NOW)
+    assert [s.item_id for s in out if s.category == "ai"] == [2, 1]
+    assert len(out) == 6
+
+
+def test_stale_beyond_minimum_never_fills_spare_slots() -> None:
+    """Stale stories only ever fill a minimum (or rescue an empty no-minimum category)."""
+    cfg = CFG.model_copy(update={"category_min": {"ai": 1}})
+    clusters = [solo(cand(i, "ai1" if i < 3 else "ai2", "ai", hours_ago=30 + i)) for i in (1, 2, 3)]
+    out = select(clusters, QUOTAS, cfg, NOW)
+    assert [s.item_id for s in out] == [1]
+
+
 def test_minimums_exceeding_total_never_exceed_total() -> None:
     # edge case 21
     cfg = SelectionConfig(
@@ -246,9 +271,8 @@ def test_select_meets_minimums_property(clusters: list[Cluster]) -> None:
     """With generous quotas, every minimum is met whenever enough fresh supply exists."""
     quotas = dict.fromkeys(QUOTAS, 99)
     out = select(clusters, quotas, CFG, NOW)
-    fresh = [c for c in clusters if (NOW - c.primary.published_at).total_seconds() <= 20 * 3600]
     for category, minimum in CFG.category_min.items():
-        supply = sum(1 for c in fresh if c.primary.category == category)
+        supply = sum(1 for c in clusters if c.primary.category == category)  # fresh or stale
         got = sum(1 for s in out if s.category == category)
         assert got >= min(minimum, supply)
 
@@ -259,11 +283,17 @@ def test_select_exact_total(clusters: list[Cluster]) -> None:
     """Exactly total_stories whenever the eligible pool (under quotas) is large enough."""
     quotas = dict.fromkeys(QUOTAS, 99)
     out = select(clusters, quotas, CFG, NOW)
-    fresh = [c for c in clusters if (NOW - c.primary.published_at).total_seconds() <= 20 * 3600]
-    fresh_categories = {c.primary.category for c in fresh}
-    rescued = {
-        c.primary.category
-        for c in clusters
-        if c not in fresh and c.primary.category not in fresh_categories
-    }
-    assert len(out) == min(CFG.total_stories, len(fresh) + len(rescued))
+
+    def is_fresh(c: Cluster) -> bool:
+        return (NOW - c.primary.published_at).total_seconds() <= 20 * 3600
+
+    eligible = sum(1 for c in clusters if is_fresh(c))
+    for category in ("ai", "tech", "world", "india"):
+        n_fresh = sum(1 for c in clusters if is_fresh(c) and c.primary.category == category)
+        n_stale = sum(1 for c in clusters if not is_fresh(c) and c.primary.category == category)
+        minimum = CFG.category_min.get(category, 0)
+        if minimum > 0:
+            eligible += min(max(minimum - n_fresh, 0), n_stale)
+        elif n_fresh == 0 and n_stale > 0:
+            eligible += 1
+    assert len(out) == min(CFG.total_stories, eligible)
