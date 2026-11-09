@@ -16,6 +16,8 @@ from chronos.models.delivery import PushNotification as PushNotification
 from chronos.models.devices import Device as Device
 from chronos.models.devices import PairingCode as PairingCode
 from chronos.models.jobs import Job as Job
+from chronos.models.media import Reel as Reel
+from chronos.models.media import ReelAsset as ReelAsset
 from chronos.models.settings import Setting as Setting
 from chronos.models.wake import Day as Day
 from chronos.models.wake import DayTransition as DayTransition
@@ -33,6 +35,8 @@ __all__ = [
     "Job",
     "PairingCode",
     "PushNotification",
+    "Reel",
+    "ReelAsset",
     "RuleVersion",
     "Setting",
     "Source",

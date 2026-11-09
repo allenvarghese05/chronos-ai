@@ -19,6 +19,7 @@ dependencies = [
   "httpx==0.28.1",
   "feedparser==6.0.14",
   "selectolax==1.0.2",
+  "pillow==13.0.0",
 ]
 
 [dependency-groups]

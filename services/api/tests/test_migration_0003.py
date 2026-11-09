@@ -18,6 +18,7 @@ from chronos.models import Brief, BriefItem, Item, Job, Source
 from chronos.models.content import decode_simhash, encode_simhash
 
 NEW = {"sources", "items", "briefs", "brief_items", "jobs"}
+LATER = {"reels", "reel_assets"}  # 0005 (T4.1); head includes them
 NOW = "2026-11-01T06:00:00.000000Z"
 
 
@@ -42,7 +43,7 @@ def test_populated_previous_head_upgrade_down_preserves_rows(tmp_path: Path) -> 
         )
     before = set(inspect(engine).get_table_names())
     command.upgrade(cfg, "head")
-    assert set(inspect(engine).get_table_names()) == before | NEW
+    assert set(inspect(engine).get_table_names()) == before | NEW | LATER
     with engine.connect() as connection:
         assert compare_metadata(MigrationContext.configure(connection), SQLModel.metadata) == []
     command.downgrade(cfg, "08a434829bca")

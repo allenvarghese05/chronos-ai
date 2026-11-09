@@ -97,6 +97,8 @@ class TestMigration0001:
             "briefs",
             "brief_items",
             "jobs",
+            "reels",
+            "reel_assets",
         }
     )
 
