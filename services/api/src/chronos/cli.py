@@ -513,6 +513,57 @@ def run_pipeline(
         raise typer.Exit(code=1)
 
 
+# ── simulate-morning (T5.5) ───────────────────────────────────────────────────
+
+
+@app.command("simulate-morning")
+def simulate_morning_cmd(
+    date: str = typer.Option("today", "--date", help="Local day YYYY-MM-DD or 'today'."),
+    wake: str = typer.Option(
+        "06:40", "--wake", help="When the simulated owner gets up (local HH:MM)."
+    ),
+    tz: str = typer.Option("Asia/Kolkata", "--tz", help="IANA timezone of the simulated phone."),
+    keep: Path | None = typer.Option(
+        None, "--keep-dir", help="Use/keep this dir instead of a temp one."
+    ),
+) -> None:
+    """Dry-run a whole morning (scheduler, wake engine, real pipeline, delivery) on a fake clock.
+
+    Always uses an isolated database and data directory; the live ones are never touched.
+    Exits 0 when every check passes.
+    """
+    import asyncio
+    import datetime as _dt
+    import tempfile
+    from zoneinfo import ZoneInfo
+
+    from alembic import command as alembic_command
+    from alembic.config import Config as AlembicConfig
+
+    from chronos.config import get_settings
+    from chronos.simulate import render_report, simulate_morning
+
+    root = keep or Path(tempfile.mkdtemp(prefix="chronos-sim-"))
+    root.mkdir(parents=True, exist_ok=True)
+    url = f"sqlite:///{root / 'sim.db'}"
+    cfg = AlembicConfig(str(Path(__file__).parents[2] / "alembic.ini"))
+    cfg.set_main_option("sqlalchemy.url", url)
+    alembic_command.upgrade(cfg, "head")
+    settings = get_settings().model_copy(
+        update={"database_url": url, "data_root": root / "data", "reports_dir": root / "reports",
+                "scheduler_enabled": False, "worker_enabled": False}
+    )  # fmt: skip
+    day = _dt.datetime.now(ZoneInfo(tz)).date() if date == "today" else _dt.date.fromisoformat(date)
+    hour, minute = (int(x) for x in wake.split(":"))
+    report = asyncio.run(
+        simulate_morning(settings, local_date=day, wake_local=_dt.time(hour, minute), tz=tz)
+    )
+    typer.echo(render_report(report))
+    typer.echo(f"\n(simulation data kept in {root})")
+    if not all(report.checks().values()):
+        raise typer.Exit(code=1)
+
+
 # ── doctor ────────────────────────────────────────────────────────────────────
 
 
