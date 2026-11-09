@@ -9,6 +9,7 @@ Instantiate once via :func:`get_settings` and store in ``app.state.settings``.
 
 from __future__ import annotations
 
+import shutil
 from enum import StrEnum
 from pathlib import Path
 from typing import Literal
@@ -99,6 +100,19 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-5-5"
     anthropic_base_url: str = "https://api.anthropic.com/v1"
     cloud_llm_timeout_sec: float = 60.0
+
+    # ── media tools (T4.2+) ──────────────────────────────────────────────────
+    #: Model weights (Kokoro, whisper) live in the repo's gitignored ``data/models`` (D30).
+    models_dir: Path = _PROJECT_ROOT.parent.parent / "data" / "models"
+    #: Absolute tool paths: job processes run with a minimal PATH (no Homebrew).
+    ffmpeg_bin: str = Field(default_factory=lambda: shutil.which("ffmpeg") or "ffmpeg")
+    ffprobe_bin: str = Field(default_factory=lambda: shutil.which("ffprobe") or "ffprobe")
+    tts_voice: str = "af_heart"
+    #: af_heart speaks ~142 wpm at 1.0; 1.15 gives ~163 wpm so 185 words stay near 68 s.
+    tts_speed: float = Field(default=1.15, gt=0.5, le=2.0)
+    edge_tts_voice: str = "en-US-AriaNeural"
+    #: edge-tts sends the script to Microsoft's online TTS; fallback only (D12).
+    edge_tts_enabled: bool = True
 
     # Reel preferences: consumed by the future pipeline, not mobile appearance.
     theme: Literal["auto", "dawn", "mono", "ink"] = "auto"
