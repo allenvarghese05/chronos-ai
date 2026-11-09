@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import datetime
 import json
 from typing import Any, cast
 
 from chronos.content.fetchers import ParsedItem
+from chronos.time import format_utc_iso
 
 
 def _as_dict(value: object) -> dict[str, Any]:
@@ -15,6 +17,19 @@ def _as_dict(value: object) -> dict[str, Any]:
 
 def _opt_str(value: object) -> str | None:
     return value if isinstance(value, str) and value else None
+
+
+def _iso_utc(value: object) -> str | None:
+    """HF ``publishedAt`` (ISO-8601, usually ``...Z``) to the project's UTC string format."""
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        dt = datetime.datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.UTC)
+    return format_utc_iso(dt)
 
 
 def parse(body: bytes, now: str) -> list[ParsedItem]:
@@ -44,6 +59,8 @@ def parse(body: bytes, now: str) -> list[ParsedItem]:
                 url=f"https://huggingface.co/papers/{paper_id}" if paper_id else "",
                 title=_opt_str(paper.get("title")) or "",
                 summary=_opt_str(paper.get("summary")),
+                published_at=_iso_utc(entry.get("publishedAt"))
+                or _iso_utc(paper.get("publishedAt")),
                 image_url=_opt_str(entry.get("thumbnail")),
                 extra_json=json.dumps(extra) if extra else None,
             )
