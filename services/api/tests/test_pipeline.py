@@ -54,10 +54,10 @@ def test_prewarm_due_fake_clock(minutes_from_start: int, due: bool) -> None:
 
 
 def test_stages_for_render_modes() -> None:
-    assert stages_for("eager", "prewarm") == [JobKind.ingest, JobKind.script]
+    assert stages_for("eager", "prewarm") == [JobKind.ingest, JobKind.script, JobKind.assets]
     assert stages_for("eager", "confirm") == []
     assert stages_for("on_trigger", "prewarm") == [JobKind.ingest]
-    assert stages_for("on_trigger", "confirm") == [JobKind.script]
+    assert stages_for("on_trigger", "confirm") == [JobKind.script, JobKind.assets]
 
 
 def test_chain_keys() -> None:
@@ -72,7 +72,7 @@ def test_chain_keys() -> None:
 
 def test_enqueue_chain_idempotent_and_force(test_settings: Settings, tmp_db_url: str) -> None:
     queue = JobQueue(create_db_engine(tmp_db_url))
-    stages = [JobKind.script, JobKind.ingest, JobKind.render]  # order and unimplemented fixed up
+    stages = [JobKind.script, JobKind.ingest, JobKind.captions]  # order + unimplemented fixed up
     first = enqueue_chain(queue, local_date=DAY, device_id=1, stages=stages, now=NOW)
     again = enqueue_chain(queue, local_date=DAY, device_id=1, stages=stages, now=NOW)
     assert first is not None and again is not None and first.id == again.id
@@ -204,7 +204,9 @@ def test_admin_run_enqueues_idempotently(test_settings: Settings, tmp_db_url: st
             "/v1/admin/run", headers=auth_headers(token), json={**body, "force": True}
         )
         assert forced.json()["job_id"] != r1.json()["job_id"]
-        bad = client.post("/v1/admin/run", headers=auth_headers(token), json={"stages": ["render"]})
+        bad = client.post(
+            "/v1/admin/run", headers=auth_headers(token), json={"stages": ["captions"]}
+        )
         assert bad.status_code == 422
         assert client.post("/v1/admin/run", json=body).status_code == 401
     with Session(create_db_engine(tmp_db_url)) as session:
@@ -246,10 +248,10 @@ def test_cli_run_reports_stage_results(
 
     monkeypatch.setattr(pipeline, "run_chain", fake_run_chain)
     result = CliRunner().invoke(
-        cli_app, ["run", "--date", "2026-10-06", "--stages", "script,ingest,render", "--force"]
+        cli_app, ["run", "--date", "2026-10-06", "--stages", "script,ingest,captions", "--force"]
     )
     assert result.exit_code == 1, result.output
-    assert "not implemented yet, skipped: render" in result.output
+    assert "not implemented yet, skipped: captions" in result.output
     assert "✓ ingest" in result.output and "✗ script" in result.output
     assert seen["local_date"] == DAY and seen["force"] is True
     assert seen["stages"] == [JobKind.ingest, JobKind.script]
@@ -334,7 +336,7 @@ async def test_scheduler_enqueues_prewarm_at_window_start_minus_30(
     (job,) = jobs()
     assert job.kind == "ingest" and job.key == "ingest:2026-10-06:1"
     payload = StagePayload.model_validate_json(job.payload_json)
-    expected = ["ingest", "script"] if render_mode == "eager" else ["ingest"]
+    expected = ["ingest", "script", "assets"] if render_mode == "eager" else ["ingest"]
     assert [s.value for s in payload.stages] == expected
     await scheduler.run_due(datetime.datetime(2026, 10, 6, 12, 31, tzinfo=datetime.UTC))
     assert len(jobs()) == 1  # idempotent; no push token needed for prewarm
