@@ -21,7 +21,7 @@ describe('ReelPropsSchema — valid fixture', () => {
 		const props = ReelPropsSchema.parse(raw);
 		expect(props.localDate).toBe('2026-10-06');
 		expect(props.greeting).toBe('Good morning');
-		expect(props.tone).toBe('friendly');
+		expect(props.tone).toBe('calm');
 		expect(props.theme).toBe('dawn');
 		expect(props.audio.durationSec).toBe(3.0);
 		expect(props.scenes).toHaveLength(1);

@@ -4,8 +4,7 @@
 # Exports the FastAPI OpenAPI schema from services/api, then generates
 # TypeScript types for apps/mobile using openapi-typescript.
 #
-# The renderer zod step (T3.4) is guarded at the bottom; uncomment when the
-# ReelScript/ReelProps Pydantic models exist in chronos/content/script/schema.py.
+# Step 3 generates the renderer's zod schema from chronos.media.reel_props (T3.4).
 #
 # Usage:
 #   scripts/gen-types.sh           # from repo root or any subdir
@@ -38,18 +37,10 @@ else
   echo "apps/mobile not scaffolded — skipping openapi-typescript"
 fi
 
-# ── Step 3: renderer zod schema (T3.4 — not yet active) ──────────────────────
-# Uncomment when chronos.content.script.schema and chronos.media.reel_json exist:
-#
-# if (cd "$REPO_ROOT/services/api" && uv run --locked python -c \
-#     "import chronos.content.script.schema" 2>/dev/null); then
-#   echo "→ Generating renderer zod schema …"
-#   (
-#     cd "$REPO_ROOT/services/api"
-#     uv run --locked chronos schema export-reel-props \
-#       --out "$REPO_ROOT/packages/renderer/src/schema.json"
-#   )
-#   echo "✓ packages/renderer/src/schema.json updated"
-# else
-#   echo "ReelProps model not yet defined — skipping renderer zod (T3.4)"
-# fi
+# ── Step 3: renderer zod schema from the ReelProps Pydantic models (T3.4) ─────
+echo "→ Generating renderer zod schema …"
+(
+  cd "$REPO_ROOT/services/api"
+  uv run --locked chronos schema export-reel-props
+)
+echo "✓ packages/renderer/src/schema.generated.ts and services/api/reel_props.schema.json updated"

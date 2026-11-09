@@ -1,0 +1,301 @@
+{
+	"$defs": {
+		"Audio": {
+			"additionalProperties": false,
+			"properties": {
+				"durationSec": {
+					"exclusiveMinimum": 0,
+					"title": "Durationsec",
+					"type": "number"
+				},
+				"src": {
+					"minLength": 1,
+					"title": "Src",
+					"type": "string"
+				}
+			},
+			"required": [
+				"src",
+				"durationSec"
+			],
+			"title": "Audio",
+			"type": "object"
+		},
+		"CaptionWord": {
+			"additionalProperties": false,
+			"description": "One spoken word with its timing in seconds.",
+			"properties": {
+				"e": {
+					"minimum": 0,
+					"title": "E",
+					"type": "number"
+				},
+				"s": {
+					"minimum": 0,
+					"title": "S",
+					"type": "number"
+				},
+				"w": {
+					"minLength": 1,
+					"title": "W",
+					"type": "string"
+				}
+			},
+			"required": [
+				"w",
+				"s",
+				"e"
+			],
+			"title": "CaptionWord",
+			"type": "object"
+		},
+		"Media": {
+			"additionalProperties": false,
+			"description": "A scene's visual layer.",
+			"properties": {
+				"index": {
+					"anyOf": [
+						{
+							"minimum": 0,
+							"type": "integer"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Index"
+				},
+				"query": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Query"
+				},
+				"type": {
+					"enum": [
+						"image",
+						"video",
+						"gradient"
+					],
+					"title": "Type",
+					"type": "string"
+				},
+				"url": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Url"
+				}
+			},
+			"required": [
+				"type"
+			],
+			"title": "Media",
+			"type": "object"
+		},
+		"Scene": {
+			"additionalProperties": false,
+			"properties": {
+				"body": {
+					"anyOf": [
+						{
+							"items": {
+								"type": "string"
+							},
+							"type": "array"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Body"
+				},
+				"endSec": {
+					"minimum": 0,
+					"title": "Endsec",
+					"type": "number"
+				},
+				"index": {
+					"minimum": 0,
+					"title": "Index",
+					"type": "integer"
+				},
+				"kicker": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Kicker"
+				},
+				"media": {
+					"anyOf": [
+						{
+							"$ref": "#/$defs/Media"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"source": {
+					"anyOf": [
+						{
+							"$ref": "#/$defs/SceneSource"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null
+				},
+				"startSec": {
+					"minimum": 0,
+					"title": "Startsec",
+					"type": "number"
+				},
+				"title": {
+					"anyOf": [
+						{
+							"type": "string"
+						},
+						{
+							"type": "null"
+						}
+					],
+					"default": null,
+					"title": "Title"
+				},
+				"type": {
+					"enum": [
+						"cover",
+						"story",
+						"outro"
+					],
+					"title": "Type",
+					"type": "string"
+				}
+			},
+			"required": [
+				"index",
+				"startSec",
+				"endSec",
+				"type"
+			],
+			"title": "Scene",
+			"type": "object"
+		},
+		"SceneSource": {
+			"additionalProperties": false,
+			"properties": {
+				"name": {
+					"minLength": 1,
+					"title": "Name",
+					"type": "string"
+				},
+				"url": {
+					"format": "uri",
+					"minLength": 1,
+					"title": "Url",
+					"type": "string"
+				}
+			},
+			"required": [
+				"name",
+				"url"
+			],
+			"title": "SceneSource",
+			"type": "object"
+		}
+	},
+	"additionalProperties": false,
+	"description": "Everything Remotion needs to render one Morning Reel.",
+	"properties": {
+		"attribution": {
+			"items": {
+				"type": "string"
+			},
+			"title": "Attribution",
+			"type": "array"
+		},
+		"audio": {
+			"$ref": "#/$defs/Audio"
+		},
+		"captions": {
+			"items": {
+				"items": {
+					"$ref": "#/$defs/CaptionWord"
+				},
+				"type": "array"
+			},
+			"title": "Captions",
+			"type": "array"
+		},
+		"greeting": {
+			"minLength": 1,
+			"title": "Greeting",
+			"type": "string"
+		},
+		"localDate": {
+			"pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+			"title": "Localdate",
+			"type": "string"
+		},
+		"scenes": {
+			"items": {
+				"$ref": "#/$defs/Scene"
+			},
+			"minItems": 1,
+			"title": "Scenes",
+			"type": "array"
+		},
+		"theme": {
+			"enum": [
+				"dawn",
+				"mono",
+				"ink"
+			],
+			"title": "Theme",
+			"type": "string"
+		},
+		"tone": {
+			"enum": [
+				"calm",
+				"energetic"
+			],
+			"title": "Tone",
+			"type": "string"
+		}
+	},
+	"required": [
+		"localDate",
+		"greeting",
+		"tone",
+		"audio",
+		"scenes",
+		"captions",
+		"theme",
+		"attribution"
+	],
+	"title": "ReelProps",
+	"type": "object"
+}
