@@ -219,7 +219,7 @@ check-renderer:
     pnpm exec tsc --noEmit
     pnpm exec vitest run
     mkdir -p out
-    pnpm exec remotion still src/index.ts MorningReel out/smoke.png --props=src/fixtures/sample-reel.json --frame=60
+    for frame in 0 60 600; do pnpm exec remotion still src/index.ts MorningReel "out/smoke-$frame.png" --props=src/fixtures/sample-reel.json --frame="$frame"; done
     echo "just check-renderer: all steps passed"
 
 # ───────────────────────────── security ─────────────────────────────

@@ -2,19 +2,75 @@
 	"localDate": "2026-10-06",
 	"greeting": "Good morning",
 	"tone": "calm",
-	"audio": {
-		"src": "audio/silence-3s.wav",
-		"durationSec": 3.0
-	},
+	"audio": { "src": "audio/silence-3s.wav", "durationSec": 24.0 },
 	"scenes": [
+		{ "index": 0, "type": "cover", "title": "Morning Reel", "startSec": 0, "endSec": 3.0 },
 		{
-			"index": 0,
-			"type": "cover",
-			"startSec": 0,
-			"endSec": 3.0
+			"index": 1,
+			"type": "story",
+			"title": "Floods force thousands from homes in central Europe",
+			"kicker": "WORLD",
+			"body": ["Rivers burst banks in Austria and Czechia", "Thousands of people evacuated"],
+			"media": { "type": "gradient" },
+			"source": { "name": "BBC News", "url": "https://www.bbc.co.uk/news/world-12345678" },
+			"startSec": 3.35,
+			"endSec": 12.0
+		},
+		{
+			"index": 2,
+			"type": "story",
+			"title": "Small model matches big ones on code repair",
+			"kicker": "AI DROP",
+			"body": ["3B model trained on execution traces", "Matches 30B models on the benchmark"],
+			"media": { "type": "gradient" },
+			"source": {
+				"name": "Hugging Face Papers",
+				"url": "https://huggingface.co/papers/2609.01234"
+			},
+			"startSec": 12.35,
+			"endSec": 21.0
+		},
+		{
+			"index": 3,
+			"type": "outro",
+			"title": "That's your brief",
+			"startSec": 21.35,
+			"endSec": 24.0
 		}
 	],
-	"captions": [],
+	"captions": [
+		[
+			{ "w": "Good", "s": 0.2, "e": 0.5 },
+			{ "w": "morning.", "s": 0.5, "e": 1.0 },
+			{ "w": "Here", "s": 1.1, "e": 1.3 },
+			{ "w": "is", "s": 1.3, "e": 1.4 },
+			{ "w": "your", "s": 1.4, "e": 1.6 },
+			{ "w": "brief.", "s": 1.6, "e": 2.2 }
+		],
+		[
+			{ "w": "BBC", "s": 3.4, "e": 3.7 },
+			{ "w": "News", "s": 3.7, "e": 4.0 },
+			{ "w": "reports", "s": 4.0, "e": 4.4 },
+			{ "w": "heavy", "s": 4.4, "e": 4.8 },
+			{ "w": "rain", "s": 4.8, "e": 5.1 },
+			{ "w": "across", "s": 5.1, "e": 5.5 },
+			{ "w": "central", "s": 5.5, "e": 5.9 },
+			{ "w": "Europe.", "s": 5.9, "e": 6.5 }
+		],
+		[
+			{ "w": "A", "s": 12.4, "e": 12.5 },
+			{ "w": "3B", "s": 12.5, "e": 12.9 },
+			{ "w": "model", "s": 12.9, "e": 13.3 },
+			{ "w": "matches", "s": 13.3, "e": 13.8 },
+			{ "w": "30B", "s": 13.8, "e": 14.3 },
+			{ "w": "models.", "s": 14.3, "e": 15.0 }
+		],
+		[
+			{ "w": "That", "s": 21.4, "e": 21.6 },
+			{ "w": "is", "s": 21.6, "e": 21.7 },
+			{ "w": "all.", "s": 21.7, "e": 22.2 }
+		]
+	],
 	"theme": "dawn",
-	"attribution": []
+	"attribution": ["BBC News", "Hugging Face Papers", "Voice: Kokoro-82M", "Captions: whisper.cpp"]
 }

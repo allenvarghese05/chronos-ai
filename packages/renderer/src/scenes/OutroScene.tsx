@@ -5,7 +5,7 @@
  * feed · tap to read sources" heading, list of source names, attribution lines.
  */
 
-import { AbsoluteFill } from 'remotion';
+import { AbsoluteFill, useCurrentFrame, useVideoConfig } from 'remotion';
 import type { z } from 'zod';
 import {
 	FONT_FAMILY,
@@ -16,6 +16,7 @@ import {
 	THEMES,
 	type Theme,
 } from '../design/tokens';
+import { fadeOpacity } from '../lib/scene';
 import type { OutroSceneSchema } from '../schema';
 
 type OutroSceneProps = z.infer<typeof OutroSceneSchema>;
@@ -26,11 +27,18 @@ interface Props {
 	attribution: string[];
 }
 
-export function OutroScene({ theme, attribution }: Props) {
+export function OutroScene({ scene, theme, attribution }: Props) {
 	const palette = THEMES[theme];
+	const frame = useCurrentFrame();
+	const { durationInFrames } = useVideoConfig();
 
 	return (
-		<AbsoluteFill style={{ backgroundColor: palette.background[3] }}>
+		<AbsoluteFill
+			style={{
+				backgroundColor: palette.background[3],
+				opacity: fadeOpacity(frame, durationInFrames),
+			}}
+		>
 			<div
 				style={{
 					position: 'absolute',
@@ -54,7 +62,7 @@ export function OutroScene({ theme, attribution }: Props) {
 						color: palette.text,
 					}}
 				>
-					Saved to your feed
+					{scene.title ?? 'Saved to your feed'}
 				</h2>
 				<p
 					style={{
@@ -65,7 +73,7 @@ export function OutroScene({ theme, attribution }: Props) {
 						color: palette.kicker,
 					}}
 				>
-					Tap to read sources
+					Saved to your feed · tap to read sources
 				</p>
 				{attribution.length > 0 && (
 					<ul
