@@ -72,11 +72,33 @@ ROOT_CA="${REPO_ROOT}/data/certs/rootCA.pem"
 # ---- lockfile (prevent overlapping runs) ------------------------------------
 if [ "${DRY_RUN}" != "1" ]; then
     mkdir -p "$(dirname "${LOCK_FILE}")"
-    # Use flock if available (macOS has it via util-linux or via lock_file manually)
-    exec 9>"${LOCK_FILE}"
-    if ! flock -n 9 2>/dev/null; then
-        echo "[deploy] Another deploy is running (lockfile held). Exiting." >&2
-        exit 0
+    # Stock macOS has no flock(1) (and its shlock(1) will not reclaim a dead holder's
+    # lock), so fall back to an atomic mkdir lock holding our PID. A lock whose PID is
+    # no longer alive is stale and is taken over. Never report a missing tool as "held".
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"${LOCK_FILE}"
+        if ! flock -n 9; then
+            echo "[deploy] Another deploy is running (lockfile held). Exiting." >&2
+            exit 0
+        fi
+    else
+        LOCK_DIR="${LOCK_FILE}.d"
+        if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+            HOLDER="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
+            if [ -n "${HOLDER}" ] && kill -0 "${HOLDER}" 2>/dev/null; then
+                echo "[deploy] Another deploy is running (pid ${HOLDER}). Exiting." >&2
+                exit 0
+            fi
+            echo "[deploy] Removing stale lock (pid ${HOLDER:-unknown} not running)." >&2
+            rm -f "${LOCK_DIR}/pid"
+            rmdir "${LOCK_DIR}" 2>/dev/null || true
+            if ! mkdir "${LOCK_DIR}" 2>/dev/null; then
+                echo "[deploy] Lost the race for the lock. Exiting." >&2
+                exit 0
+            fi
+        fi
+        echo $$ > "${LOCK_DIR}/pid"
+        trap 'rm -f "${LOCK_DIR}/pid"; rmdir "${LOCK_DIR}" 2>/dev/null || true' EXIT
     fi
 fi
 
