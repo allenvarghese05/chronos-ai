@@ -146,3 +146,18 @@ def test_find_denied_whole_words_only() -> None:
 def test_date_type() -> None:
     script = validate_script(valid_script(candidates()), candidates(), DAY)
     assert script.local_date == datetime.date(2026, 10, 6)
+
+
+def test_story_draft_rejects_comments_on_missing_details() -> None:
+    import json
+
+    from chronos.content.script.schema import check_story_draft
+
+    bad_vo = "Hacker News reports RIP, Harvest with no details."
+    bad = json.dumps({"title": "RIP, Harvest", "bullets": [], "voiceover": bad_vo})
+    with pytest.raises(ScriptValidationError) as info:
+        check_story_draft(bad, (8, 24))
+    assert "do not mention missing details (remove: no details)" in info.value.problems
+    ok_vo = "Hacker News readers are saying goodbye to Harvest today."
+    ok = json.dumps({"title": "RIP, Harvest", "bullets": [], "voiceover": ok_vo})
+    assert check_story_draft(ok, (8, 24)).title == "RIP, Harvest"
