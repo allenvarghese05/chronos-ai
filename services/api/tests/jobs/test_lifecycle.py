@@ -108,12 +108,16 @@ class TestLifespanWorkerEnabled:
                 resp = client.get("/healthz")
                 assert resp.status_code == 200
 
-    def test_no_default_handlers_registered(self, tmp_path: Path) -> None:
+    def test_pipeline_handlers_registered(self, tmp_path: Path) -> None:
+        """T3.5: the worker runs the pipeline stages (and nothing else)."""
+        from chronos.pipeline import HANDLERS
+
         settings = _make_worker_settings(tmp_path)
         app = create_app(settings=settings)
         with TestClient(app, raise_server_exceptions=False):
             worker: Worker = app.state.worker
-            assert worker.handlers == {}
+            assert worker.handlers == HANDLERS
+            assert all(h.module == "chronos.pipeline" for h in worker.handlers.values())
 
     def test_no_automatic_enqueue_on_startup(self, tmp_path: Path) -> None:
         settings = _make_worker_settings(tmp_path)

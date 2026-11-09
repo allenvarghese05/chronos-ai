@@ -163,17 +163,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         _worker_stop: threading.Event | None = None
         _worker_engine: Any | None = None
         if resolved.effective_worker_enabled:
+            from chronos.config import settings_snapshot
             from chronos.db import create_db_engine as _create_engine
             from chronos.jobs.queue import JobQueue
             from chronos.jobs.worker import Worker
+            from chronos.pipeline import HANDLERS as _PIPELINE_HANDLERS
 
             _worker_engine = _create_engine(resolved.database_url)
             _worker_queue = JobQueue(_worker_engine)
             _worker = Worker(
                 _worker_queue,
                 resolved.data_root.resolve(),
-                {},  # empty; future tasks register real handlers
+                dict(_PIPELINE_HANDLERS),
                 poll_interval=0.25,
+                settings_json=settings_snapshot(resolved),
             )
             _worker_stop = threading.Event()
             _worker_thread = threading.Thread(
