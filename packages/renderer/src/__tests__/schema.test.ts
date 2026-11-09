@@ -23,9 +23,9 @@ describe('ReelPropsSchema — valid fixture', () => {
 		expect(props.greeting).toBe('Good morning');
 		expect(props.tone).toBe('calm');
 		expect(props.theme).toBe('dawn');
-		expect(props.audio.durationSec).toBe(3.0);
-		expect(props.scenes).toHaveLength(1);
-		expect(props.captions).toHaveLength(0);
+		expect(props.audio.durationSec).toBe(24.0);
+		expect(props.scenes.map((s) => s.type)).toEqual(['cover', 'story', 'story', 'outro']);
+		expect(props.captions).toHaveLength(props.scenes.length);
 	});
 });
 

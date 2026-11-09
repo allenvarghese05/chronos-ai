@@ -6,8 +6,10 @@
  *
  * Scene routing:
  *   "cover"  → CoverScene  (working in T0.5)
- *   "story"  → StoryScene  (stub; implemented in T4.4)
- *   "outro"  → OutroScene  (stub; implemented in T4.4)
+ *   "story"  → StoryScene  (T4.4)
+ *   "outro"  → OutroScene  (T4.4)
+ *
+ * Captions (`props.captions[i]`, same order as `props.scenes`) are drawn over each scene.
  *
  * Each scene is wrapped in a `<Sequence>` whose `from` and `durationInFrames`
  * are computed by `sceneFrames(scene.startSec, scene.endSec, fps)`.
@@ -16,6 +18,7 @@
 import { useMemo } from 'react';
 import type { CalculateMetadataFunction } from 'remotion';
 import { Audio, Sequence, staticFile, useVideoConfig } from 'remotion';
+import { WordCaptions } from '../captions/WordCaptions';
 import { waitForFonts } from '../design/fonts';
 import { COMPOSITION } from '../design/tokens';
 import { sceneFrames } from '../lib/timing';
@@ -70,7 +73,7 @@ export function MorningReel(props: ReelProps) {
 			<Audio src={staticFile(props.audio.src)} />
 
 			{/* Scene sequences */}
-			{props.scenes.map((scene: SceneProps) => {
+			{props.scenes.map((scene: SceneProps, position: number) => {
 				const { startFrame, durationInFrames } = sceneFrames(scene.startSec, scene.endSec, fps);
 
 				if (durationInFrames === 0) return null;
@@ -83,6 +86,11 @@ export function MorningReel(props: ReelProps) {
 						name={`${scene.type}-${scene.index}`}
 					>
 						<SceneRouter scene={scene} reelProps={props} />
+						<WordCaptions
+							words={props.captions[position] ?? []}
+							theme={props.theme}
+							sceneStartSec={scene.startSec}
+						/>
 					</Sequence>
 				);
 			})}
