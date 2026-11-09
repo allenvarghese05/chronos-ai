@@ -212,3 +212,23 @@ def override_settings(s: Settings) -> None:
 
 # Silence "unused import" from env.py which imports Env.
 __all__ = ["Env", "Settings", "get_settings", "override_settings", "reset_settings"]
+
+
+def settings_snapshot(settings: Settings) -> str:
+    """JSON of *settings* with secrets revealed, for :func:`settings_from_snapshot` in a
+    sandboxed job process (written 0600 into the attempt's work dir, deleted on read)."""
+    import json
+
+    data: dict[str, object] = {}
+    for name in type(settings).model_fields:
+        value = getattr(settings, name)
+        if isinstance(value, SecretStr):
+            value = value.get_secret_value()
+        elif isinstance(value, Path):
+            value = str(value.resolve())
+        data[name] = value
+    return json.dumps(data, default=str)
+
+
+def settings_from_snapshot(text: str) -> Settings:
+    return Settings.model_validate_json(text)
