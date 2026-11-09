@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     #: Path to the versioned wake-rules YAML (resolved relative to project root).
     wake_rules_path: Path = _PROJECT_ROOT / "config" / "wake_rules.yaml"
 
+    #: Path to the content-sources YAML.
+    sources_path: Path = _PROJECT_ROOT / "config" / "sources.yaml"
+
     #: TEST-ONLY — skip loading wake_rules.yaml at startup.
     #: Must never be set in production. Logged loudly at startup if set.
     skip_rules_init: bool = False

@@ -26,6 +26,7 @@ import typer
 # Path to the canonical wake-rules YAML file (tests may monkeypatch this).
 # parents[2] of src/chronos/cli.py is services/api/
 _WAKE_YAML_PATH: Path = Path(__file__).parents[2] / "config" / "wake_rules.yaml"
+_SOURCES_YAML_PATH: Path = Path(__file__).parents[2] / "config" / "sources.yaml"
 
 app = typer.Typer(
     name="chronos",
@@ -149,13 +150,14 @@ def db_migrate() -> None:
 
 @config_app.command("validate")
 def config_validate() -> None:
-    """Validate config/wake_rules.yaml against the WakeRules schema.
+    """Validate config/wake_rules.yaml and config/sources.yaml.
 
     Exits 0 on success; exits 1 and prints field-level errors on failure.
     """
     import yaml
     from pydantic import ValidationError
 
+    from chronos.content.sources import load_sources_yaml
     from chronos.wake.rules import load_yaml
 
     yaml_path = _WAKE_YAML_PATH
@@ -179,6 +181,28 @@ def config_validate() -> None:
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"✓ {yaml_path.name} is valid")
+
+    sources_path = _SOURCES_YAML_PATH
+    if not sources_path.exists():
+        typer.echo(f"✗ config file not found: {sources_path}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        load_sources_yaml(sources_path)
+    except yaml.YAMLError as exc:
+        typer.echo(f"✗ YAML parse error in {sources_path.name}:\n  {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+    except ValidationError as exc:
+        typer.echo(f"✗ {sources_path.name} has {exc.error_count()} validation error(s):", err=True)
+        for err in exc.errors():
+            loc = ".".join(str(p) for p in err["loc"])
+            typer.echo(f"  [{loc}] {err['msg']}", err=True)
+        raise typer.Exit(code=1) from exc
+    except Exception as exc:  # pragma: no cover
+        typer.echo(f"✗ Unexpected error: {exc}", err=True)
+        raise typer.Exit(code=1) from exc
+
+    typer.echo(f"✓ {sources_path.name} is valid")
 
 
 @config_app.command("apply-yaml")

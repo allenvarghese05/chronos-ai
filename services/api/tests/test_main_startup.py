@@ -109,6 +109,67 @@ class TestStartupRefusesOnBadYaml:
 
 
 # ---------------------------------------------------------------------------
+# Startup must refuse to start on bad sources.yaml
+# ---------------------------------------------------------------------------
+
+
+class TestStartupRefusesOnBadSourcesYaml:
+    def test_startup_invalid_sources_yaml_refuses_start(self, tmp_path: Path) -> None:
+        db_url = f"sqlite:///{tmp_path / 'test.db'}"
+        _run_migrations(db_url)
+
+        bad_sources = tmp_path / "bad_sources.yaml"
+        bad_sources.write_text("{unclosed: [")  # syntactically invalid YAML
+
+        reset_rules_cache()
+        settings = _make_settings(db_url, sources_path=str(bad_sources))
+        app = create_app(settings=settings)
+
+        with pytest.raises(yaml.YAMLError):
+            with TestClient(app):
+                pass  # pragma: no cover
+
+    def test_startup_missing_sources_yaml_refuses_start(self, tmp_path: Path) -> None:
+        db_url = f"sqlite:///{tmp_path / 'test.db'}"
+        _run_migrations(db_url)
+
+        missing_sources = tmp_path / "nonexistent" / "sources.yaml"  # does not exist
+
+        reset_rules_cache()
+        settings = _make_settings(db_url, sources_path=str(missing_sources))
+        app = create_app(settings=settings)
+
+        with pytest.raises((FileNotFoundError, OSError)):
+            with TestClient(app):
+                pass  # pragma: no cover
+
+    def test_startup_invalid_sources_schema_refuses_start(self, tmp_path: Path) -> None:
+        db_url = f"sqlite:///{tmp_path / 'test.db'}"
+        _run_migrations(db_url)
+
+        bad_schema = tmp_path / "bad_schema_sources.yaml"
+        # Valid YAML but missing required 'http' key.
+        bad_schema.write_text(
+            "version: 1\n"
+            "sources: []\n"
+            "selection:\n"
+            "  total_stories: 6\n"
+            "  category_min:\n"
+            "    ai: 2\n"
+            "  freshness_hours: 20\n"
+            "  cross_source_boost: 0.25\n"
+        )
+
+        reset_rules_cache()
+        settings = _make_settings(db_url, sources_path=str(bad_schema))
+        app = create_app(settings=settings)
+
+        with pytest.raises((ValidationError, ValueError)):
+            with TestClient(app):
+                pass  # pragma: no cover
+
+
+# ---------------------------------------------------------------------------
 # MINOR (review finding 1) — unreachable DB must fail startup, not be swallowed
 # ---------------------------------------------------------------------------
 

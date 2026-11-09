@@ -430,6 +430,42 @@ class TestCliValidate:
         result = runner.invoke(cli_app, ["config", "validate"])
         assert result.exit_code == 1
 
+    def test_cli_validate_sources_yaml_bad(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Invalid sources.yaml fails validation after wake_rules passes."""
+        import chronos.cli as _cli_module
+
+        bad_sources = tmp_path / "sources.yaml"
+        bad_sources.write_text("{unclosed: [")
+
+        monkeypatch.setattr(_cli_module, "_SOURCES_YAML_PATH", bad_sources)
+
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["config", "validate"])
+        assert result.exit_code == 1
+        assert "sources.yaml" in result.output or "YAML parse error" in result.output
+
+    def test_cli_validate_sources_yaml_schema_error(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Schema-invalid sources.yaml fails validation."""
+        import chronos.cli as _cli_module
+
+        bad_sources = tmp_path / "sources.yaml"
+        # Missing required 'http' key.
+        bad_sources.write_text(
+            "version: 1\nsources: []\nselection:\n  total_stories: 6\n"
+            "  category_min:\n    ai: 2\n  freshness_hours: 20\n  cross_source_boost: 0.25\n"
+        )
+
+        monkeypatch.setattr(_cli_module, "_SOURCES_YAML_PATH", bad_sources)
+
+        runner = CliRunner()
+        result = runner.invoke(cli_app, ["config", "validate"])
+        assert result.exit_code == 1
+        assert "sources.yaml" in result.output
+
 
 # ---------------------------------------------------------------------------
 # CLI: chronos config apply-yaml
