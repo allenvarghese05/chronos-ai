@@ -37,6 +37,7 @@ from chronos.api.device import router as device_router
 from chronos.api.health import router as health_router
 from chronos.api.jobs import router as jobs_router
 from chronos.api.pair import router as pair_router
+from chronos.api.reels import router as reels_router
 from chronos.api.report import router as report_router
 from chronos.api.telemetry import router as telemetry_router
 from chronos.config import Settings, get_settings, override_settings
@@ -249,6 +250,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(debug_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(report_router, prefix="/v1", responses=PROBLEM_RESPONSES)
     app.include_router(jobs_router, prefix="/v1", responses=PROBLEM_RESPONSES)
+    app.include_router(reels_router, prefix="/v1", responses=PROBLEM_RESPONSES)
 
     # Publish the manually size-bounded raw-body contract without installing an automatic
     # Body parser, which would parse before the endpoint's 64 KiB validation gate.
