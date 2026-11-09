@@ -1,0 +1,8 @@
+[
+  {"source_key": "hf_daily_papers", "external_id": "hf-1", "category": "ai", "mentions": [["arxiv_cs_ai_cl_lg", "ax-3"]]},
+  {"source_key": "hf_daily_papers", "external_id": "hf-2", "category": "ai", "mentions": []},
+  {"source_key": "hn_front", "external_id": "41000001", "category": "tech", "mentions": []},
+  {"source_key": "bbc_world", "external_id": "bbc-1", "category": "world", "mentions": [["cbs_top", "cbs-1"]]},
+  {"source_key": "bbc_world", "external_id": "bbc-2", "category": "world", "mentions": [["cbs_top", "cbs-3"]]},
+  {"source_key": "ie_india", "external_id": "iei-1", "category": "india", "mentions": []}
+]
