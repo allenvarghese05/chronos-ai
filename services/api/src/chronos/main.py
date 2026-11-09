@@ -122,6 +122,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         hint="run `chronos config apply-yaml` to promote the updated YAML",
                     )
 
+        # Validate sources.yaml schema at startup (sync is deferred to T3.5).
+        from chronos.content.sources import load_sources_yaml
+
+        load_sources_yaml(resolved.sources_path)
+
         # Start scheduler if enabled.
         _scheduler_task: asyncio.Task[None] | None = None
         _stop_event: asyncio.Event | None = None

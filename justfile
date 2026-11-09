@@ -183,7 +183,10 @@ check-api:
     uv run --locked ruff check .
     uv run --locked ruff format --check .
     uv run --locked pyright
-    uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion" --cov=chronos.wake --cov-fail-under=90 --cov-report=term-missing:skip-covered
+    uv run --locked pytest -m "not ollama and not kokoro and not whisper and not remotion" --cov=chronos.wake --cov=chronos.http --cov=chronos.content --cov-report=term-missing:skip-covered
+    uv run --locked coverage report --include='*/chronos/wake/*' --fail-under=90
+    uv run --locked coverage report --include='*/chronos/http.py' --fail-under=85
+    uv run --locked coverage report --include='*/chronos/content/*' --fail-under=85
     uv run --locked bandit -q -r src -ll
     if uv run --locked chronos config validate --help >/dev/null 2>&1; then uv run --locked chronos config validate; fi
     echo "just check-api: all steps passed"
