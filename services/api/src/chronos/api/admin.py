@@ -189,3 +189,56 @@ def run_pipeline(
         job_key=job.key if job else None,
         job_status=job.status if job else None,
     )
+
+
+# ── manual delivery (T5.2) ───────────────────────────────────────────────────
+
+_deliver_limit = rate_limit("admin-deliver", per_minute=3)
+
+
+class DeliverRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    local_date: datetime.date | None = None
+    force: bool = False
+
+
+class DeliverResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    local_date: datetime.date
+    outcome: Literal[
+        "sent", "already_delivered", "not_due", "pending_render", "no_token", "send_failed"
+    ]
+
+
+@router.post("/deliver", response_model=DeliverResult)
+async def deliver_now(
+    body: DeliverRequest,
+    device: Device = Depends(require_device),
+    session: Session = Depends(get_session_dep),
+    client: PushClient = Depends(test_push_client),
+    _rl: None = Depends(_deliver_limit),
+) -> DeliverResult:
+    """Deliver the day's push now. ``force`` moves an undelivered day to ``fallback`` first."""
+    from chronos.delivery.deliver import deliver_day
+    from chronos.enums import DayState, TransitionCause
+    from chronos.models.wake import Day, DayTransition
+    from chronos.pipeline import ensure_day
+
+    assert device.id is not None
+    now = datetime.datetime.now(datetime.UTC)
+    local_date = ensure_day(session, device, now, body.local_date)
+    day = session.get(Day, (local_date.isoformat(), device.id))
+    assert day is not None
+    if body.force and day.state in (DayState.idle.value, DayState.monitoring.value):
+        stamp = utc_now_iso()
+        session.add(
+            DayTransition(local_date=day.local_date, device_id=device.id, from_state=day.state,
+                          to_state=DayState.fallback.value, cause=TransitionCause.manual.value,
+                          caused_by_evaluation_id=None, at=stamp)
+        )  # fmt: skip
+        day.state = DayState.fallback.value
+        day.updated_at = stamp
+        session.add(day)
+        session.commit()
+    outcome = await deliver_day(session, device, day, client, now)
+    return DeliverResult(local_date=local_date, outcome=outcome)
