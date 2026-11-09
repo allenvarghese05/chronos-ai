@@ -25,7 +25,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import structlog
 from pydantic import BaseModel, ConfigDict, Field
@@ -314,11 +314,36 @@ def tts_job(ctx: JobContext) -> None:
         deps.engine.dispose()
 
 
+def captions_job(ctx: JobContext) -> None:
+    from chronos.media.captions import run_whisper
+    from chronos.media.reels import captions_stage
+
+    payload = StagePayload.model_validate_json(ctx.payload_json)
+    deps = _deps(ctx)
+    try:
+        s = deps.settings
+        data_root = s.data_root.resolve()
+        model = s.models_dir / "whisper" / "ggml-small.en.bin"
+
+        def transcribe(voice: Path, work: Path) -> list[Any]:
+            return run_whisper(s.whisper_bin, s.ffmpeg_bin, model, voice, work, data_root)
+
+        with Session(deps.engine) as session:
+            captions_stage(
+                session, local_date=payload.local_date.isoformat(), device_id=payload.device_id,
+                data_root=data_root, transcribe=transcribe, now=utc_now_iso(),
+            )  # fmt: skip
+        _chain_next(deps, payload, JobKind.captions)
+    finally:
+        deps.engine.dispose()
+
+
 HANDLERS: dict[JobKind, Handler] = {
     JobKind.ingest: Handler("chronos.pipeline", "ingest_job"),
     JobKind.script: Handler("chronos.pipeline", "script_job"),
     JobKind.assets: Handler("chronos.pipeline", "assets_job"),
     JobKind.tts: Handler("chronos.pipeline", "tts_job"),
+    JobKind.captions: Handler("chronos.pipeline", "captions_job"),
 }
 
 
