@@ -39,3 +39,4 @@ tasks go in `docs/decisions/Dnn-slug.md` using the same table shape and the next
 D34: [Device-session Keychain accessibility](decisions/D34-device-session-keychain.md) supersedes the session accessibility requirement in the security document.
 
 D35: [Near-duplicate headlines by word-set Jaccard](decisions/D35-title-dedupe-jaccard.md) supersedes the simhash-distance rule in docs/06 §2.3.
+D36: [Stale stories top a category up to its minimum](decisions/D36-stale-topup-to-minimum.md) refines the freshness rule in docs/06 §1.

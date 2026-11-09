@@ -62,7 +62,7 @@ sources:
 selection:
   total_stories: 6           # fits ~60 s with ~9 s per story + cover/outro
   category_min: { ai: 2, world: 1, india: 1 }
-  freshness_hours: 20        # items older than this are ignored unless a category would be empty
+  freshness_hours: 20        # older items ignored, except to reach a category_min or fill an empty category (D36)
   cross_source_boost: 0.25   # same story in ≥ 2 sources
 ```
 

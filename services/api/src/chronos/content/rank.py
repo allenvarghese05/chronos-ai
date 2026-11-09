@@ -8,10 +8,17 @@ taken from the cluster's primary item:
 - popularity: ``1 + 0.6 * min(1, log10(1 + x) / log10(1 + cap))`` for HF upvotes (cap 300)
   and HN points (cap 1000); every other source 1.0 (owner decision 2).
 
-Selection: stale clusters are dropped except the single best stale cluster of a category
-that has no fresh cluster at all; then category minimums are filled in narrative order,
-then remaining slots by score. Both phases honour each source's ``quota`` (counted on the
-primary's source) and stop at ``total_stories``. Output is in narrative order (ai, tech,
+Selection (ADR D36 for stale handling):
+
+1. Minimums, in narrative order: a category takes its fresh clusters best-first and, if it is
+   still short of ``category_min``, tops up with its best *stale* clusters (weekends: HF
+   and arXiv do not publish, so AI would otherwise starve).
+2. Remaining slots by score from the fresh clusters, plus the single best stale cluster of a
+   category without a minimum that has no fresh cluster at all (docs/06 "unless a category
+   would be empty").
+
+Both phases honour each source's ``quota`` (counted on the primary's source) and stop at
+``total_stories``. Output is in narrative order (ai, tech,
 world, india), best first within a category. Ties break on (score desc, newer first,
 lower item id).
 """
@@ -120,15 +127,16 @@ def select(
         ),
         key=lambda s: s.sort_key,
     )
-    pool = [s for s in scored if not s.stale]
-    fresh_categories = {s.cluster.primary.category for s in pool}
+    fresh = [s for s in scored if not s.stale]
+    stale = [s for s in scored if s.stale]
+    fresh_categories = {s.cluster.primary.category for s in fresh}
+    pool = list(fresh)
     for category in NARRATIVE_ORDER:
-        if category not in fresh_categories:
-            rescue = next(
-                (s for s in scored if s.stale and s.cluster.primary.category == category), None
-            )
-            if rescue is not None:
-                pool.append(rescue)
+        if category in fresh_categories or cfg.category_min.get(category, 0) > 0:
+            continue  # minimum categories top up from stale in phase 1 instead
+        rescue = next((s for s in stale if s.cluster.primary.category == category), None)
+        if rescue is not None:
+            pool.append(rescue)
     pool.sort(key=lambda s: s.sort_key)
 
     chosen: list[_Scored] = []
@@ -148,10 +156,11 @@ def select(
     total = cfg.total_stories
     for category in NARRATIVE_ORDER:
         need = cfg.category_min.get(category, 0)
-        for s in pool:
+        in_category = [s for s in fresh + stale if s.cluster.primary.category == category]
+        for s in in_category:  # fresh best-first, then stale best-first
             if need <= 0 or len(chosen) >= total:
                 break
-            if s.cluster.primary.category == category and take(s):
+            if take(s):
                 need -= 1
     for s in pool:
         if len(chosen) >= total:
