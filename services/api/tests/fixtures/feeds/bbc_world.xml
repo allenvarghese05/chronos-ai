@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:media="http://search.yahoo.com/mrss/">
+  <channel>
+    <item>
+      <guid isPermaLink="false">bbc-1</guid>
+      <title>Global Summit Begins</title>
+      <link>https://www.bbc.co.uk/news/world-1</link>
+      <description><![CDATA[<p>Leaders gather.</p>]]></description>
+      <pubDate>Mon, 06 Oct 2026 06:00:00 GMT</pubDate>
+      <media:thumbnail width="2048" height="1152" url="https://ichef.bbci.co.uk/news/2048/cpsprodpb/1.jpg"/>
+    </item>
+  </channel>
+</rss>

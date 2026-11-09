@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>arxiv query</title>
+  <entry>
+    <id>http://arxiv.org/abs/2401.12345v2</id>
+    <title>Quantum Computing Advances</title>
+    <summary>We present new algorithms for quantum error correction.</summary>
+    <published>2026-10-05T12:00:00Z</published>
+    <author><name>Dr. X</name></author>
+    <category term="cs.AI"/>
+    <category term="cs.CL"/>
+  </entry>
+</feed>

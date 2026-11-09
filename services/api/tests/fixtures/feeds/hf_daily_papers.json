@@ -1,0 +1,11 @@
+[
+  {
+    "paper": {
+      "id": "hf-paper-001",
+      "title": "Scaling Laws for Neural Language Models",
+      "summary": "We study empirical scaling laws for language model performance on downstream tasks.",
+      "upvotes": 156
+    },
+    "thumbnail": "https://example.com/hf-thumb.jpg"
+  }
+]
