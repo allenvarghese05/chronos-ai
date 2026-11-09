@@ -34,10 +34,12 @@ from typing import TYPE_CHECKING
 import structlog
 from sqlmodel import Session, select
 
-from chronos.enums import DayState, PushKind, TicketStatus, TransitionCause
+from chronos.enums import DayState, JobKind, PushKind, TicketStatus, TransitionCause
+from chronos.jobs.queue import JobQueue
 from chronos.models.delivery import PushNotification
 from chronos.models.devices import Device
 from chronos.models.wake import Day, DayTransition
+from chronos.pipeline import enqueue_chain, prewarm_due, stages_for
 from chronos.time import format_utc_iso
 from chronos.wake.rules import get_rules_cache
 from chronos.wake.state import get_or_create_day
@@ -254,7 +256,9 @@ class Scheduler:
 
         Called every 60 s by :meth:`run_forever`.
         """
+        pending: list[tuple[int, datetime.date, list[JobKind]]] = []
         with self._session_factory() as session:
+            engine = session.get_bind()
             devices: list[Device] = list(
                 session.exec(  # type: ignore[call-overload]
                     select(Device).where(Device.status == "active")
@@ -262,6 +266,9 @@ class Scheduler:
             )
             for device in devices:
                 try:
+                    chain = self._pipeline_due(session, device, now)
+                    if chain is not None:
+                        pending.append(chain)
                     await self._process_device(session, device, now)
                 except Exception:
                     log.exception(
@@ -269,6 +276,45 @@ class Scheduler:
                         device_id=device.id,
                     )
             session.commit()
+        # Enqueue after commit: the job queue writes in its own short transaction (T3.5).
+        for device_id, local_date, stages in pending:
+            try:
+                job = enqueue_chain(
+                    JobQueue(engine),  # type: ignore[arg-type]
+                    local_date=local_date, device_id=device_id, stages=stages, now=now,
+                )  # fmt: skip
+                if job is not None:
+                    log.debug("pipeline_chain", device_id=device_id, key=job.key,
+                              status=job.status)  # fmt: skip
+            except Exception:
+                log.exception("pipeline_enqueue_error", device_id=device_id)
+
+    def _pipeline_due(
+        self, session: Session, device: Device, now: datetime.datetime
+    ) -> tuple[int, datetime.date, list[JobKind]] | None:
+        """Prewarm (window start - 30 min) or, under ``on_trigger``, post-confirm stages.
+
+        Independent of the push token: the reel is prepared even before the phone registers.
+        Idempotent - the job key is unique per stage and day, so re-enqueueing is a no-op.
+        """
+        from zoneinfo import ZoneInfo
+
+        from chronos.api.config import preferences
+
+        assert device.id is not None
+        rules, _ = get_rules_cache().get_effective(session)
+        window_cfg = rules.window.to_window_config()
+        tz_obj = ZoneInfo(device.tz)
+        local_date = local_date_for(now, tz_obj, window_cfg.day_boundary)
+        window = window_for(local_date, tz_obj, window_cfg)
+        mode = preferences(session, self._settings).render_mode
+        if prewarm_due(now, window.start_utc, window.end_utc):
+            day = get_or_create_day(session, device, local_date, device.tz, rules, now)
+            if mode == "on_trigger" and day.state == DayState.confirmed.value:
+                return device.id, local_date, stages_for(mode, "confirm")
+            session.flush()
+            return device.id, local_date, stages_for(mode, "prewarm")
+        return None
 
     async def _process_device(
         self,
