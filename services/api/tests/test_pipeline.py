@@ -23,10 +23,12 @@ from chronos.main import create_app
 from chronos.models.content import Item, Source
 from chronos.models.jobs import Job
 from chronos.pipeline import (
+    STAGE_ORDER,
     StagePayload,
     chain_key,
     enqueue_chain,
     enqueue_next,
+    implemented,
     ingest_stage,
     job_key,
     prewarm_due,
@@ -54,10 +56,12 @@ def test_prewarm_due_fake_clock(minutes_from_start: int, due: bool) -> None:
 
 
 def test_stages_for_render_modes() -> None:
-    assert stages_for("eager", "prewarm") == [JobKind.ingest, JobKind.script, JobKind.assets]
+    every = implemented(STAGE_ORDER)
+    assert every[:2] == [JobKind.ingest, JobKind.script]  # grows as M4 registers stages
+    assert stages_for("eager", "prewarm") == every
     assert stages_for("eager", "confirm") == []
     assert stages_for("on_trigger", "prewarm") == [JobKind.ingest]
-    assert stages_for("on_trigger", "confirm") == [JobKind.script, JobKind.assets]
+    assert stages_for("on_trigger", "confirm") == every[1:]
 
 
 def test_chain_keys() -> None:
@@ -336,7 +340,8 @@ async def test_scheduler_enqueues_prewarm_at_window_start_minus_30(
     (job,) = jobs()
     assert job.kind == "ingest" and job.key == "ingest:2026-10-06:1"
     payload = StagePayload.model_validate_json(job.payload_json)
-    expected = ["ingest", "script", "assets"] if render_mode == "eager" else ["ingest"]
+    every = [s.value for s in implemented(STAGE_ORDER)]
+    expected = every if render_mode == "eager" else ["ingest"]
     assert [s.value for s in payload.stages] == expected
     await scheduler.run_due(datetime.datetime(2026, 10, 6, 12, 31, tzinfo=datetime.UTC))
     assert len(jobs()) == 1  # idempotent; no push token needed for prewarm
