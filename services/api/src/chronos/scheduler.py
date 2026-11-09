@@ -276,6 +276,7 @@ class Scheduler:
                         device_id=device.id,
                     )
             session.commit()
+        await self.run_deliveries(now)
         # Enqueue after commit: the job queue writes in its own short transaction (T3.5).
         for device_id, local_date, stages in pending:
             try:
@@ -288,6 +289,31 @@ class Scheduler:
                               status=job.status)  # fmt: skip
             except Exception:
                 log.exception("pipeline_enqueue_error", device_id=device_id)
+
+    async def run_deliveries(self, now: datetime.datetime) -> None:
+        """Send the visible push for confirmed / fallback days not yet delivered (T5.2).
+
+        Runs after the device pass has committed; ``deliver_day`` claims each day atomically,
+        so a confirm racing the window end still produces exactly one push.
+        """
+        from chronos.delivery.deliver import deliver_day
+
+        with self._session_factory() as session:
+            rows = session.exec(
+                select(Day, Device)
+                .join(Device, Device.id == Day.device_id)  # type: ignore[arg-type]
+                .where(Device.status == "active")
+                .where(Day.state.in_([DayState.confirmed.value, DayState.fallback.value]))  # type: ignore[attr-defined]
+                .where(Day.delivered_at.is_(None))  # type: ignore[union-attr]
+            ).all()
+            for day, device in rows:
+                try:
+                    outcome = await deliver_day(session, device, day, self._push_client, now)
+                    if outcome not in ("pending_render", "not_due"):
+                        log.info("delivery_outcome", device_id=device.id,
+                                 local_date=day.local_date, outcome=outcome)  # fmt: skip
+                except Exception:
+                    log.exception("delivery_error", device_id=device.id)
 
     def _pipeline_due(
         self, session: Session, device: Device, now: datetime.datetime
