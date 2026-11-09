@@ -9,13 +9,14 @@ from typing import Literal
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text, update
 from sqlmodel import Session
 
 from chronos.auth import require_device
 from chronos.db import get_session_dep
 from chronos.delivery.push import PushClient, PushMessage
+from chronos.enums import JobKind
 from chronos.errors import ProblemException
 from chronos.models.delivery import PushNotification
 from chronos.models.devices import Device
@@ -128,3 +129,63 @@ async def push_test(
     )
     session.commit()
     return PushTestResult(outcome=outcome, reason=reason)
+
+
+# ── pipeline run (T3.5) ──────────────────────────────────────────────────────
+
+_run_limit = rate_limit("admin-run", per_minute=6)
+
+
+class RunRequest(BaseModel):
+    """Run pipeline stages for the caller's device; defaults to today's content stages."""
+
+    model_config = ConfigDict(extra="forbid")
+    local_date: datetime.date | None = None
+    stages: list[JobKind] = Field(
+        default_factory=lambda: [JobKind.ingest, JobKind.script], min_length=1, max_length=6
+    )
+    force: bool = False
+
+
+class RunResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    local_date: datetime.date
+    stages: list[JobKind]
+    job_id: int | None
+    job_key: str | None
+    job_status: str | None
+
+
+@router.post("/run", response_model=RunResult, status_code=202)
+def run_pipeline(
+    body: RunRequest,
+    device: Device = Depends(require_device),
+    session: Session = Depends(get_session_dep),
+    _rl: None = Depends(_run_limit),
+) -> RunResult:
+    """Enqueue the first stage; the worker runs the chain. Idempotent unless ``force``."""
+    from chronos.jobs.queue import JobQueue
+    from chronos.pipeline import enqueue_chain, ensure_day, implemented
+
+    assert device.id is not None
+    now = datetime.datetime.now(datetime.UTC)
+    local_date = ensure_day(session, device, now, body.local_date)
+    stages = implemented(body.stages)
+    if not stages:
+        raise ProblemException(
+            422,
+            "no_runnable_stages",
+            "No Runnable Stages",
+            "None of the stages is implemented yet.",
+        )
+    job = enqueue_chain(
+        JobQueue(session.get_bind()),  # type: ignore[arg-type]
+        local_date=local_date, device_id=device.id, stages=stages, now=now, force=body.force,
+    )  # fmt: skip
+    return RunResult(
+        local_date=local_date,
+        stages=stages,
+        job_id=job.id if job else None,
+        job_key=job.key if job else None,
+        job_status=job.status if job else None,
+    )

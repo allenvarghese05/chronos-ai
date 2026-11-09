@@ -70,6 +70,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Pipeline
+         * @description Enqueue the first stage; the worker runs the chain. Idempotent unless ``force``.
+         */
+        post: operations["admin_run_pipeline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/config": {
         parameters: {
             query?: never;
@@ -928,6 +948,37 @@ export interface components {
             /** Rule Id */
             rule_id: string;
         };
+        /**
+         * RunRequest
+         * @description Run pipeline stages for the caller's device; defaults to today's content stages.
+         */
+        RunRequest: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+            /** Local Date */
+            local_date?: string | null;
+            /** Stages */
+            stages?: components["schemas"]["JobKind"][];
+        };
+        /** RunResult */
+        RunResult: {
+            /** Job Id */
+            job_id: number | null;
+            /** Job Key */
+            job_key: string | null;
+            /** Job Status */
+            job_status: string | null;
+            /**
+             * Local Date
+             * Format: date
+             */
+            local_date: string;
+            /** Stages */
+            stages: components["schemas"]["JobKind"][];
+        };
         /** ScorePage */
         ScorePage: {
             /** End */
@@ -1285,6 +1336,66 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PushTestResult"];
+                };
+            };
+            /** @description Unauthorized — missing or invalid bearer token. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Forbidden — device token revoked. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Unprocessable Entity — validation failed. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too Many Requests — rate limit exceeded. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    admin_run_pipeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunResult"];
                 };
             };
             /** @description Unauthorized — missing or invalid bearer token. */
