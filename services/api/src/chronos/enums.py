@@ -178,6 +178,35 @@ class BriefItemRole(enum.StrEnum):
     mention = "mention"
 
 
+class ReelStatus(enum.StrEnum):
+    """Media pipeline progress for one reel (docs/04 §2.4)."""
+
+    assets = "assets"
+    tts = "tts"
+    captions = "captions"
+    rendering = "rendering"
+    ready = "ready"
+    failed = "failed"
+
+
+class ReelAssetKind(enum.StrEnum):
+    voice_wav = "voice_wav"
+    voice_mp3 = "voice_mp3"
+    captions_json = "captions_json"
+    reel_json = "reel_json"
+    image = "image"
+    broll = "broll"
+    thumbnail = "thumbnail"
+
+
+class AssetLicence(enum.StrEnum):
+    pexels = "pexels"
+    og_image = "og_image"
+    generated = "generated"
+    kokoro = "kokoro"
+    edge_tts = "edge_tts"
+
+
 class JobKind(enum.StrEnum):
     """Trusted internal stage identifiers; not executable module names."""
 

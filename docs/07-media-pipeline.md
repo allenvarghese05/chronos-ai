@@ -10,6 +10,8 @@ For each `story` scene, in order of preference:
 
 1. `items.image_url` from the feed, else resolve `og:image` / `twitter:image` by fetching the
    article HTML (≤ 2 MB, SSRF guard, 10 s).
+   If the feed image is a small thumbnail (longest side < 800 px) the og:image is fetched too
+   and the larger one wins (T4.1; BBC feed thumbnails are 240 px wide).
 2. If `visual == "broll"` and `CHRONOS_PEXELS_API_KEY` is set: Pexels video search with
    `broll_query`, portrait orientation, ≤ 15 s, pick `hd` file ≤ 25 MB; store `licence = pexels`
    and attribution in `reel.json`.
