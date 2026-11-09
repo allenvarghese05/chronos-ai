@@ -79,6 +79,9 @@ export function StoryScene({ scene, theme }: Props) {
 	const title = scene.title ?? '';
 	const bullets = scene.body ?? [];
 	const enter = spring({ frame, fps, config: SPRING_TEXT });
+	// Over photos/video (often busy: paper screenshots, crowds) the text sits on a dark card so
+	// contrast stays >= 4.5:1 whatever the image is (docs/07 §6); gradients need no card.
+	const onMedia = scene.media?.type === 'image' || scene.media?.type === 'video';
 
 	return (
 		<AbsoluteFill style={{ opacity: fadeOpacity(frame, durationInFrames) }}>
@@ -99,6 +102,14 @@ export function StoryScene({ scene, theme }: Props) {
 					gap: 24,
 					transform: `translateY(${(1 - enter) * 40}px)`,
 					opacity: enter,
+					...(onMedia
+						? {
+								padding: 32,
+								borderRadius: 28,
+								backgroundColor: 'rgba(0,0,0,0.78)',
+								backdropFilter: 'blur(12px)',
+							}
+						: {}),
 				}}
 			>
 				{scene.kicker !== undefined && (
@@ -127,7 +138,7 @@ export function StoryScene({ scene, theme }: Props) {
 						fontSize: headlineSize(title),
 						fontWeight: 700,
 						lineHeight: 1.12,
-						color: palette.text,
+						color: onMedia ? '#FFFFFF' : palette.text,
 						display: '-webkit-box',
 						WebkitLineClamp: 3,
 						WebkitBoxOrient: 'vertical',
@@ -147,7 +158,7 @@ export function StoryScene({ scene, theme }: Props) {
 									fontFamily: FONT_FAMILY.sans,
 									fontSize: FONT_SIZE.bullet,
 									fontWeight: 500,
-									color: palette.text,
+									color: onMedia ? '#FFFFFF' : palette.text,
 									opacity: s,
 									transform: `translateX(${(1 - s) * 24}px)`,
 									textShadow: '0 1px 8px rgba(0,0,0,0.35)',
@@ -167,8 +178,11 @@ export function StoryScene({ scene, theme }: Props) {
 						left: SAFE_SIDE,
 						fontFamily: FONT_FAMILY.mono,
 						fontSize: FONT_SIZE.kicker,
-						color: palette.kicker,
+						color: onMedia ? '#FFFFFF' : palette.kicker,
 						letterSpacing: 1,
+						...(onMedia
+							? { padding: '6px 14px', borderRadius: 999, backgroundColor: 'rgba(0,0,0,0.7)' }
+							: {}),
 					}}
 				>
 					via {scene.source.name}
