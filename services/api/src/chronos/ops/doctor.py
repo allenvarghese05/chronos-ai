@@ -259,11 +259,13 @@ def check_ollama(probes: DoctorProbes, ollama_model: str, ollama_digest: str) ->
         models_list: list[dict[str, Any]] = [
             cast(dict[str, Any], m) for m in _raw_list if isinstance(m, dict)
         ]
+        # Exact name match, as the script stage does: a prefix match on "qwen2.5" would
+        # pick e.g. "qwen2.5-coder:7b-instruct" when another project has it installed.
         found: dict[str, Any] | None = next(
             (
                 m
                 for m in models_list
-                if str(m.get("name", "")).startswith(ollama_model.split(":")[0])
+                if ollama_model in (str(m.get("name", "")), str(m.get("model", "")))
             ),
             None,
         )
@@ -276,8 +278,9 @@ def check_ollama(probes: DoctorProbes, ollama_model: str, ollama_digest: str) ->
         rows.append(DoctorRow("ollama:model", OK, f"Model {model_name!r} present"))
 
         if ollama_digest:
-            actual_digest = str(found.get("digest", ""))
-            if actual_digest == ollama_digest:
+            # /api/tags reports bare hex; the justfile pin carries "sha256:".
+            actual_digest = str(found.get("digest", "")).removeprefix("sha256:")
+            if actual_digest and actual_digest == ollama_digest.removeprefix("sha256:"):
                 rows.append(
                     DoctorRow(
                         "ollama:digest",
