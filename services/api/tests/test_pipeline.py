@@ -76,7 +76,7 @@ def test_chain_keys() -> None:
 
 def test_enqueue_chain_idempotent_and_force(test_settings: Settings, tmp_db_url: str) -> None:
     queue = JobQueue(create_db_engine(tmp_db_url))
-    stages = [JobKind.script, JobKind.ingest, JobKind.render]  # order + unimplemented fixed up
+    stages = [JobKind.script, JobKind.ingest, JobKind.deliver]  # order + unimplemented fixed up
     first = enqueue_chain(queue, local_date=DAY, device_id=1, stages=stages, now=NOW)
     again = enqueue_chain(queue, local_date=DAY, device_id=1, stages=stages, now=NOW)
     assert first is not None and again is not None and first.id == again.id
@@ -86,7 +86,7 @@ def test_enqueue_chain_idempotent_and_force(test_settings: Settings, tmp_db_url:
     forced = enqueue_chain(queue, local_date=DAY, device_id=1, stages=stages, now=NOW, force=True)
     assert forced is not None and forced.id != first.id
     assert (
-        enqueue_chain(queue, local_date=DAY, device_id=1, stages=[JobKind.render], now=NOW) is None
+        enqueue_chain(queue, local_date=DAY, device_id=1, stages=[JobKind.deliver], now=NOW) is None
     )
 
 
@@ -208,7 +208,9 @@ def test_admin_run_enqueues_idempotently(test_settings: Settings, tmp_db_url: st
             "/v1/admin/run", headers=auth_headers(token), json={**body, "force": True}
         )
         assert forced.json()["job_id"] != r1.json()["job_id"]
-        bad = client.post("/v1/admin/run", headers=auth_headers(token), json={"stages": ["render"]})
+        bad = client.post(
+            "/v1/admin/run", headers=auth_headers(token), json={"stages": ["deliver"]}
+        )
         assert bad.status_code == 422
         assert client.post("/v1/admin/run", json=body).status_code == 401
     with Session(create_db_engine(tmp_db_url)) as session:
@@ -250,10 +252,10 @@ def test_cli_run_reports_stage_results(
 
     monkeypatch.setattr(pipeline, "run_chain", fake_run_chain)
     result = CliRunner().invoke(
-        cli_app, ["run", "--date", "2026-10-06", "--stages", "script,ingest,render", "--force"]
+        cli_app, ["run", "--date", "2026-10-06", "--stages", "script,ingest,deliver", "--force"]
     )
     assert result.exit_code == 1, result.output
-    assert "not implemented yet, skipped: render" in result.output
+    assert "not implemented yet, skipped: deliver" in result.output
     assert "✓ ingest" in result.output and "✗ script" in result.output
     assert seen["local_date"] == DAY and seen["force"] is True
     assert seen["stages"] == [JobKind.ingest, JobKind.script]

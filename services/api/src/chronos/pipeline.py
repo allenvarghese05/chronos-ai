@@ -338,12 +338,33 @@ def captions_job(ctx: JobContext) -> None:
         deps.engine.dispose()
 
 
+def render_job(ctx: JobContext) -> None:
+    from chronos.api.config import preferences
+    from chronos.media.render import RenderTools, render_stage
+
+    payload = StagePayload.model_validate_json(ctx.payload_json)
+    deps = _deps(ctx)
+    try:
+        s = deps.settings
+        with Session(deps.engine) as session:
+            render_stage(
+                session, local_date=payload.local_date.isoformat(), device_id=payload.device_id,
+                data_root=s.data_root.resolve(),
+                tools=RenderTools(s.node_bin, s.renderer_dir, s.ffprobe_bin),
+                theme_preference=preferences(session, s).theme, now=utc_now_iso(),
+            )  # fmt: skip
+        _chain_next(deps, payload, JobKind.render)
+    finally:
+        deps.engine.dispose()
+
+
 HANDLERS: dict[JobKind, Handler] = {
     JobKind.ingest: Handler("chronos.pipeline", "ingest_job"),
     JobKind.script: Handler("chronos.pipeline", "script_job"),
     JobKind.assets: Handler("chronos.pipeline", "assets_job"),
     JobKind.tts: Handler("chronos.pipeline", "tts_job"),
     JobKind.captions: Handler("chronos.pipeline", "captions_job"),
+    JobKind.render: Handler("chronos.pipeline", "render_job"),
 }
 
 
