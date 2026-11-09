@@ -34,6 +34,7 @@ class Source(SQLModel, table=True):
         CheckConstraint("quota >= 0", name="ck_sources_quota"),
         CheckConstraint("weight >= 0", name="ck_sources_weight"),
         CheckConstraint("consecutive_failures >= 0", name="ck_sources_failures"),
+        CheckConstraint("min_points >= 0", name="ck_sources_min_points"),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -44,6 +45,7 @@ class Source(SQLModel, table=True):
     enabled: int = 1
     quota: int = 1
     weight: float = 1.0
+    min_points: int | None = None
     etag: str | None = None
     last_modified: str | None = None
     last_fetched_at: str | None = None

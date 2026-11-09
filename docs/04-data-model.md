@@ -149,6 +149,7 @@ Indexes: `(device_id, received_at)`, `(local_date)`.
 | enabled | INTEGER | |
 | quota | INTEGER | max items into a brief |
 | weight | REAL | ranking multiplier |
+| min_points | INTEGER NULL | `hn_rss` only: drop items whose Algolia points are known and below this (CHECK ≥ 0; migration 0004) |
 | etag, last_modified | TEXT NULL | conditional GET |
 | last_fetched_at, last_status, last_error | TEXT NULL | |
 | consecutive_failures | INTEGER | |
