@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,6 +27,7 @@ from chronos.media.assets import (
     SceneImageResult,
     fetch_scene_images,
 )
+from chronos.media.captions import CaptionsError, SceneRange, TimedWord, build_captions
 from chronos.media.tts import TtsEngine, synthesize_scenes
 from chronos.models.content import Brief, Item
 from chronos.models.media import Reel, ReelAsset
@@ -284,3 +285,61 @@ def tts_stage(
     log.info("tts_done", reel=reel.public_id, seconds=round(result.duration_sec, 1),
              engines=sorted(result.engines))  # fmt: skip
     return TtsReport(reel.public_id, result.duration_sec, tuple(sorted(result.engines)), False)
+
+
+# --- captions stage (T4.3) ----------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class CaptionsReport:
+    reel_public_id: str
+    coverage: float
+    used_whisper: bool
+    skipped: bool
+
+
+Transcriber = Callable[[Path, Path], list[TimedWord]]  # (voice_wav, work_dir) -> heard words
+
+
+def captions_stage(
+    session: Session,
+    *,
+    local_date: str,
+    device_id: int,
+    data_root: Path,
+    transcribe: Transcriber,
+    now: str,
+) -> CaptionsReport:
+    """Align the script's words to whisper timings; proportional fallback. Idempotent."""
+    import json as _json
+    import time
+
+    brief, reel = reel_for_day(session, local_date, device_id)
+    assert reel.id is not None
+    out_dir = reel_dir(data_root, reel)
+    captions_path = out_dir / "captions.json"
+    existing = existing_asset(session, reel.id, ReelAssetKind.captions_json, None)
+    if existing is not None and captions_path.exists():
+        return CaptionsReport(reel.public_id, 1.0, True, True)
+    tts = _json.loads((out_dir / "tts.json").read_text(encoding="utf-8"))
+    ranges = [SceneRange(t["scene_index"], t["start_sec"], t["end_sec"]) for t in tts]
+    script = ReelScript.model_validate_json(brief.script_json)
+    scene_words = [(s.index, s.voiceover.split()) for s in script.scenes]
+    started = time.perf_counter()
+    try:
+        heard: list[TimedWord] | None = transcribe(out_dir / "voice.wav", out_dir)
+    except CaptionsError as exc:
+        log.warning("captions_whisper_failed", reel=reel.public_id, error=str(exc))
+        heard = None
+    result = build_captions(scene_words, ranges, heard)
+    captions_path.write_text(result.to_json(), encoding="utf-8")
+    record_asset(session, reel.id, data_root, ReelAssetKind.captions_json, captions_path,
+                 licence=AssetLicence.generated)  # fmt: skip
+    reel.captions_ms = int((time.perf_counter() - started) * 1000)
+    reel.status = ReelStatus.captions.value
+    reel.updated_at = now
+    session.add(reel)
+    session.commit()
+    log.info("captions_done", reel=reel.public_id, coverage=round(result.coverage, 3),
+             whisper=result.used_whisper)  # fmt: skip
+    return CaptionsReport(reel.public_id, result.coverage, result.used_whisper, False)
