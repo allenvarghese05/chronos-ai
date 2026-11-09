@@ -1,4 +1,5 @@
 import { createApi, type Transport } from '../src/api/client';
+import { routeForNotification } from '../src/reels/deeplink';
 import {
 	type CaptionDoc,
 	captionAt,
@@ -115,6 +116,9 @@ describe('links', () => {
 		expect(reelIdFrom('chronos://reel/../../x')).toBeNull();
 		expect(reelIdFrom({ type: 'reel_ready', reel_public_id: RID })).toBe(RID);
 		expect(reelIdFrom({ type: 'tick' })).toBeNull();
+		expect(routeForNotification({ type: 'reel_ready', reel_public_id: RID })).toBe(`/reel/${RID}`);
+		expect(routeForNotification({ type: 'text_fallback' })).toBe('/');
+		expect(routeForNotification({ type: 'tick' })).toBeNull();
 	});
 });
 
