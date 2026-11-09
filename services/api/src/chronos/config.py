@@ -85,7 +85,20 @@ class Settings(BaseSettings):
 
     # ── tool endpoints ───────────────────────────────────────────────────────
     ollama_endpoint: str = "http://localhost:11434"
-    llm_provider: str = "ollama"
+    #: Primary is always Ollama; ``openai``/``anthropic`` add that provider as the second step
+    #: of the script chain when its API key is set (D11, T3.4 owner decision 5).
+    llm_provider: Literal["ollama", "openai", "anthropic"] = "ollama"
+    ollama_model: str = "qwen2.5:7b-instruct"
+    #: Expected ``sha256:...`` digest; a mismatch is recorded in briefs and flagged by doctor.
+    ollama_digest: str = ""
+    ollama_timeout_sec: float = 80.0
+    openai_api_key: SecretStr | None = None
+    openai_model: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
+    anthropic_api_key: SecretStr | None = None
+    anthropic_model: str = "claude-sonnet-5-5"
+    anthropic_base_url: str = "https://api.anthropic.com/v1"
+    cloud_llm_timeout_sec: float = 60.0
 
     # Reel preferences: consumed by the future pipeline, not mobile appearance.
     theme: Literal["auto", "dawn", "mono", "ink"] = "auto"
