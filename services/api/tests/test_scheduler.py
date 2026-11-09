@@ -483,10 +483,13 @@ class TestSchedulerSimulation:
                 )
             ).first()
             assert day is not None
-            assert day.state == DayState.fallback.value
+            # T5.2: the scheduler delivers right after the fallback transition.
+            assert day.state == DayState.delivered.value
 
         # Push client received 60 messages
-        assert len(fake_push.sent) == 60
+        silent = [m for m in fake_push.sent if m.data.get("type") == "tick"]
+        assert len(silent) == 60
+        assert len(fake_push.sent) == 61  # + the one visible delivery push after fallback (T5.2)
 
     @pytest.mark.anyio
     async def test_stops_on_confirm(self, setup: _SimSetup) -> None:
@@ -520,7 +523,10 @@ class TestSchedulerSimulation:
             session.add(day)
             session.commit()
 
-        ticks_at_confirm = len(fake_push.sent)
+        def ticks() -> int:
+            return sum(1 for m in fake_push.sent if m.data.get("type") == "tick")
+
+        ticks_at_confirm = ticks()
 
         # Continue simulation to window end
         end_sim = window.end_utc + datetime.timedelta(minutes=5)
@@ -528,10 +534,12 @@ class TestSchedulerSimulation:
             await scheduler.run_due(current)
             current += datetime.timedelta(minutes=1)
 
-        # No new ticks after confirm
-        assert len(fake_push.sent) == ticks_at_confirm, (
-            f"Ticks sent after confirm: {len(fake_push.sent) - ticks_at_confirm}"
+        # No new ticks after confirm; exactly one visible delivery push (T5.2)
+        assert ticks() == ticks_at_confirm, (
+            f"Ticks sent after confirm: {ticks() - ticks_at_confirm}"
         )
+        deliveries = [m for m in fake_push.sent if m.data.get("type") != "tick"]
+        assert len(deliveries) == 1
 
     @pytest.mark.anyio
     async def test_rate_limited_delays_next_tick(self, setup: _SimSetup) -> None:
