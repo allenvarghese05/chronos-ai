@@ -32,3 +32,19 @@ def ok_script(ctx: JobContext) -> None:
 
 def failing_script(ctx: JobContext) -> None:
     raise RuntimeError("script stage exploded")
+
+
+def ok_assets(ctx: JobContext) -> None:
+    _stage(ctx, JobKind.assets)
+
+
+def ok_tts(ctx: JobContext) -> None:
+    _stage(ctx, JobKind.tts)
+
+
+def ok_captions(ctx: JobContext) -> None:
+    _stage(ctx, JobKind.captions)
+
+
+def ok_render(ctx: JobContext) -> None:
+    _stage(ctx, JobKind.render)
