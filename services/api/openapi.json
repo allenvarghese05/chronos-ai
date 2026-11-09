@@ -1302,6 +1302,99 @@
         "title": "RuleBreakdown",
         "type": "object"
       },
+      "RunRequest": {
+        "additionalProperties": false,
+        "description": "Run pipeline stages for the caller's device; defaults to today's content stages.",
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "local_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Date"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/JobKind"
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "title": "RunRequest",
+        "type": "object"
+      },
+      "RunResult": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "job_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Key"
+          },
+          "job_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Status"
+          },
+          "local_date": {
+            "format": "date",
+            "title": "Local Date",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/JobKind"
+            },
+            "title": "Stages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "local_date",
+          "stages",
+          "job_id",
+          "job_key",
+          "job_status"
+        ],
+        "title": "RunResult",
+        "type": "object"
+      },
       "ScorePage": {
         "additionalProperties": false,
         "properties": {
@@ -2095,6 +2188,83 @@
           }
         ],
         "summary": "Push Test",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/v1/admin/run": {
+      "post": {
+        "description": "Enqueue the first stage; the worker runs the chain. Idempotent unless ``force``.",
+        "operationId": "admin_run_pipeline",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run Pipeline",
         "tags": [
           "admin"
         ]
