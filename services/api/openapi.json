@@ -322,6 +322,58 @@
         "title": "DebugSnapshot",
         "type": "object"
       },
+      "DeliverRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "title": "Force",
+            "type": "boolean"
+          },
+          "local_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Local Date"
+          }
+        },
+        "title": "DeliverRequest",
+        "type": "object"
+      },
+      "DeliverResult": {
+        "additionalProperties": false,
+        "properties": {
+          "local_date": {
+            "format": "date",
+            "title": "Local Date",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "sent",
+              "already_delivered",
+              "not_due",
+              "pending_render",
+              "no_token",
+              "send_failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "local_date",
+          "outcome"
+        ],
+        "title": "DeliverResult",
+        "type": "object"
+      },
       "DerivedFacts": {
         "additionalProperties": false,
         "description": "Server-derived facts computed inside :func:`evaluate`; emitted for debugging.\n\nThese are **not** passed in externally \u2014 they are computed from\n``ctx.previous`` + ``signals`` inside ``evaluate``.",
@@ -2352,6 +2404,83 @@
         "summary": "Readiness probe",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/v1/admin/deliver": {
+      "post": {
+        "description": "Deliver the day's push now. ``force`` moves an undelivered day to ``fallback`` first.",
+        "operationId": "admin_deliver_now",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeliverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeliverResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized \u2014 missing or invalid bearer token."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Forbidden \u2014 device token revoked."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity \u2014 validation failed."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests \u2014 rate limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Deliver Now",
+        "tags": [
+          "admin"
         ]
       }
     },
