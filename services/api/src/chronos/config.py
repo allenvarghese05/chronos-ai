@@ -107,6 +107,7 @@ class Settings(BaseSettings):
     #: Absolute tool paths: job processes run with a minimal PATH (no Homebrew).
     ffmpeg_bin: str = Field(default_factory=lambda: shutil.which("ffmpeg") or "ffmpeg")
     ffprobe_bin: str = Field(default_factory=lambda: shutil.which("ffprobe") or "ffprobe")
+    whisper_bin: str = Field(default_factory=lambda: shutil.which("whisper-cli") or "whisper-cli")
     tts_voice: str = "af_heart"
     #: af_heart speaks ~142 wpm at 1.0; 1.15 gives ~163 wpm so 185 words stay near 68 s.
     tts_speed: float = Field(default=1.15, gt=0.5, le=2.0)
